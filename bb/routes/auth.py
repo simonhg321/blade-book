@@ -5,10 +5,11 @@ OIDC (google/apple) routes are added in the same blueprint by plan 02 task 7.
 """
 import logging
 import re
+import secrets
 
 from flask import Blueprint, current_app, g, jsonify, redirect, request
 
-from bb import auth, db, mail, paths
+from bb import auth, db, mail, oidc, paths
 
 log = logging.getLogger('blade-book.auth')
 
@@ -82,3 +83,54 @@ def signout_all():
     finally:
         con.close()
     return jsonify({'ok': True})
+
+
+# --- OIDC: Google (query callback) + Apple (form_post callback) ---------------
+
+@bp.get('/providers')
+def providers():
+    return jsonify({'providers': oidc.configured()})
+
+
+@bp.get('/<name>')
+def oidc_start(name):
+    provider = oidc.get(name)
+    if provider is None:
+        return jsonify({'error': 'not found'}), 404
+    con = db.connect()
+    try:
+        reason = auth.check_rate_limits(con)
+        if reason:
+            return jsonify({'error': reason}), 429
+        nonce = secrets.token_urlsafe(16)
+        state = db.create_oauth_state(con, provider.name, nonce)
+    finally:
+        con.close()
+    return redirect(oidc.authorize_url(provider, state, nonce))
+
+
+@bp.route('/<name>/callback', methods=['GET', 'POST'])
+def oidc_callback(name):
+    provider = oidc.get(name)
+    if provider is None:
+        return jsonify({'error': 'not found'}), 404
+    params = request.form if request.method == 'POST' else request.args
+    code, state = params.get('code'), params.get('state')
+    con = db.connect()
+    try:
+        saved = db.pop_oauth_state(con, state) if state else None
+        if params.get('error') or not code or saved is None or saved['provider'] != provider.name:
+            log.warning('%s callback rejected: error=%s code=%s state_ok=%s',
+                        provider.name, params.get('error'), bool(code), saved is not None)
+            return _landing(auth='failed')
+        try:
+            claims = oidc.exchange_code(provider, code, saved['nonce'])
+        except oidc.OIDCError as e:
+            log.warning('%s exchange failed: %s', provider.name, e)
+            return _landing(auth='failed')
+        user = auth.sign_in_by_email(con, claims['email'], provider=provider.name,
+                                     sub=claims['sub'], verified=claims['email_verified'])
+    finally:
+        con.close()
+    log.info('%s sign-in: %s (@%s)', provider.name, user['email'], user['handle'])
+    return _landing()
