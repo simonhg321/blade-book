@@ -18,3 +18,30 @@ def env(tmp_path, monkeypatch):
     paths.ensure_dirs()
     yield paths
     importlib.reload(paths)
+
+
+@pytest.fixture
+def mailer():
+    from bb import mail
+    return mail.FakeMailer()
+
+
+@pytest.fixture
+def app(env, mailer, monkeypatch):
+    monkeypatch.setenv('SESSION_KEY', 'test-session-key-not-secret')
+    monkeypatch.setenv('BASE_URL', 'http://test')
+    from app import create_app
+    return create_app(mailer=mailer)
+
+
+@pytest.fixture
+def client(app):
+    return app.test_client()
+
+
+def magic_link_from(mailer):
+    """The last magic link the fake mailer saw."""
+    import re
+    m = re.search(r'https?://\S+/api/auth/magic\?t=\S+', mailer.sent[-1]['text'])
+    assert m, mailer.sent[-1]['text']
+    return m.group(0)

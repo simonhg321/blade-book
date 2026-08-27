@@ -9,8 +9,11 @@ session_secret. Rotating that secret invalidates every device at once.
 import hashlib
 import re
 import unicodedata
+from functools import wraps
 
-from bb import db
+from flask import g, jsonify, request, session
+
+from bb import config, db
 
 HANDLE_MAX = 24
 HANDLE_MIN = 3
@@ -52,3 +55,94 @@ def unique_handle(con, base):
 def handle_for_email(con, email):
     local = email.strip().lower().split('@', 1)[0]
     return unique_handle(con, slugify_handle(local))
+
+
+# --- sessions ----------------------------------------------------------------
+
+DEFAULT_BASE_URL = 'https://billboard.instockornot.club'
+PUBLIC_USER_FIELDS = ('id', 'email', 'handle', 'display_name', 'verified_at',
+                      'is_admin', 'sub_status', 'created')
+
+
+def base_url():
+    return config.get('BASE_URL', DEFAULT_BASE_URL).rstrip('/')
+
+
+def client_ip():
+    fwd = request.headers.get('X-Forwarded-For', '')
+    return (fwd.split(',')[0].strip() if fwd else request.remote_addr) or '?'
+
+
+def _secret_hash(secret):
+    return hashlib.sha256(secret.encode()).hexdigest()[:16]
+
+
+def login(con, user):
+    if not user['session_secret']:
+        user['session_secret'] = db.rotate_session_secret(con, user['id'])
+    session.permanent = True
+    session['uid'] = user['id']
+    session['ssh'] = _secret_hash(user['session_secret'])
+    g.user = user
+
+
+def logout():
+    session.clear()
+    g.user = None
+
+
+def logout_everywhere(con, user_id):
+    db.rotate_session_secret(con, user_id)
+    logout()
+
+
+def current_user(con):
+    """User dict for the session cookie, or None. Cached on g per request."""
+    if 'user' in g:
+        return g.user
+    g.user = None
+    uid, ssh = session.get('uid'), session.get('ssh')
+    if uid and ssh:
+        user = db.get_user(con, uid)
+        if user and user['session_secret'] and _secret_hash(user['session_secret']) == ssh:
+            g.user = user
+    return g.user
+
+
+def public_user(user):
+    return {k: user[k] for k in PUBLIC_USER_FIELDS}
+
+
+def sign_in_by_email(con, email, provider=None, sub=None, verified=True):
+    """Find-or-create the account for a proven email, merge the OIDC subject
+    if any, mark verified, and log in. The single entry point for every
+    sign-in method (spec §6: same email across providers → one user)."""
+    email = email.strip().lower()
+    user = db.get_user_by_email(con, email)
+    if user is None and provider and sub:
+        user = db.get_user_by_subject(con, provider, sub)  # email changed at provider
+    if user is None:
+        uid = db.create_user(con, email, handle_for_email(con, email))
+        db.rotate_session_secret(con, uid)
+        user = db.get_user(con, uid)
+    if provider and sub and user['auth_subjects'].get(provider) != sub:
+        db.set_auth_subject(con, user['id'], provider, sub)
+    if verified:
+        db.set_verified(con, user['id'])
+    user = db.get_user(con, user['id'])
+    login(con, user)
+    return user
+
+
+def login_required(fn):
+    @wraps(fn)
+    def wrapper(*a, **kw):
+        con = db.connect()
+        try:
+            user = current_user(con)
+        finally:
+            con.close()
+        if user is None:
+            return jsonify({'error': 'sign in required'}), 401
+        return fn(*a, **kw)
+    return wrapper
