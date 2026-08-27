@@ -113,6 +113,37 @@ def test_verify_id_token_rejects_wrong_key(google_env):
         oidc.verify_id_token(oidc.google(), _google_token(priv), 'n0nce', key=other_pub)
 
 
+def _token_missing(priv, *drop, **over):
+    """Like _google_token but can drop claim keys entirely, not just override
+    their value — needed to test the `require` option in jwt.decode."""
+    claims = {'iss': 'https://accounts.google.com', 'aud': 'gid.apps.googleusercontent.com',
+              'sub': 'g-sub-1', 'email': 'sam@example.com', 'email_verified': True,
+              'nonce': 'n0nce', 'iat': int(time.time()), 'exp': int(time.time()) + 300}
+    for k in drop:
+        claims.pop(k, None)
+    claims.update(over)
+    return jwt.encode(claims, priv, algorithm='RS256', headers={'kid': 'k1'})
+
+
+def test_verify_id_token_rejects_missing_exp(google_env):
+    priv, pub = _rsa_pair()
+    with pytest.raises(oidc.OIDCError):
+        oidc.verify_id_token(oidc.google(), _token_missing(priv, 'exp'), 'n0nce', key=pub)
+
+
+def test_verify_id_token_rejects_missing_iss(google_env):
+    priv, pub = _rsa_pair()
+    with pytest.raises(oidc.OIDCError):
+        oidc.verify_id_token(oidc.google(), _token_missing(priv, 'iss'), 'n0nce', key=pub)
+
+
+def test_verify_id_token_email_verified_defaults_false_when_absent(google_env):
+    priv, pub = _rsa_pair()
+    claims = oidc.verify_id_token(
+        oidc.google(), _token_missing(priv, 'email_verified'), 'n0nce', key=pub)
+    assert claims['email_verified'] is False
+
+
 def test_exchange_code_posts_and_verifies(google_env, monkeypatch):
     priv, pub = _rsa_pair()
     posted = {}

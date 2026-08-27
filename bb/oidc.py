@@ -106,17 +106,27 @@ def apple_client_secret(team_id, client_id, key_id, private_key_pem):
         private_key_pem, algorithm='ES256', headers={'kid': key_id})
 
 
+_JWK_CLIENTS = {}
+
+
 def _signing_key(provider, id_token):
     """Public key for this token's kid, fetched from the provider's JWKS.
-    Separate so tests can monkeypatch it."""
-    return jwt.PyJWKClient(provider.jwks_url, cache_keys=True).get_signing_key_from_jwt(id_token).key
+    One PyJWKClient per jwks_url, cached, so cache_keys=True actually helps
+    and repeat logins don't refetch the JWKS. Separate so tests can
+    monkeypatch it."""
+    client = _JWK_CLIENTS.get(provider.jwks_url)
+    if client is None:
+        client = jwt.PyJWKClient(provider.jwks_url, cache_keys=True)
+        _JWK_CLIENTS[provider.jwks_url] = client
+    return client.get_signing_key_from_jwt(id_token).key
 
 
 def verify_id_token(provider, id_token, nonce, key=None):
     try:
         key = key or _signing_key(provider, id_token)
         claims = jwt.decode(id_token, key, algorithms=['RS256', 'ES256'],
-                            audience=provider.client_id)
+                            audience=provider.client_id,
+                            options={'require': ['exp', 'iat', 'sub', 'aud', 'iss']})
     except jwt.PyJWTError as e:
         raise OIDCError(f'{provider.name} id_token rejected: {e}') from e
     except Exception as e:  # JWKS fetch failed, etc. — surface it, never hide
@@ -128,7 +138,7 @@ def verify_id_token(provider, id_token, nonce, key=None):
         raise OIDCError(f'{provider.name} nonce mismatch')
     if not claims.get('sub') or not claims.get('email'):
         raise OIDCError(f'{provider.name} token missing sub/email')
-    ev = claims.get('email_verified', True)
+    ev = claims.get('email_verified', False)
     if isinstance(ev, str):
         ev = ev.lower() == 'true'  # Apple sends the string "true"
     return {'sub': claims['sub'], 'email': claims['email'].strip().lower(),
