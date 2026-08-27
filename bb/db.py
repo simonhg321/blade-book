@@ -4,14 +4,16 @@ bb/db.py — the only module that touches SQLite. Every row except users is
 owned (owner_id). Private columns are listed once, here, so the leak test in
 later plans has a single source of truth.
 """
+import hashlib
 import json
 import os
+import secrets
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from bb import paths
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SALE_STATUSES = ('keeping', 'for_trade', 'for_sale', 'consigned', 'sold')
 KNIFE_STATUSES = ('draft', 'live')
@@ -143,6 +145,32 @@ CREATE TABLE IF NOT EXISTS deleted_users (
   email_hash TEXT PRIMARY KEY,
   deleted_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS magic_tokens (
+  id INTEGER PRIMARY KEY,
+  token_hash TEXT NOT NULL UNIQUE,
+  email TEXT NOT NULL,
+  ip TEXT,
+  created TEXT NOT NULL,
+  expires TEXT NOT NULL,
+  used_at TEXT
+);
+CREATE INDEX IF NOT EXISTS magic_tokens_email ON magic_tokens(email, created);
+
+CREATE TABLE IF NOT EXISTS auth_attempts (
+  id INTEGER PRIMARY KEY,
+  ip TEXT NOT NULL,
+  ts TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS auth_attempts_ip ON auth_attempts(ip, ts);
+
+CREATE TABLE IF NOT EXISTS oauth_states (
+  state TEXT PRIMARY KEY,
+  provider TEXT NOT NULL,
+  nonce TEXT NOT NULL,
+  created TEXT NOT NULL,
+  expires TEXT NOT NULL
+);
 """
 
 
@@ -163,6 +191,8 @@ def connect():
     con.executescript(SCHEMA)
     if con.execute('SELECT count(*) FROM schema_version').fetchone()[0] == 0:
         con.execute('INSERT INTO schema_version VALUES (?)', (SCHEMA_VERSION,))
+    else:
+        con.execute('UPDATE schema_version SET version = ?', (SCHEMA_VERSION,))
     con.commit()
     return con
 
@@ -209,3 +239,124 @@ def next_tag(con, owner_id):
                     (owner_id,)).fetchone()[0]
     con.commit()
     return f'K{n:02d}'
+
+
+MAGIC_TTL_MIN = 15
+STATE_TTL_MIN = 10
+
+
+def _norm_email(email):
+    return email.strip().lower()
+
+
+def _sha(s):
+    return hashlib.sha256(s.encode()).hexdigest()
+
+
+def _plus(minutes):
+    return (datetime.now(timezone.utc) + timedelta(minutes=minutes)).isoformat()
+
+
+# --- magic links -----------------------------------------------------------
+
+def create_magic_token(con, email, ip):
+    token = secrets.token_urlsafe(32)
+    con.execute(
+        'INSERT INTO magic_tokens (token_hash, email, ip, created, expires) '
+        'VALUES (?, ?, ?, ?, ?)',
+        (_sha(token), _norm_email(email), ip, now(), _plus(MAGIC_TTL_MIN)))
+    con.commit()
+    return token
+
+
+def consume_magic_token(con, token):
+    """Email for a live, unused token — and burn it. None otherwise."""
+    row = con.execute(
+        'SELECT id, email FROM magic_tokens WHERE token_hash = ? '
+        'AND used_at IS NULL AND expires > ?', (_sha(token), now())).fetchone()
+    if row is None:
+        return None
+    con.execute('UPDATE magic_tokens SET used_at = ? WHERE id = ?', (now(), row['id']))
+    con.commit()
+    return row['email']
+
+
+def count_magic_tokens_since(con, email, since_iso):
+    return con.execute(
+        'SELECT count(*) FROM magic_tokens WHERE email = ? AND created >= ?',
+        (_norm_email(email), since_iso)).fetchone()[0]
+
+
+# --- per-IP attempts -------------------------------------------------------
+
+def record_attempt(con, ip):
+    con.execute('INSERT INTO auth_attempts (ip, ts) VALUES (?, ?)', (ip, now()))
+    con.commit()
+
+
+def count_attempts_since(con, ip, since_iso):
+    return con.execute(
+        'SELECT count(*) FROM auth_attempts WHERE ip = ? AND ts >= ?',
+        (ip, since_iso)).fetchone()[0]
+
+
+# --- OIDC state (DB, not cookie: Apple's form_post callback is cross-site) --
+
+def create_oauth_state(con, provider, nonce):
+    state = secrets.token_urlsafe(24)
+    con.execute(
+        'INSERT INTO oauth_states (state, provider, nonce, created, expires) '
+        'VALUES (?, ?, ?, ?, ?)', (state, provider, nonce, now(), _plus(STATE_TTL_MIN)))
+    con.commit()
+    return state
+
+
+def pop_oauth_state(con, state):
+    row = con.execute(
+        'SELECT provider, nonce FROM oauth_states WHERE state = ? AND expires > ?',
+        (state, now())).fetchone()
+    con.execute('DELETE FROM oauth_states WHERE state = ?', (state,))
+    con.commit()
+    return dict(row) if row else None
+
+
+# --- user auth fields ------------------------------------------------------
+
+def rotate_session_secret(con, user_id):
+    secret = secrets.token_hex(16)
+    con.execute('UPDATE users SET session_secret = ? WHERE id = ?', (secret, user_id))
+    con.commit()
+    return secret
+
+
+def set_verified(con, user_id):
+    con.execute('UPDATE users SET verified_at = ? WHERE id = ? AND verified_at IS NULL',
+                (now(), user_id))
+    con.commit()
+
+
+def set_auth_subject(con, user_id, provider, sub):
+    subjects = get_user(con, user_id)['auth_subjects']
+    subjects[provider] = sub
+    con.execute('UPDATE users SET auth_subjects = ? WHERE id = ?',
+                (json.dumps(subjects), user_id))
+    con.commit()
+
+
+def get_user_by_subject(con, provider, sub):
+    return _user_row(con.execute(
+        "SELECT * FROM users WHERE json_extract(auth_subjects, '$.' || ?) = ?",
+        (provider, sub)).fetchone())
+
+
+def handle_exists(con, handle):
+    return con.execute('SELECT 1 FROM users WHERE handle = ?',
+                       (handle,)).fetchone() is not None
+
+
+def purge_auth_tables(con):
+    cutoff = _plus(-24 * 60)
+    con.execute('DELETE FROM magic_tokens WHERE created < ?', (cutoff,))
+    con.execute('DELETE FROM auth_attempts WHERE ts < ?', (cutoff,))
+    con.execute('DELETE FROM oauth_states WHERE created < ?', (cutoff,))
+    con.commit()
