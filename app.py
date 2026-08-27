@@ -10,7 +10,6 @@ import shutil
 import subprocess
 from datetime import timedelta
 from logging.handlers import RotatingFileHandler
-from urllib.parse import urlsplit
 
 from flask import Blueprint, Flask, jsonify
 
@@ -83,14 +82,6 @@ def create_app(mailer=None):
         secret = secrets.token_hex(32)
         log.warning('SESSION_KEY missing from .env — sessions will not survive a restart')
     from bb import auth, mail
-    # SERVER_NAME must match BASE_URL's host: it's what Werkzeug's test
-    # client (and Flask's own url_for) use as the default Host for a
-    # request that doesn't specify one, and a session cookie is host-locked
-    # to whatever Host the response that set it carried. Without this, a
-    # request to the absolute magic-link URL (BASE_URL's host) and a
-    # follow-up request to a relative path (defaulting to 'localhost')
-    # would be treated as different origins and the cookie would never
-    # come back.
     app.config.update(
         SECRET_KEY=secret,
         SESSION_COOKIE_NAME='bb_session',
@@ -98,7 +89,6 @@ def create_app(mailer=None):
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE='Lax',
         SESSION_COOKIE_SECURE=auth.base_url().startswith('https'),
-        SERVER_NAME=urlsplit(auth.base_url()).netloc,
         PERMANENT_SESSION_LIFETIME=timedelta(days=90),
         MAILER=mailer or mail.from_env(),
     )

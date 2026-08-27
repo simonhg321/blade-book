@@ -29,7 +29,7 @@ def mailer():
 @pytest.fixture
 def app(env, mailer, monkeypatch):
     monkeypatch.setenv('SESSION_KEY', 'test-session-key-not-secret')
-    monkeypatch.setenv('BASE_URL', 'http://test')
+    monkeypatch.setenv('BASE_URL', 'http://localhost')
     from app import create_app
     return create_app(mailer=mailer)
 

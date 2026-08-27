@@ -9,7 +9,7 @@ def test_request_link_sends_mail_and_never_reveals_existence(client, mailer):
     assert len(mailer.sent) == 1
     assert mailer.sent[0]['to'] == 'sam@example.com'
     link = magic_link_from(mailer)
-    assert link.startswith('http://test/blade-book/api/auth/magic?t=')
+    assert link.startswith('http://localhost/blade-book/api/auth/magic?t=')
 
 
 def test_request_link_rejects_bad_email(client, mailer):
