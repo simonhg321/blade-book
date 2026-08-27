@@ -2,5 +2,91 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>blade-book</title>
-<style>body{font-family:system-ui;background:#f6f1e7;color:#1a1a1a;display:grid;place-items:center;min-height:100vh;margin:0}main{text-align:center}h1{font-size:3rem;letter-spacing:.04em;margin:0}p{opacity:.7}</style>
-<main><h1>BLADE-BOOK</h1><p>a register for knife collectors — early access</p></main>
+<style>
+  :root{--cream:#f6f1e7;--ink:#1a1a1a;--muted:#6b665c;--line:#d9d2c3;--accent:#b5442f}
+  body{font-family:system-ui,sans-serif;background:var(--cream);color:var(--ink);margin:0;min-height:100vh;display:grid;place-items:center}
+  main{width:min(92vw,420px);text-align:center}
+  h1{font-size:3rem;letter-spacing:.06em;margin:0 0 .25rem}
+  p{color:var(--muted);margin:.25rem 0 1.25rem}
+  form{display:grid;gap:.6rem}
+  input,button{font:inherit;padding:.75rem .9rem;border-radius:8px;border:1px solid var(--line)}
+  input{background:#fff}
+  button{background:var(--ink);color:var(--cream);border-color:var(--ink);cursor:pointer}
+  button.alt{background:#fff;color:var(--ink)}
+  .msg{min-height:1.4em;font-size:.95rem}
+  .msg.err{color:var(--accent)}
+  .strip{display:flex;gap:.75rem;justify-content:center;align-items:baseline}
+  .hidden{display:none}
+  small{color:var(--muted)}
+</style>
+<main>
+  <h1>BLADE-BOOK</h1>
+  <p>a register for knife collectors — early access</p>
+
+  <section id="signed-out">
+    <form id="magic">
+      <input id="email" type="email" name="email" placeholder="you@example.com" required autocomplete="email">
+      <button type="submit">Email me a sign-in link</button>
+    </form>
+    <div id="providers" class="hidden" style="display:grid;gap:.6rem;margin-top:.6rem"></div>
+    <div id="msg" class="msg" aria-live="polite"></div>
+    <small>No passwords. The link works once and expires in 15 minutes.</small>
+  </section>
+
+  <section id="signed-in" class="hidden">
+    <div class="strip">
+      <span>signed in as <strong id="handle"></strong></span>
+      <button class="alt" id="signout">Sign out</button>
+    </div>
+  </section>
+</main>
+<script>
+(async function () {
+  const API = '/blade-book/api/auth';
+  const $ = id => document.getElementById(id);
+  const msg = (t, err) => { $('msg').textContent = t; $('msg').className = 'msg' + (err ? ' err' : ''); };
+
+  const flag = new URLSearchParams(location.search).get('auth');
+  if (flag === 'expired') msg('That link has expired or was already used — request a new one.', true);
+  if (flag === 'failed') msg('Sign-in did not complete. Try again.', true);
+
+  const me = await fetch(API + '/me', {credentials: 'same-origin'});
+  if (me.ok) {
+    const u = await me.json();
+    $('handle').textContent = '@' + u.handle;
+    $('signed-out').classList.add('hidden');
+    $('signed-in').classList.remove('hidden');
+  } else {
+    const p = await fetch(API + '/providers').then(r => r.json()).catch(() => ({providers: []}));
+    if (p.providers.length) {
+      const box = $('providers');
+      for (const name of p.providers) {
+        const a = document.createElement('a');
+        a.href = API + '/' + name;
+        a.innerHTML = '<button type="button" class="alt" style="width:100%">Sign in with ' +
+          name.charAt(0).toUpperCase() + name.slice(1) + '</button>';
+        box.appendChild(a);
+      }
+      box.classList.remove('hidden');
+    }
+  }
+
+  $('magic').addEventListener('submit', async e => {
+    e.preventDefault();
+    msg('Sending…');
+    const r = await fetch(API + '/magic', {
+      method: 'POST', credentials: 'same-origin',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({email: $('email').value.trim()})
+    });
+    const body = await r.json().catch(() => ({}));
+    if (r.status === 202) msg('Check your email — the link is on its way.');
+    else msg(body.error || 'Something went wrong.', true);
+  });
+
+  $('signout').addEventListener('click', async () => {
+    await fetch(API + '/signout', {method: 'POST', credentials: 'same-origin'});
+    location.href = '/blade-book/';
+  });
+})();
+</script>

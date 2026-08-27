@@ -42,3 +42,19 @@ def test_runbook_move_exists_and_names_the_steps():
     for word in ('supervisorctl stop blade_book', 'rsync', '/var/lib/blade-book',
                  '/etc/blade-book', 'DNS'):
         assert word in s
+
+
+def test_landing_has_sign_in_wiring():
+    html = open(os.path.join(ROOT, 'html', 'index.html')).read()
+    for needle in ("'/blade-book/api/auth'", "'/magic'", "'/me'", "'/providers'",
+                   "'/signout'", "'expired'", "'failed'", 'type="email"'):
+        assert needle in html, needle
+    assert 'fonts.googleapis.com' not in html  # billboard vhost CSP blocks it (plan 05 self-hosts)
+
+
+def test_env_doc_lists_every_key_the_code_reads():
+    doc = open(os.path.join(ROOT, 'docs', 'ENV.md')).read()
+    for key in ('SESSION_KEY', 'BASE_URL', 'RESEND_API_KEY', 'MAIL_FROM',
+                'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'APPLE_CLIENT_ID',
+                'APPLE_TEAM_ID', 'APPLE_KEY_ID', 'APPLE_PRIVATE_KEY'):
+        assert key in doc, key
