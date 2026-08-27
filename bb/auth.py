@@ -146,3 +146,29 @@ def login_required(fn):
             return jsonify({'error': 'sign in required'}), 401
         return fn(*a, **kw)
     return wrapper
+
+
+# --- rate limits -------------------------------------------------------------
+
+EMAIL_LINKS_PER_HOUR = 5
+IP_ATTEMPTS_PER_HOUR = 30
+PURGE_EVERY = 50
+
+
+def check_rate_limits(con, email=None):
+    """Record this attempt for the caller's IP and answer with a reason string
+    if either limit is hit, else None. Purges stale auth rows every
+    PURGE_EVERY attempts (keyed on the attempts row count, so no randomness
+    and no cron)."""
+    from datetime import datetime, timedelta, timezone
+    hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+    ip = client_ip()
+    db.record_attempt(con, ip)
+    total = con.execute('SELECT count(*) FROM auth_attempts').fetchone()[0]
+    if total % PURGE_EVERY == 0:
+        db.purge_auth_tables(con)
+    if db.count_attempts_since(con, ip, hour_ago) > IP_ATTEMPTS_PER_HOUR:
+        return 'too many sign-in attempts — try again in an hour'
+    if email and db.count_magic_tokens_since(con, email, hour_ago) >= EMAIL_LINKS_PER_HOUR:
+        return 'too many links sent to that address — try again in an hour'
+    return None

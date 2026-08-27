@@ -32,6 +32,10 @@ def request_magic_link():
         return jsonify({'error': 'enter a valid email'}), 400
     con = db.connect()
     try:
+        reason = auth.check_rate_limits(con, email)
+        if reason:
+            log.warning('rate limited %s from %s: %s', email, auth.client_ip(), reason)
+            return jsonify({'error': reason}), 429
         token = db.create_magic_token(con, email, auth.client_ip())
     finally:
         con.close()
