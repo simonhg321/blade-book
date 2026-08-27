@@ -25,10 +25,17 @@ def test_ip_limit_applies_across_emails(client, mailer):
     assert _req(client, 'fresh@example.com', ip='10.9.9.10').status_code == 202
 
 
-def test_first_forwarded_hop_is_the_client(client):
-    _req(client, 'sam@example.com', ip='203.0.113.5, 10.0.0.1')
+def test_last_forwarded_hop_is_the_client(client):
+    _req(client, 'sam@example.com', ip='1.2.3.4, 203.0.113.5')
     con = db.connect()
     assert con.execute('SELECT ip FROM auth_attempts').fetchone()[0] == '203.0.113.5'
+
+
+def test_spoofed_first_hop_does_not_bypass_ip_limit(client):
+    for i in range(auth.IP_ATTEMPTS_PER_HOUR):
+        assert _req(client, f'u{i}@example.com', ip=f'{i}.{i}.{i}.{i}, 10.9.9.9').status_code == 202
+    r = _req(client, 'fresh@example.com', ip='30.30.30.30, 10.9.9.9')
+    assert r.status_code == 429
 
 
 def test_check_rate_limits_purges_periodically(env):

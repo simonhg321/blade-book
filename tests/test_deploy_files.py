@@ -47,7 +47,7 @@ def test_runbook_move_exists_and_names_the_steps():
 def test_landing_has_sign_in_wiring():
     html = open(os.path.join(ROOT, 'html', 'index.html')).read()
     for needle in ("'/blade-book/api/auth'", "'/magic'", "'/me'", "'/providers'",
-                   "'/signout'", "'expired'", "'failed'", 'type="email"'):
+                   "'/signout'", "'expired'", "'failed'", "'unverified'", 'type="email"'):
         assert needle in html, needle
     assert 'fonts.googleapis.com' not in html  # billboard vhost CSP blocks it (plan 05 self-hosts)
 

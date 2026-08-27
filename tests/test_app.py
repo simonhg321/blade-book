@@ -1,5 +1,6 @@
 # Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
 import os
+import stat
 
 
 def test_healthz_ok(env):
@@ -35,3 +36,10 @@ def test_unknown_api_route_is_json_404(env):
 def test_config_load_tolerates_missing_env_file(env):
     from bb import config
     config.load()  # must not raise when CONFIG_DIR/.env is absent
+
+
+def test_app_log_is_not_world_readable(env):
+    from app import create_app
+    create_app()
+    app_log = os.path.join(env.LOG_DIR, 'app.log')
+    assert stat.S_IMODE(os.stat(app_log).st_mode) == 0o640

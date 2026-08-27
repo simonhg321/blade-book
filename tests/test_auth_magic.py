@@ -19,6 +19,16 @@ def test_request_link_rejects_bad_email(client, mailer):
     assert mailer.sent == []
 
 
+def test_request_link_returns_502_when_mailer_raises(app, mailer):
+    def boom(*a, **kw):
+        raise RuntimeError('resend is down')
+    mailer.send = boom
+    c = app.test_client()
+    r = c.post('/blade-book/api/auth/magic', json={'email': 'sam@example.com'})
+    assert r.status_code == 502
+    assert r.get_json() == {'error': 'could not send the email — try again in a minute'}
+
+
 def test_click_creates_user_signs_in_and_verifies(client, mailer, env):
     client.post('/blade-book/api/auth/magic', json={'email': 'Sam.Smith@example.com'})
     link = magic_link_from(mailer)

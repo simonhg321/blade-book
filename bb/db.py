@@ -189,9 +189,10 @@ def connect():
     con.execute('PRAGMA busy_timeout=5000')
     con.execute('PRAGMA foreign_keys=ON')
     con.executescript(SCHEMA)
-    if con.execute('SELECT count(*) FROM schema_version').fetchone()[0] == 0:
+    row = con.execute('SELECT version FROM schema_version').fetchone()
+    if row is None:
         con.execute('INSERT INTO schema_version VALUES (?)', (SCHEMA_VERSION,))
-    else:
+    elif row[0] != SCHEMA_VERSION:
         con.execute('UPDATE schema_version SET version = ?', (SCHEMA_VERSION,))
     con.commit()
     return con
@@ -270,15 +271,14 @@ def create_magic_token(con, email, ip):
 
 
 def consume_magic_token(con, token):
-    """Email for a live, unused token — and burn it. None otherwise."""
+    """Email for a live, unused token — and burn it, atomically (RETURNING
+    means the UPDATE's WHERE clause is the single point of truth for
+    single-use, no read-then-write race). None otherwise."""
     row = con.execute(
-        'SELECT id, email FROM magic_tokens WHERE token_hash = ? '
-        'AND used_at IS NULL AND expires > ?', (_sha(token), now())).fetchone()
-    if row is None:
-        return None
-    con.execute('UPDATE magic_tokens SET used_at = ? WHERE id = ?', (now(), row['id']))
+        'UPDATE magic_tokens SET used_at = ? WHERE token_hash = ? AND used_at IS NULL '
+        'AND expires > ? RETURNING email', (now(), _sha(token), now())).fetchone()
     con.commit()
-    return row['email']
+    return row['email'] if row else None
 
 
 def count_magic_tokens_since(con, email, since_iso):
@@ -313,9 +313,9 @@ def create_oauth_state(con, provider, nonce):
 
 def pop_oauth_state(con, state):
     row = con.execute(
-        'SELECT provider, nonce FROM oauth_states WHERE state = ? AND expires > ?',
+        'DELETE FROM oauth_states WHERE state = ? AND expires > ? RETURNING provider, nonce',
         (state, now())).fetchone()
-    con.execute('DELETE FROM oauth_states WHERE state = ?', (state,))
+    con.execute('DELETE FROM oauth_states WHERE state = ?', (state,))  # burn an expired one too
     con.commit()
     return dict(row) if row else None
 

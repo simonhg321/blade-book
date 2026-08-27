@@ -97,7 +97,7 @@ def test_verify_id_token_accepts_good_token(google_env):
     {'nonce': 'wrong'},
     {'aud': 'someone-else'},
     {'iss': 'https://evil.example.com'},
-    {'exp': int(time.time()) - 10},
+    {'exp': int(time.time()) - 120},  # beyond the leeway=60 clock-skew allowance
     {'email': None},
 ])
 def test_verify_id_token_rejects(google_env, bad):
@@ -173,6 +173,7 @@ def test_exchange_code_posts_and_verifies(google_env, monkeypatch):
 def test_exchange_code_raises_on_token_endpoint_error(google_env, monkeypatch):
     class R:
         status_code = 400
+        text = '{"error": "invalid_grant"}'
 
         def json(self):
             return {'error': 'invalid_grant'}
@@ -180,3 +181,35 @@ def test_exchange_code_raises_on_token_endpoint_error(google_env, monkeypatch):
     monkeypatch.setattr(requests, 'post', lambda *a, **k: R())
     with pytest.raises(oidc.OIDCError):
         oidc.exchange_code(oidc.google(), 'bad', 'n')
+
+
+def _bad_status_gateway(**kw):
+    class R:
+        status_code = 502
+        text = '<html>bad gateway</html>'
+
+        def json(self):
+            raise ValueError('not JSON')
+    return R()
+
+
+def _ok_status_bad_json(**kw):
+    class R:
+        status_code = 200
+        text = 'not json either'
+
+        def json(self):
+            raise ValueError('not JSON')
+    return R()
+
+
+def _raise_connection_error(**kw):
+    raise __import__('requests').ConnectionError('boom')
+
+
+@pytest.mark.parametrize('fake_post', [_bad_status_gateway, _ok_status_bad_json, _raise_connection_error])
+def test_exchange_code_never_raises_unhandled_on_bad_token_response(google_env, monkeypatch, fake_post):
+    import requests
+    monkeypatch.setattr(requests, 'post', lambda *a, **kw: fake_post(**kw))
+    with pytest.raises(oidc.OIDCError):
+        oidc.exchange_code(oidc.google(), 'code', 'n0nce')

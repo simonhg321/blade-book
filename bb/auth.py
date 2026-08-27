@@ -69,8 +69,11 @@ def base_url():
 
 
 def client_ip():
+    """Behind exactly one trusted proxy (Apache on this box) the real client is
+    the LAST X-Forwarded-For hop — Apache appends it; earlier hops are whatever
+    the client chose to send. Never use the first hop."""
     fwd = request.headers.get('X-Forwarded-For', '')
-    return (fwd.split(',')[0].strip() if fwd else request.remote_addr) or '?'
+    return (fwd.rsplit(',', 1)[-1].strip() if fwd else request.remote_addr) or '?'
 
 
 def _secret_hash(secret):
@@ -80,6 +83,7 @@ def _secret_hash(secret):
 def login(con, user):
     if not user['session_secret']:
         user['session_secret'] = db.rotate_session_secret(con, user['id'])
+    session.clear()
     session.permanent = True
     session['uid'] = user['id']
     session['ssh'] = _secret_hash(user['session_secret'])
@@ -117,6 +121,7 @@ def sign_in_by_email(con, email, provider=None, sub=None, verified=True):
     """Find-or-create the account for a proven email, merge the OIDC subject
     if any, mark verified, and log in. The single entry point for every
     sign-in method (spec §6: same email across providers → one user)."""
+    # TODO plan 10/11: consult deleted_users (email hash) so a re-created account gets no fresh free_old_used allowance
     email = email.strip().lower()
     user = db.get_user_by_email(con, email)
     if user is None and provider and sub:

@@ -4,6 +4,8 @@ Secrets only. Paths never live here (bb/paths.py). `install.sh` creates the
 file with `SESSION_KEY`; add the rest by hand (`sudo nano /etc/blade-book/.env`)
 and restart with `bash scripts/restart.sh`.
 
+Paths and the port are NOT here — `BLADEBOOK_*_DIR` / `BLADEBOOK_PORT` are read by `bb/paths.py` and set by the supervisor program, not `.env`.
+
 | key | plan | value |
 |---|---|---|
 | `SESSION_KEY` | 01 | 64 hex chars from `openssl rand -hex 32`. Rotating it signs everyone out. |

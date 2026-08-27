@@ -114,7 +114,7 @@ def test_unverified_provider_email_is_rejected(client, both, monkeypatch):
                                             'email_verified': False}})
     q = _start(client, 'google')
     r = client.get(f"/blade-book/api/auth/google/callback?code=x&state={q['state'][0]}")
-    assert r.headers['Location'].endswith('/blade-book/?auth=failed')
+    assert r.headers['Location'].endswith('/blade-book/?auth=unverified')
     assert client.get('/blade-book/api/auth/me').status_code == 401
     con = db.connect()
     assert con.execute('SELECT count(*) FROM users').fetchone()[0] == 0
@@ -129,7 +129,7 @@ def test_unverified_provider_email_does_not_merge_into_existing_user(client, mai
                                             'email_verified': False}})
     q = _start(client, 'google')
     r = client.get(f"/blade-book/api/auth/google/callback?code=x&state={q['state'][0]}")
-    assert r.headers['Location'].endswith('/blade-book/?auth=failed')
+    assert r.headers['Location'].endswith('/blade-book/?auth=unverified')
     assert client.get('/blade-book/api/auth/me').status_code == 401
     con = db.connect()
     assert db.get_user(con, uid)['auth_subjects'] == {}
@@ -167,6 +167,22 @@ def test_exchange_error_redirects_failed(client, both, monkeypatch):
     q = _start(client, 'google')
     r = client.get(f"/blade-book/api/auth/google/callback?code=x&state={q['state'][0]}")
     assert r.headers['Location'].endswith('?auth=failed')
+
+
+def test_callback_survives_gateway_error_from_token_endpoint(client, both, monkeypatch):
+    """requests.post returning an HTML 502 page must not 500 the callback —
+    exchange_code should raise OIDCError, which the route already handles."""
+    class R:
+        status_code = 502
+        text = '<html>bad gateway</html>'
+
+        def json(self):
+            raise ValueError('not JSON')
+    import requests
+    monkeypatch.setattr(requests, 'post', lambda *a, **kw: R())
+    q = _start(client, 'google')
+    r = client.get(f"/blade-book/api/auth/google/callback?code=x&state={q['state'][0]}")
+    assert r.status_code == 302 and r.headers['Location'].endswith('/blade-book/?auth=failed')
 
 
 def test_start_is_rate_limited_per_ip(client, both):

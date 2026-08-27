@@ -7,6 +7,12 @@ verified locally against the provider's JWKS (PyJWT); `verify_id_token`
 takes an explicit key so tests never touch the network. Apple's client
 secret is an ES256 JWT we mint from the .p8 key; Apple returns the code
 by cross-site form_post, which is why OIDC state lives in the DB.
+
+State is single-use and provider-bound but NOT bound to the caller's browser
+(Apple's form_post is cross-site, so a SameSite=Lax cookie cannot carry it). A
+login-CSRF where an attacker completes their own flow and hands the callback
+URL to a victim is therefore possible; later plans must not treat state as
+proof of browser identity.
 """
 import logging
 import time
@@ -125,7 +131,7 @@ def verify_id_token(provider, id_token, nonce, key=None):
     try:
         key = key or _signing_key(provider, id_token)
         claims = jwt.decode(id_token, key, algorithms=['RS256', 'ES256'],
-                            audience=provider.client_id,
+                            audience=provider.client_id, leeway=60,
                             options={'require': ['exp', 'iat', 'sub', 'aud', 'iss']})
     except jwt.PyJWTError as e:
         raise OIDCError(f'{provider.name} id_token rejected: {e}') from e
@@ -155,8 +161,11 @@ def exchange_code(provider, code, nonce):
     except requests.RequestException as e:
         raise OIDCError(f'{provider.name} token endpoint unreachable: {e!r}') from e
     if r.status_code != 200:
-        raise OIDCError(f'{provider.name} token endpoint {r.status_code}: {r.json()}')
-    id_token = r.json().get('id_token')
+        raise OIDCError(f'{provider.name} token endpoint {r.status_code}: {r.text[:200]!r}')
+    try:
+        id_token = r.json().get('id_token')
+    except ValueError as e:
+        raise OIDCError(f'{provider.name} token endpoint returned non-JSON: {r.text[:200]!r}') from e
     if not id_token:
         raise OIDCError(f'{provider.name} token response had no id_token')
     return verify_id_token(provider, id_token, nonce)

@@ -100,3 +100,12 @@ def test_handle_exists_and_purge(env):
 def test_schema_version_is_2(env):
     con = db.connect()
     assert con.execute('SELECT version FROM schema_version').fetchone()[0] == 2
+
+
+def test_connect_stamps_old_version_up(env):
+    con = db.connect()
+    con.execute('UPDATE schema_version SET version = 1')
+    con.commit()
+    con.close()
+    con = db.connect()
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == 2

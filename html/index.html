@@ -49,6 +49,7 @@
   const flag = new URLSearchParams(location.search).get('auth');
   if (flag === 'expired') msg('That link has expired or was already used — request a new one.', true);
   if (flag === 'failed') msg('Sign-in did not complete. Try again.', true);
+  if (flag === 'unverified') msg('Your sign-in provider has not verified that email address — use the email link instead.', true);
 
   const me = await fetch(API + '/me', {credentials: 'same-origin'});
   if (me.ok) {

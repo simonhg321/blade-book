@@ -44,6 +44,13 @@ def _setup_logging():
         '%(asctime)s %(levelname)s %(name)s: %(message)s'))
     root.addHandler(handler)
     root.setLevel(logging.INFO)
+    try:
+        os.chmod(target, 0o640)  # magic links land here via LogMailer — never world-readable
+        # rotated files (app.log.1, .2, ...) inherit this only via the process
+        # umask at rotation time, not this chmod — acceptable, they're on the
+        # same host under the same log dir permissions.
+    except OSError as e:
+        log.warning('could not chmod %s to 0o640: %r', target, e)
 
 
 api = Blueprint('api', __name__, url_prefix=paths.API_PREFIX)
@@ -80,7 +87,8 @@ def create_app(mailer=None):
     secret = config.get('SESSION_KEY')
     if not secret:
         secret = secrets.token_hex(32)
-        log.warning('SESSION_KEY missing from .env — sessions will not survive a restart')
+        log.warning('SESSION_KEY missing from .env — each gunicorn worker will mint its own '
+                    'key and sessions will break across workers/restarts')
     from bb import auth, mail
     app.config.update(
         SECRET_KEY=secret,

@@ -42,7 +42,11 @@ def request_magic_link():
         con.close()
     link = f'{auth.base_url()}{paths.API_PREFIX}/auth/magic?t={token}'
     subject, text, html = mail.magic_link_message(link)
-    current_app.config['MAILER'].send(email, subject, text, html)
+    try:
+        current_app.config['MAILER'].send(email, subject, text, html)
+    except Exception:
+        log.exception('magic link send failed for %s', email)
+        return jsonify({'error': 'could not send the email — try again in a minute'}), 502
     log.info('magic link requested for %s from %s', email, auth.client_ip())
     return jsonify({'ok': True}), 202
 
@@ -120,8 +124,8 @@ def oidc_callback(name):
     try:
         saved = db.pop_oauth_state(con, state) if state else None
         if params.get('error') or not code or saved is None or saved['provider'] != provider.name:
-            log.warning('%s callback rejected: error=%s code=%s state_ok=%s',
-                        provider.name, params.get('error'), bool(code), saved is not None)
+            log.warning('%s callback rejected: error=%r code=%s state_ok=%s',
+                        provider.name, str(params.get('error'))[:64], bool(code), saved is not None)
             return _landing(auth='failed')
         try:
             claims = oidc.exchange_code(provider, code, saved['nonce'])
@@ -130,7 +134,7 @@ def oidc_callback(name):
             return _landing(auth='failed')
         if not claims['email_verified']:
             log.warning('%s sign-in rejected: email not verified by provider', provider.name)
-            return _landing(auth='failed')
+            return _landing(auth='unverified')
         user = auth.sign_in_by_email(con, claims['email'], provider=provider.name,
                                      sub=claims['sub'])
     finally:
