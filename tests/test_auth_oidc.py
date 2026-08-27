@@ -109,13 +109,40 @@ def test_known_subject_with_new_email_signs_into_existing_user(client, both, mon
     assert me['id'] == uid and me['email'] == 'sam@example.com'  # email is not silently rewritten
 
 
-def test_unverified_provider_email_does_not_set_verified(client, both, monkeypatch):
+def test_unverified_provider_email_is_rejected(client, both, monkeypatch):
     _fake_exchange(monkeypatch, {'google': {'sub': 'g-2', 'email': 'sam@example.com',
                                             'email_verified': False}})
     q = _start(client, 'google')
-    client.get(f"/blade-book/api/auth/google/callback?code=x&state={q['state'][0]}")
-    me = client.get('/blade-book/api/auth/me').get_json()
-    assert me['verified_at'] is None
+    r = client.get(f"/blade-book/api/auth/google/callback?code=x&state={q['state'][0]}")
+    assert r.headers['Location'].endswith('/blade-book/?auth=failed')
+    assert client.get('/blade-book/api/auth/me').status_code == 401
+    con = db.connect()
+    assert con.execute('SELECT count(*) FROM users').fetchone()[0] == 0
+
+
+def test_unverified_provider_email_does_not_merge_into_existing_user(client, mailer, both, monkeypatch):
+    client.post('/blade-book/api/auth/magic', json={'email': 'sam@example.com'})
+    client.get(magic_link_from(mailer))
+    uid = client.get('/blade-book/api/auth/me').get_json()['id']
+    client.post('/blade-book/api/auth/signout')
+    _fake_exchange(monkeypatch, {'google': {'sub': 'g-9', 'email': 'sam@example.com',
+                                            'email_verified': False}})
+    q = _start(client, 'google')
+    r = client.get(f"/blade-book/api/auth/google/callback?code=x&state={q['state'][0]}")
+    assert r.headers['Location'].endswith('/blade-book/?auth=failed')
+    assert client.get('/blade-book/api/auth/me').status_code == 401
+    con = db.connect()
+    assert db.get_user(con, uid)['auth_subjects'] == {}
+
+
+def test_cross_provider_state_replay_is_rejected(client, both, monkeypatch):
+    _fake_exchange(monkeypatch, {
+        'google': {'sub': 'g-1', 'email': 'sam@example.com', 'email_verified': True},
+        'apple': {'sub': 'a-1', 'email': 'sam@example.com', 'email_verified': True}})
+    q = _start(client, 'google')
+    r = client.get(f"/blade-book/api/auth/apple/callback?code=x&state={q['state'][0]}")
+    assert r.headers['Location'].endswith('/blade-book/?auth=failed')
+    assert client.get('/blade-book/api/auth/me').status_code == 401
 
 
 @pytest.mark.parametrize('qs', ['code=x&state=bogus', 'code=x', 'state=', 'error=access_denied&state=x'])

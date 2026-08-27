@@ -128,8 +128,11 @@ def oidc_callback(name):
         except oidc.OIDCError as e:
             log.warning('%s exchange failed: %s', provider.name, e)
             return _landing(auth='failed')
+        if not claims['email_verified']:
+            log.warning('%s sign-in rejected: email not verified by provider', provider.name)
+            return _landing(auth='failed')
         user = auth.sign_in_by_email(con, claims['email'], provider=provider.name,
-                                     sub=claims['sub'], verified=claims['email_verified'])
+                                     sub=claims['sub'])
     finally:
         con.close()
     log.info('%s sign-in: %s (@%s)', provider.name, user['email'], user['handle'])
