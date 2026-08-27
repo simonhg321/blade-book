@@ -8,3 +8,4 @@ config/
 *.db-wal
 *.db-shm
 .env
+.worktrees/
