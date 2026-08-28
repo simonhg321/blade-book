@@ -9,6 +9,7 @@ where bytes live.
 """
 import os
 import re
+import secrets
 
 from bb import paths
 
@@ -50,10 +51,17 @@ class LocalFSStore(PhotoStore):
     def put(self, key, data):
         p = self._path(key)
         os.makedirs(os.path.dirname(p), exist_ok=True)
-        tmp = p + '.part'
-        with open(tmp, 'wb') as f:
-            f.write(data)
-        os.replace(tmp, p)  # atomic: a reader never sees a half-written original
+        tmp = f'{p}.{os.getpid()}.{secrets.token_hex(4)}.part'
+        try:
+            with open(tmp, 'wb') as f:
+                f.write(data)
+            os.replace(tmp, p)  # atomic: a reader never sees a half-written original
+        except BaseException:
+            try:
+                os.unlink(tmp)
+            except FileNotFoundError:
+                pass
+            raise
 
     def get(self, key):
         p = self._path(key)

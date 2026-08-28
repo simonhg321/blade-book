@@ -53,3 +53,11 @@ def test_from_paths_uses_photos_dir(env):
     s = store.from_paths()
     assert isinstance(s, store.LocalFSStore)
     assert s.root == env.photos_dir()
+
+
+def test_failed_put_leaves_no_temp_file(tmp_path):
+    s = store.LocalFSStore(str(tmp_path / 'photos'))
+    with pytest.raises(TypeError):
+        s.put('1/7/1.jpg', 'not bytes')  # str → f.write raises
+    assert not s.exists('1/7/1.jpg')
+    assert list((tmp_path / 'photos' / '1' / '7').glob('*')) == []
