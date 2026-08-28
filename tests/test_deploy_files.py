@@ -101,3 +101,13 @@ def test_requirements_pin_anthropic():
 def test_requirements_and_runbook_mention_pillow_heif():
     assert 'pillow-heif' in _read('requirements.txt')
     assert 'pillow-heif' in _read('docs/RUNBOOK-move.md')
+
+
+def test_wire_anthropic_script():
+    path = os.path.join(ROOT, 'scripts', 'wire_anthropic.sh')
+    assert os.path.exists(path)
+    s = _read('scripts/wire_anthropic.sh')
+    for needle in ('ANTHROPIC_API_KEY', 'DECODER_MODEL', '--break-system-packages',
+                   'supervisorctl restart blade_book'):
+        assert needle in s, needle
+    assert 'echo "$KEY"' not in s and 'echo $KEY' not in s
