@@ -450,6 +450,92 @@ def set_knife_note(con, owner_id, knife_id, text):
     return ok
 
 
+def update_knife(con, owner_id, knife_id, fields):
+    """Owner edit. `fields` is column → value, already validated by bb.edit; `ext` is a
+    whole dict and REPLACES. Raises ValueError for any column outside EDITABLE_COLUMNS
+    (status, tag, owner, sale columns have their own helpers)."""
+    bad = set(fields) - EDITABLE_COLUMNS
+    if bad:
+        raise ValueError(f'not editable: {sorted(bad)}')
+    if not fields:
+        return get_knife(con, owner_id, knife_id)
+    cols, vals = [], []
+    for col, v in fields.items():
+        cols.append(f'{col} = ?')
+        vals.append(json.dumps(v) if col == 'ext' else v)
+    vals += [now(), knife_id, owner_id]
+    ok = con.execute(f'UPDATE knives SET {", ".join(cols)}, updated = ? WHERE id = ? AND owner_id = ?',
+                     vals).rowcount == 1
+    con.commit()
+    return get_knife(con, owner_id, knife_id) if ok else None
+
+
+def publish_knife(con, owner_id, knife_id):
+    """draft → live. Needs at least one photo. Idempotent on a live knife. Writes the
+    `photographed` event once, on the transition. Returns (knife, error)."""
+    k = get_knife(con, owner_id, knife_id)
+    if k is None:
+        return None, 'not found'
+    if k['status'] == 'live':
+        return k, None
+    if not k['photos']:
+        return k, 'add a photo first'
+    con.execute("UPDATE knives SET status = 'live', updated = ? WHERE id = ? AND owner_id = ?",
+                (now(), knife_id, owner_id))
+    con.commit()
+    n = len(k['photos'])
+    add_event(con, owner_id, knife_id, 'photographed', detail=f'{n} photo{"s" if n != 1 else ""}')
+    return get_knife(con, owner_id, knife_id), None
+
+
+SALE_EVENT = {'for_trade': 'for_trade', 'for_sale': 'for_sale', 'sold': 'sold',
+              'consigned': 'consigned', 'keeping': 'withdrawn'}
+_LISTED = ('for_trade', 'for_sale', 'consigned')
+
+
+def set_sale(con, owner_id, knife_id, sale_status, asking_price=None, seller_note=None,
+             amount=None, counterparty=None):
+    """Sale controls. One event per status CHANGE: listing states by name, `keeping`
+    as `withdrawn` (only when leaving a listed state), `sold` with amount + counterparty."""
+    if sale_status not in SALE_STATUSES:
+        raise ValueError(f'bad sale_status {sale_status!r}')
+    k = get_knife(con, owner_id, knife_id)
+    if k is None:
+        return None
+    con.execute('UPDATE knives SET sale_status = ?, asking_price = ?, seller_note = ?, updated = ? '
+                'WHERE id = ? AND owner_id = ?',
+                (sale_status, asking_price, seller_note, now(), knife_id, owner_id))
+    con.commit()
+    if sale_status != k['sale_status'] and (sale_status != 'keeping' or k['sale_status'] in _LISTED):
+        add_event(con, owner_id, knife_id, SALE_EVENT[sale_status], detail=seller_note or None,
+                  amount=amount if sale_status == 'sold' else asking_price,
+                  counterparty=counterparty)
+    return get_knife(con, owner_id, knife_id)
+
+
+def set_public(con, owner_id, knife_ids, is_public):
+    """Bulk public/private. Only the owner's rows change; returns the count."""
+    ids = [int(i) for i in knife_ids]
+    if not ids:
+        return 0
+    marks = ','.join('?' * len(ids))
+    n = con.execute(f'UPDATE knives SET is_public = ?, updated = ? WHERE owner_id = ? AND id IN ({marks})',
+                    [1 if is_public else 0, now(), owner_id, *ids]).rowcount
+    con.commit()
+    return n
+
+
+def full_register(con, owner_id):
+    """Every knife (drafts included), newest first, each with photos + events. The
+    owner's own page — never the input to a public view."""
+    out = []
+    for r in con.execute('SELECT * FROM knives WHERE owner_id = ? ORDER BY id DESC', (owner_id,)).fetchall():
+        k = _knife_row(con, r)
+        k['events'] = list_events(con, owner_id, k['id'])
+        out.append(k)
+    return out
+
+
 # --- events + decode -----------------------------------------------------------
 
 def add_event(con, owner_id, knife_id, type, detail=None, amount=None, counterparty=None,
@@ -511,6 +597,11 @@ def apply_decode(con, owner_id, knife_id, d):
     return get_knife(con, owner_id, knife_id)
 
 
+EDITABLE_COLUMNS = frozenset(_DECODE_COLUMNS) | {
+    'ext', 'price_paid', 'acquired_from', 'acquired_date', 'location', 'notes_private',
+    'condition_note', 'notes_public', 'hero_photo'}
+
+
 def _photo_keys(con, knife_id):
     keys = []
     for r in con.execute('SELECT store_key FROM photos WHERE knife_id = ?', (knife_id,)):
@@ -524,6 +615,19 @@ def delete_draft_knife(con, owner_id, knife_id):
     if row is None:
         return []
     keys = _photo_keys(con, knife_id)
+    con.execute('DELETE FROM knives WHERE id = ? AND owner_id = ?', (knife_id, owner_id))  # photos cascade
+    con.commit()
+    return keys
+
+
+def delete_knife(con, owner_id, knife_id):
+    """Delete a knife of ANY status (the owner's data; anti-sticky). Photos cascade;
+    events are removed explicitly. Returns the store keys to remove, None if not owned."""
+    row = con.execute('SELECT id FROM knives WHERE id = ? AND owner_id = ?', (knife_id, owner_id)).fetchone()
+    if row is None:
+        return None
+    keys = _photo_keys(con, knife_id)
+    con.execute('DELETE FROM events WHERE knife_id = ? AND owner_id = ?', (knife_id, owner_id))
     con.execute('DELETE FROM knives WHERE id = ? AND owner_id = ?', (knife_id, owner_id))  # photos cascade
     con.commit()
     return keys
