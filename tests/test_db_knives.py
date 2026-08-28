@@ -77,10 +77,13 @@ def test_add_photo_to_foreign_knife_is_not_found(env):
 
 def test_delete_draft_returns_keys_and_refuses_live(env):
     con = db.connect()
-    a, _ = _two_users(con)
+    a, b = _two_users(con)
     k = db.create_draft_knife(con, a)
     db.add_photo(con, a, k['id'], 1, f"{a}/{k['id']}/1.jpg", 'ab' * 32, 1, 1)
     db.add_photo(con, a, k['id'], 3, f"{a}/{k['id']}/3.png", 'cd' * 32, 1, 1)
+    assert db.delete_draft_knife(con, b, k['id']) == []      # foreign owner: nothing happens
+    assert db.get_knife(con, a, k['id']) is not None
+    assert con.execute('SELECT count(*) FROM photos').fetchone()[0] == 2
     keys = db.delete_draft_knife(con, a, k['id'])
     assert sorted(keys) == sorted([f"{a}/{k['id']}/1.jpg", f"{a}/{k['id']}/1.thumb.jpg",
                                    f"{a}/{k['id']}/3.png", f"{a}/{k['id']}/3.thumb.jpg"])

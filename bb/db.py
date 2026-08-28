@@ -437,7 +437,7 @@ def delete_draft_knife(con, owner_id, knife_id):
     if row is None:
         return []
     keys = _photo_keys(con, knife_id)
-    con.execute('DELETE FROM knives WHERE id = ?', (knife_id,))  # photos cascade
+    con.execute('DELETE FROM knives WHERE id = ? AND owner_id = ?', (knife_id, owner_id))  # photos cascade
     con.commit()
     return keys
 
@@ -469,7 +469,7 @@ def delete_photo(con, owner_id, knife_id, seq):
     row = get_photo(con, owner_id, knife_id, seq)
     if row is None:
         return None
-    con.execute('DELETE FROM photos WHERE id = ?', (row['id'],))
+    con.execute('DELETE FROM photos WHERE id = ? AND owner_id = ?', (row['id'], owner_id))
     _touch(con, owner_id, knife_id)
     con.commit()
     return row
