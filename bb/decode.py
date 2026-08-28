@@ -62,6 +62,8 @@ def prep_image(data):
         img = photos._open(data)
         if img is None:
             return None
+        if img.format in ('JPEG', 'MPO'):
+            img.draft('RGB', (MAX_EDGE * 2, MAX_EDGE * 2))
         img = ImageOps.exif_transpose(img).convert('RGB')
     except (photos.TooBig, OSError, ValueError):
         return None
@@ -108,7 +110,7 @@ def _to_decoded(data, maker, model):
         ext = {k: data['ext'][k] for k in mod.EXT_PROPS}
         conf = dict(data['confidence'])
         card_text, no_card, reasoning = data['card_text'], bool(data['no_card']), data['reasoning']
-    except (KeyError, TypeError) as e:
+    except (KeyError, TypeError, ValueError) as e:
         raise DecodeError(f'model output missing {e}') from e
     return Decoded(core=core_, ext=ext, card_text=card_text or '', no_card=no_card,
                    confidence=conf, reasoning=reasoning or '', flags=mod.flags(core_, ext),

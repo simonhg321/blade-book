@@ -90,3 +90,7 @@ def test_intake_page_wiring():
     landing = open(os.path.join(ROOT, 'html', 'index.html')).read()
     assert '/blade-book/me/add/' in landing and 'ADD A KNIFE' in landing
     assert "'/blade-book/api/knives/?status=draft'" in landing
+
+
+def test_requirements_pin_anthropic():
+    assert 'anthropic>=' in _read('requirements.txt')

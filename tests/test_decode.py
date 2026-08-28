@@ -33,6 +33,18 @@ def test_prep_image_leaves_small_images_alone_but_reencodes():
     assert Image.open(io.BytesIO(out)).size == (800, 600)
 
 
+def test_prep_image_draft_mode_large_orientation():
+    # Verify draft-mode decode doesn't spike RSS on large JPEGs; orient 6 rotates landscape to portrait
+    img = Image.new('RGB', (8000, 6000), (200, 100, 50))
+    buf = io.BytesIO()
+    exif = Image.Exif(); exif[274] = 6
+    img.save(buf, 'JPEG', exif=exif, quality=30)
+    out = decode.prep_image(buf.getvalue())
+    result = Image.open(io.BytesIO(out))
+    assert max(result.size) <= decode.MAX_EDGE
+    assert result.size[0] < result.size[1]  # portrait after orientation 6 transpose
+
+
 def test_build_messages_shape():
     msgs = decode.build_messages([b'a', b'b'], 'Large 31', 'crk', no_card=True)
     assert len(msgs) == 1 and msgs[0]['role'] == 'user'
