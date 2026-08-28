@@ -20,6 +20,10 @@ def _jpeg(w=1200, h=900, exif_orientation=None):
     return buf.getvalue()
 
 
+def _png_1bit(w, h):
+    buf = io.BytesIO(); Image.new('1', (w, h), 1).save(buf, 'PNG'); return buf.getvalue()
+
+
 def test_ext_for_allows_known_and_rejects_others():
     assert photos.ext_for('IMG_0001.JPG') == 'jpg'
     assert photos.ext_for('shot.heic') == 'heic'
@@ -62,3 +66,14 @@ def test_ingest_rejects_too_big_and_bad_type():
 def test_mime_covers_every_allowed_ext():
     for ext in photos.ALLOWED_EXT:
         assert photos.MIME[ext].startswith('image/'), ext
+
+
+def test_ingest_rejects_decompression_bombs_before_decoding():
+    small = _png_1bit(20000, 9000)          # 180 MP declared, tiny file → Pillow's own bomb error
+    assert len(small) < photos.MAX_PHOTO_BYTES
+    with pytest.raises(photos.TooBig):
+        photos.ingest(small, 'bomb.png')
+    with pytest.raises(photos.TooBig):      # 81 MP: under Pillow's threshold, over ours
+        photos.ingest(_png_1bit(9000, 9000), 'big.png')
+    r = photos.ingest(_png_1bit(8000, 6000), 'ok.png')   # 48 MP — an iPhone is fine
+    assert (r.width, r.height) == (8000, 6000) and r.thumb is not None
