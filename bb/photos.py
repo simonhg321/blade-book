@@ -28,6 +28,15 @@ _CHEAP_FORMATS = ('JPEG', 'MPO')  # Pillow can decode these at reduced scale via
 _OPEN_FORMATS = ['JPEG', 'PNG', 'GIF', 'WEBP', 'TIFF']  # Pillow only dispatches to
                                                           # these decoders regardless
                                                           # of the sniffed content
+MAX_PIXELS_HEIF = 50_000_000  # pillow-heif decodes fully; a 48 MP iPhone HEIC must pass
+try:
+    import pillow_heif
+    pillow_heif.register_heif_opener()
+    _OPEN_FORMATS.append('HEIF')
+    HEIF_OK = True
+except ImportError:  # optional dependency — HEIC then stores without a thumb, as before
+    HEIF_OK = False
+
 MIME = {'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png',
         'heic': 'image/heic', 'heif': 'image/heif', 'webp': 'image/webp',
         'tif': 'image/tiff', 'tiff': 'image/tiff', 'dng': 'image/x-adobe-dng',
@@ -71,7 +80,12 @@ def _open(data):
     except (UnidentifiedImageError, OSError, ValueError):
         return None
     w, h = img.size
-    cap = MAX_PIXELS if img.format in _CHEAP_FORMATS else MAX_PIXELS_NON_JPEG
+    if img.format in _CHEAP_FORMATS:
+        cap = MAX_PIXELS
+    elif img.format == 'HEIF':
+        cap = MAX_PIXELS_HEIF
+    else:
+        cap = MAX_PIXELS_NON_JPEG
     if w * h > cap:
         raise TooBig(f'{w}x{h} = {w * h} pixels > {cap}')
     return img

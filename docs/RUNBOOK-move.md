@@ -4,7 +4,7 @@ Trigger: 10–30 customers (spec §11). Everything lives in four dirs and one
 supervisor program; nothing imports from billboard.
 
 1. New Linode: same OS, `apt install apache2 supervisor python3-pip sqlite3`,
-   `pip install -r requirements.txt` (gunicorn lands in /usr/local/bin).
+   `pip install -r requirements.txt` (which now pulls `pillow-heif` — HEIC thumbs/decode depend on it; gunicorn lands in /usr/local/bin).
 2. On stark: `sudo supervisorctl stop blade_book` (writes stop; static pages keep serving).
 3. `rsync -a /home/shg/blade-book/ new:/home/shg/blade-book/`
    `rsync -a /var/lib/blade-book/ new:/var/lib/blade-book/`

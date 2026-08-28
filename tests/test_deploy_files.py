@@ -95,3 +95,8 @@ def test_intake_page_wiring():
 
 def test_requirements_pin_anthropic():
     assert 'anthropic>=' in _read('requirements.txt')
+
+
+def test_requirements_and_runbook_mention_pillow_heif():
+    assert 'pillow-heif' in _read('requirements.txt')
+    assert 'pillow-heif' in _read('docs/RUNBOOK-move.md')
