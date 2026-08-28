@@ -12,13 +12,13 @@ CORE_PROPS = {
     'variant': {'type': 'string', 'description': 'Edition/qualifier not covered elsewhere, e.g. "25th Anniversary"; empty if none'},
     'blade_steel': {'type': 'string', 'description': 'As printed, e.g. "CPM MagnaCut", "S35VN", "Damascus"; empty if unknown'},
     'blade_shape': {'type': 'string', 'description': '"Drop Point", "Insingo", "Tanto", "Wharncliffe"…; empty if unknown'},
-    'blade_length_in': {'type': ['number', 'null'], 'description': 'Inches, only when the model+size makes it certain; else null'},
+    'blade_length_in': {'anyOf': [{'type': 'number'}, {'type': 'null'}], 'description': 'Inches, only when the model+size makes it certain; else null'},
     'handle_material': {'type': 'string', 'description': 'Frame/scale material incl. inlay wood or micarta, e.g. "titanium, box elder burl inlay"'},
     'lock_type': {'type': 'string', 'description': '"framelock", "slipjoint", "fixed"…'},
     'born_on': {'type': 'string', 'description': 'Birth/manufacture date from the card as YYYY-MM-DD, YYYY-MM or YYYY; empty if no date visible'},
     'born_on_precision': {'type': 'string', 'enum': ['day', 'month', 'year', '']},
     'born_on_source': {'type': 'string', 'enum': ['card', 'box', 'owner', 'inferred', '']},
-    'condition': {'type': ['integer', 'null'], 'enum': [1, 2, 3, 4, None], 'description': '1 new/unused, 2 excellent, 3 very good, 4 used; null if the knife is not visible'},
+    'condition': {'anyOf': [{'type': 'integer', 'enum': [1, 2, 3, 4]}, {'type': 'null'}], 'description': '1 new/unused, 2 excellent, 3 very good, 4 used; null if the knife is not visible'},
     'has_box': {'type': 'boolean'},
     'has_card': {'type': 'boolean', 'description': 'A birth card / certificate is IN FRAME'},
     'has_papers': {'type': 'boolean', 'description': 'Any other paperwork: warranty, care sheet, receipt'},
@@ -28,8 +28,8 @@ CORE_PROPS = {
 }
 CORE_FIELDS = tuple(CORE_PROPS)
 
-NO_CARD_LINE = ('The owner states there is no birth card for this knife. Do not invent one; '
-                'leave born_on empty with born_on_source "" unless a date is printed on the box.')
+NO_CARD_LINE = ('The owner states there is NO birth card for this knife — no birth card is in frame. '
+                'Do not invent one; leave born_on empty with born_on_source "" unless a date is printed on the box.')
 
 BASE_PROMPT = (
     'These photos are ALL of the SAME knife, shot by its owner for their private register. '

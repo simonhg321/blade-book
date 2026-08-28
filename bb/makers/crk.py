@@ -60,7 +60,7 @@ _STEEL_ALIASES = [
     (re.compile(r'\bs45\s*vn?\b', re.I), 's45vn'),
     (re.compile(r'\bs30\s*v\b', re.I), 's30v'),
     (re.compile(r'bg[-\s]?42', re.I), 'bg-42'),
-    (re.compile(r'(cpm[-\s]?)?4v\b', re.I), 'cpm 4v'),
+    (re.compile(r'\b(cpm[-\s]?)?4v\b', re.I), 'cpm 4v'),
 ]
 _MODELS = ('sebenza', 'inkosi', 'mnandi', 'impinda', 'umnumzaan', 'tilock', 'ti-lock',
            'zaan', 'green beret', 'pacific', 'nyala', 'professional soldier', 'sikayo')
@@ -100,9 +100,10 @@ def norm(field, value):
     return s
 
 
-def flags(core_, ext):
+def flags(core_, ext, today=None):
     """Consistency rules. Input = the decoded core + ext dicts. Output = list of
     human sentences; empty means consistent."""
+    today = today or dt.date.today()
     out = []
     sku = (ext.get('crk_sku') or '').strip().upper()
     pre = sku.split('-', 1)[0] if sku else ''
@@ -122,7 +123,7 @@ def flags(core_, ext):
         if (lo and year < lo) or (hi and year > hi):
             label = {'s30v': 'S30V', 'magnacut': 'MagnaCut', 's45vn': 'S45VN'}[steel]
             out.append(f'{label} on a {year} card — outside its production window')
-    if year and year > dt.date.today().year:
+    if year and year > today.year:
         out.append(f'card date {born} is in the future')
     h, hb = _s(ext.get('hand')), _s(ext.get('hand_on_box'))
     if h and hb and h != hb:

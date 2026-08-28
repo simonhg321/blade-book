@@ -28,6 +28,9 @@ def test_schema_is_closed_and_covers_core_ext_confidence():
     assert conf['properties']['model']['enum'] == ['high', 'medium', 'low']
     for k in ('card_text', 'no_card', 'reasoning'):
         assert k in s['required'], k
+    assert s['properties']['condition']['anyOf'][0]['enum'] == [1, 2, 3, 4]
+    assert s['properties']['blade_length_in']['anyOf'][1] == {'type': 'null'}
+    assert not any(isinstance(p.get('type'), list) for p in s['properties'].values())  # strict mode: no type arrays
     json.dumps(s)  # serialisable
 
 
@@ -89,3 +92,10 @@ def test_flags_future_date_and_hand_mismatch():
     f = crk.flags({'model': 'Sebenza', 'born_on': '2022-01-01'}, {'hand': 'left', 'hand_on_box': 'right'})
     assert any('hand' in x.lower() for x in f)
     assert crk.flags({'model': 'Sebenza', 'born_on': None}, {}) == []
+
+
+def test_flags_today_parameter():
+    f = crk.flags({'model': 'Sebenza', 'born_on': '2027-01-01'}, {}, today=dt.date(2026, 8, 28))
+    assert any('future' in x for x in f)
+    f = crk.flags({'model': 'Sebenza', 'born_on': '2027-01-01'}, {}, today=dt.date(2027, 6, 1))
+    assert not any('future' in x for x in f)
