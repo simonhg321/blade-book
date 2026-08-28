@@ -135,6 +135,9 @@ def _slot_ok(seq):
 @bp.post('/<int:knife_id>/photos/<int:seq>')
 @auth.login_required
 def upload_photo(knife_id, seq):
+    """Upload a photo to a slot.
+    ?replace=1 swaps a slot in one request: ingest first, then delete the old photo,
+    then insert — a rejected file never touches the existing photo."""
     if not _slot_ok(seq):
         return jsonify({'error': 'slot must be 1, 2 or 3'}), 400
     f = request.files.get('photo')
@@ -157,6 +160,11 @@ def upload_photo(knife_id, seq):
     try:
         if db.get_knife(con, owner, knife_id) is None:
             return _not_found()
+        if request.args.get('replace') == '1':
+            old = db.delete_photo(con, owner, knife_id, seq)
+            if old:
+                _delete_keys(store, [old['store_key'], db.thumb_key(old['store_key'])],
+                             f'replace {knife_id}/{seq}')
         try:
             db.add_photo(con, owner, knife_id, seq, key, ing.sha256, ing.width, ing.height)
         except db.SlotTaken:

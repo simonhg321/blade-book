@@ -132,3 +132,26 @@ def test_delete_draft_removes_its_files(client, mailer, app, env):
     for key in (f"{me['id']}/{kid}/1.jpg", f"{me['id']}/{kid}/1.thumb.jpg",
                 f"{me['id']}/{kid}/2.jpg", f"{me['id']}/{kid}/2.thumb.jpg"):
         assert not store.exists(key), key
+
+
+def test_replace_swaps_slot_in_one_request_and_bad_file_keeps_old(client, mailer, app, env):
+    me = signed_in(client, mailer)
+    kid = client.post(K + '/').get_json()['id']
+    first = _jpeg(640, 480)
+    assert _up(client, kid, 1, first).status_code == 201
+    store = app.config['STORE']
+    # a rejected file must not disturb the existing photo
+    r = client.post(f'{K}/{kid}/photos/1?replace=1',
+                    data={'photo': (io.BytesIO(b'nope'), 'scan.pdf')}, content_type='multipart/form-data')
+    assert r.status_code == 415
+    assert store.get(f"{me['id']}/{kid}/1.jpg") == first
+    # a good file swaps it
+    second = _jpeg(800, 600)
+    r = client.post(f'{K}/{kid}/photos/1?replace=1',
+                    data={'photo': (io.BytesIO(second), 'new.png')}, content_type='multipart/form-data')
+    assert r.status_code == 201 and r.get_json()['width'] == 800
+    assert store.get(f"{me['id']}/{kid}/1.png") == second
+    assert not store.exists(f"{me['id']}/{kid}/1.jpg")
+    assert [p['seq'] for p in client.get(f'{K}/{kid}').get_json()['photos']] == [1]
+    # without replace, a taken slot is still a 409
+    assert _up(client, kid, 1).status_code == 409

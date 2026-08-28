@@ -126,22 +126,24 @@
 
   function upload(seq, f, replace) {
     var id = current;
-    var go = replace ? api('/knives/' + id + '/photos/' + seq, { method: 'DELETE' }) : Promise.resolve({ ok: true });
     say('uploading ' + seq + '…');
-    go.then(function () {
-      var fd = new FormData(); fd.append('photo', f, f.name || ('shot' + seq + '.jpg'));
-      return api('/knives/' + id + '/photos/' + seq, { method: 'POST', body: fd });
-    }).then(function (res) {
-      if (!res.ok) throw new Error(res.j.error || 'upload failed');
-      say('✓ saved ' + seq + (res.j.has_thumb ? '' : ' (no preview for this format — stored)'));
-      return loadDrafts(id);
-    }).catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); });
+    var fd = new FormData(); fd.append('photo', f, f.name || ('shot' + seq + '.jpg'));
+    var url = '/knives/' + id + '/photos/' + seq + (replace ? '?replace=1' : '');
+    return api(url, { method: 'POST', body: fd })
+      .then(function (res) {
+        if (!res.ok) throw new Error(res.j.error || 'upload failed');
+        say('✓ saved ' + seq + (res.j.has_thumb ? '' : ' (no preview for this format — stored)'));
+      })
+      .catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); })
+      .then(function () { return loadDrafts(id); });
   }
 
   function removeSlot(seq) {
     if (!confirm('Delete photo ' + seq + '?')) return;
     var id = current;
-    api('/knives/' + id + '/photos/' + seq, { method: 'DELETE' }).then(function () { return loadDrafts(id); });
+    api('/knives/' + id + '/photos/' + seq, { method: 'DELETE' })
+      .catch(function () { say('✗ network error', true); })
+      .then(function () { return loadDrafts(id); });
   }
 
   var noteTimer = null;
@@ -159,15 +161,19 @@
   $('note').addEventListener('blur', function () { clearTimeout(noteTimer); saveNote(); });
 
   $('new').addEventListener('click', function () {
-    api('/knives/', { method: 'POST' }).then(function (res) {
-      if (!res.ok) { say(res.j.error || 'could not create', true); return; }
-      say('reserved ' + res.j.tag); loadDrafts(res.j.id);
-    });
+    api('/knives/', { method: 'POST' })
+      .then(function (res) {
+        if (!res.ok) { say(res.j.error || 'could not create', true); return; }
+        say('reserved ' + res.j.tag); loadDrafts(res.j.id);
+      })
+      .catch(function () { say('✗ network error', true); });
   });
   $('draft').addEventListener('change', function () { select(this.value); });
   $('discard').addEventListener('click', function () {
     if (!current || !confirm('Discard this draft and its photos?')) return;
-    api('/knives/' + current, { method: 'DELETE' }).then(function () { say('draft discarded'); loadDrafts(); });
+    api('/knives/' + current, { method: 'DELETE' })
+      .then(function () { say('draft discarded'); loadDrafts(); })
+      .catch(function () { say('✗ network error', true); });
   });
 
   api('/auth/me').then(function () { loadDrafts(); });
