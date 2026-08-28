@@ -128,3 +128,19 @@ def test_login_required_decorator_sets_g_user(app, mailer):
     c.post('/blade-book/api/auth/magic', json={'email': 'sam@example.com'})
     c.get(magic_link_from(mailer))
     assert c.get('/blade-book/api/_whoami').get_json() == {'handle': 'sam'}
+
+
+def test_browser_navigation_signed_out_gets_unauthenticated_page(client):
+    # a person typing an API URL into the address bar gets a page, not JSON:
+    # 401, says Unauthenticated, links to sign-in, forwards itself after 30 s
+    r = client.get('/blade-book/api/knives/', headers={'Accept': 'text/html,application/xhtml+xml,*/*;q=0.8'})
+    assert r.status_code == 401 and r.content_type.startswith('text/html')
+    body = r.get_data(as_text=True)
+    assert 'Unauthenticated' in body
+    assert 'href="/blade-book/?auth=required"' in body
+    assert 'http-equiv="refresh" content="30;url=/blade-book/?auth=required"' in body
+    # fetch()/XHR callers (Accept */* or json) keep the JSON 401 the PWA relies on
+    r = client.get('/blade-book/api/knives/', headers={'Accept': '*/*'})
+    assert r.status_code == 401 and r.get_json() == {'error': 'sign in required'}
+    r = client.get('/blade-book/api/knives/', headers={'Accept': 'application/json'})
+    assert r.status_code == 401

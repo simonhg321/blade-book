@@ -13,7 +13,7 @@ from functools import wraps
 
 from flask import g, jsonify, request, session
 
-from bb import config, db
+from bb import config, db, paths
 
 HANDLE_MAX = 24
 HANDLE_MIN = 3
@@ -140,6 +140,29 @@ def sign_in_by_email(con, email, provider=None, sub=None, verified=True):
     return user
 
 
+UNAUTHENTICATED_HTML = (
+    '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+    '<meta name="viewport" content="width=device-width,initial-scale=1">'
+    f'<meta http-equiv="refresh" content="30;url={paths.URL_PREFIX}/?auth=required">'
+    '<title>Unauthenticated — blade-book</title>'
+    '<style>body{font-family:system-ui,sans-serif;background:#f6f1e7;color:#1a1a1a;margin:0;'
+    'display:flex;min-height:100vh;align-items:center;justify-content:center}'
+    'main{text-align:center;padding:2rem}h1{font-size:1.6rem;margin:0 0 .5rem}'
+    'a{color:#1a1a1a;font-weight:600}p{margin:.4rem 0}</style></head><body><main>'
+    '<h1>Unauthenticated</h1>'
+    f'<p><a href="{paths.URL_PREFIX}/?auth=required">Sign in to blade-book</a></p>'
+    '<p style="color:#666;font-size:.9rem">Taking you there in 30 seconds.</p>'
+    '</main></body></html>'
+)
+
+
+def _wants_html():
+    """True for a browser navigation (address bar, link), false for fetch/XHR.
+    fetch() sends Accept */* by default; navigations rank text/html first."""
+    best = request.accept_mimetypes.best_match(['text/html', 'application/json'])
+    return best == 'text/html' and request.accept_mimetypes['text/html'] > request.accept_mimetypes['application/json']
+
+
 def login_required(fn):
     @wraps(fn)
     def wrapper(*a, **kw):
@@ -149,6 +172,10 @@ def login_required(fn):
         finally:
             con.close()
         if user is None:
+            if _wants_html():
+                # a person typed an API URL into the address bar → a page, not JSON:
+                # says so, links to sign-in, forwards there by itself after 30 s
+                return UNAUTHENTICATED_HTML, 401, {'Content-Type': 'text/html; charset=utf-8'}
             return jsonify({'error': 'sign in required'}), 401
         return fn(*a, **kw)
     return wrapper
