@@ -360,3 +360,129 @@ def purge_auth_tables(con):
     con.execute('DELETE FROM auth_attempts WHERE ts < ?', (cutoff,))
     con.execute('DELETE FROM oauth_states WHERE created < ?', (cutoff,))
     con.commit()
+
+
+# --- knives + photos (owner-scoped; a wrong owner_id == not found) ------------
+
+class SlotTaken(Exception):
+    pass
+
+
+def thumb_key(store_key):
+    return store_key.rsplit('.', 1)[0] + '.thumb.jpg'
+
+
+def _knife_row(con, row):
+    if row is None:
+        return None
+    d = dict(row)
+    d['ext'] = json.loads(d['ext'] or '{}')
+    d['confidence'] = json.loads(d['confidence']) if d.get('confidence') else None
+    d['photos'] = [dict(r) for r in con.execute(
+        'SELECT * FROM photos WHERE knife_id = ? ORDER BY seq', (d['id'],))]
+    return d
+
+
+def create_draft_knife(con, owner_id, maker='crk'):
+    tag = next_tag(con, owner_id)
+    ts = now()
+    cur = con.execute(
+        'INSERT INTO knives (owner_id, tag, maker, status, created, updated) '
+        "VALUES (?, ?, ?, 'draft', ?, ?)", (owner_id, tag, maker, ts, ts))
+    con.commit()
+    return get_knife(con, owner_id, cur.lastrowid)
+
+
+def get_knife(con, owner_id, knife_id):
+    return _knife_row(con, con.execute(
+        'SELECT * FROM knives WHERE id = ? AND owner_id = ?',
+        (knife_id, owner_id)).fetchone())
+
+
+def list_knives(con, owner_id, status=None):
+    sql = ('SELECT k.id, k.tag, k.status, k.maker, k.model, k.updated, '
+           '(SELECT count(*) FROM photos p WHERE p.knife_id = k.id) AS photo_count '
+           'FROM knives k WHERE k.owner_id = ?')
+    args = [owner_id]
+    if status:
+        sql += ' AND k.status = ?'
+        args.append(status)
+    sql += ' ORDER BY k.id DESC'
+    return [dict(r) for r in con.execute(sql, args)]
+
+
+def _touch(con, owner_id, knife_id):
+    return con.execute('UPDATE knives SET updated = ? WHERE id = ? AND owner_id = ?',
+                       (now(), knife_id, owner_id)).rowcount == 1
+
+
+def set_knife_note(con, owner_id, knife_id, text):
+    ok = con.execute(
+        'UPDATE knives SET notes_private = ?, updated = ? WHERE id = ? AND owner_id = ?',
+        (text, now(), knife_id, owner_id)).rowcount == 1
+    con.commit()
+    return ok
+
+
+def _photo_keys(con, knife_id):
+    keys = []
+    for r in con.execute('SELECT store_key FROM photos WHERE knife_id = ?', (knife_id,)):
+        keys += [r['store_key'], thumb_key(r['store_key'])]
+    return keys
+
+
+def delete_draft_knife(con, owner_id, knife_id):
+    row = con.execute("SELECT id FROM knives WHERE id = ? AND owner_id = ? AND status = 'draft'",
+                      (knife_id, owner_id)).fetchone()
+    if row is None:
+        return []
+    keys = _photo_keys(con, knife_id)
+    con.execute('DELETE FROM knives WHERE id = ?', (knife_id,))  # photos cascade
+    con.commit()
+    return keys
+
+
+def add_photo(con, owner_id, knife_id, seq, store_key, sha256, width, height):
+    if get_knife(con, owner_id, knife_id) is None:
+        raise LookupError(f'knife {knife_id} not found for owner {owner_id}')
+    try:
+        cur = con.execute(
+            'INSERT INTO photos (knife_id, owner_id, seq, store_key, sha256, width, height, created) '
+            'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            (knife_id, owner_id, seq, store_key, sha256, width, height, now()))
+    except sqlite3.IntegrityError as e:
+        con.rollback()
+        raise SlotTaken(f'knife {knife_id} slot {seq} is taken') from e
+    _touch(con, owner_id, knife_id)
+    con.commit()
+    return cur.lastrowid
+
+
+def get_photo(con, owner_id, knife_id, seq):
+    row = con.execute(
+        'SELECT * FROM photos WHERE knife_id = ? AND owner_id = ? AND seq = ?',
+        (knife_id, owner_id, seq)).fetchone()
+    return dict(row) if row else None
+
+
+def delete_photo(con, owner_id, knife_id, seq):
+    row = get_photo(con, owner_id, knife_id, seq)
+    if row is None:
+        return None
+    con.execute('DELETE FROM photos WHERE id = ?', (row['id'],))
+    _touch(con, owner_id, knife_id)
+    con.commit()
+    return row
+
+
+def purge_stale_drafts(con, days=7):
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    stale = [dict(r) for r in con.execute(
+        "SELECT id, owner_id, tag FROM knives WHERE status = 'draft' AND updated < ?", (cutoff,))]
+    out = []
+    for k in stale:
+        k['keys'] = _photo_keys(con, k['id'])
+        con.execute('DELETE FROM knives WHERE id = ?', (k['id'],))
+        out.append(k)
+    con.commit()
+    return out
