@@ -137,3 +137,15 @@ def test_landing_links_the_register():
     html = open(os.path.join(ROOT, 'html', 'index.html')).read()
     for needle in ('href="/blade-book/vibe.css"', 'href="/blade-book/me/"', "/api/knives/?status=live'", 'id="regcount"'):
         assert needle in html, needle
+
+
+def test_register_page_wiring():
+    html = open(os.path.join(ROOT, 'html', 'me', 'index.html')).read()
+    for needle in ("'/knives/full'", "'/auth/me'", "'/auth/signout'", "'/decode'", "'/sale'", "'/public'", "'/knives/bulk'",
+                   "json('PATCH'", "method: 'DELETE'", 'href="/blade-book/vibe.css"', 'href="/blade-book/me/add/"',
+                   'id="q"', 'id="cards"', 'id="bulkbar"', 'id="tpl"', 'class="bb-display"',
+                   "location.href = '/blade-book/'", 'prompt(', 'FIELDS = [', 'sale_status', 'is_public',
+                   'hero_photo', 'notes_public', 'notes_private', 'price_paid', 'events'):
+        assert needle in html, needle
+    assert 'innerHTML' not in html
+    assert 'fonts.googleapis.com' not in html
