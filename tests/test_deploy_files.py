@@ -79,10 +79,14 @@ def test_runbook_move_lists_both_crontab_lines():
 def test_intake_page_wiring():
     html = open(os.path.join(ROOT, 'html', 'me', 'add', 'index.html')).read()
     for needle in ("'/blade-book/api'", "'/auth/me'", "'/knives/'", "/photos/", "/note",
-                   "setAttribute('capture', 'environment')", "file.accept = 'image/*'",
-                   'BOX + KIT + CARD', 'HERO', 'PROCESS'):
+                   "file.accept = 'image/*'", 'id="file" type="file" multiple', '?replace=1',
+                   'ADD PHOTOS TO', 'BOX + KIT + CARD', 'HERO', 'PROCESS'):
         assert needle in html, needle
+    # no capture= attribute: iOS's own Take Photo / Photo Library sheet (as crk/ uses) is
+    # what collectors expect, and it is not gated by the vhost's Permissions-Policy camera=()
+    assert 'capture' not in html
     assert 'fonts.googleapis.com' not in html
     assert 'innerHTML' not in html
     landing = open(os.path.join(ROOT, 'html', 'index.html')).read()
-    assert '/blade-book/me/add/' in landing
+    assert '/blade-book/me/add/' in landing and 'ADD A KNIFE' in landing
+    assert "'/blade-book/api/knives/?status=draft'" in landing

@@ -15,9 +15,14 @@
   button.alt{background:#fff;color:var(--ink)}
   .msg{min-height:1.4em;font-size:.95rem}
   .msg.err{color:var(--accent)}
-  .strip{display:flex;gap:.75rem;justify-content:center;align-items:baseline}
   .hidden{display:none}
   small{color:var(--muted)}
+  #signed-in{display:grid;gap:.9rem}
+  #signed-in .who{color:var(--muted)}
+  #signed-in .who strong{color:var(--ink)}
+  a.big{display:block;padding:1.2rem 0;font-size:1.35rem;font-weight:800;letter-spacing:.06em;background:var(--accent);color:#fff;border-radius:14px;text-decoration:none}
+  #drafts{color:var(--muted);font-size:.95rem;min-height:1.2em}
+  #signout{background:none;color:var(--muted);border:none;text-decoration:underline;padding:.25rem}
 </style>
 <main>
   <h1>BLADE-BOOK</h1>
@@ -34,11 +39,10 @@
   </section>
 
   <section id="signed-in" class="hidden">
-    <div class="strip">
-      <span>signed in as <strong id="handle"></strong></span>
-      <a href="/blade-book/me/add/">➕ add a knife</a>
-      <button class="alt" id="signout">Sign out</button>
-    </div>
+    <div class="who">signed in as <strong id="handle"></strong></div>
+    <a class="big" href="/blade-book/me/add/">📷 &nbsp;ADD A KNIFE</a>
+    <div id="drafts" aria-live="polite"></div>
+    <button id="signout" type="button">sign out</button>
   </section>
 </main>
 <script>
@@ -58,6 +62,12 @@
     $('handle').textContent = '@' + u.handle;
     $('signed-out').classList.add('hidden');
     $('signed-in').classList.remove('hidden');
+    fetch('/blade-book/api/knives/?status=draft', {credentials: 'same-origin'})
+      .then(r => r.json()).then(j => {
+        const n = (j.knives || []).length;
+        $('drafts').textContent = n ? n + ' open draft' + (n > 1 ? 's' : '') + ' — ' +
+          j.knives.map(k => k.tag + ' ' + k.photo_count + '/3').join(' · ') : 'no open drafts yet';
+      }).catch(() => {});
   } else {
     const p = await fetch(API + '/providers').then(r => r.json()).catch(() => ({providers: []}));
     if (p.providers.length) {

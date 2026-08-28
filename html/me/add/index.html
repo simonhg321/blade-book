@@ -4,60 +4,77 @@
 <meta name="robots" content="noindex,nofollow">
 <title>blade-book — add a knife</title>
 <style>
-  :root{--cream:#f6f1e7;--ink:#1a1a1a;--muted:#6b665c;--line:#d9d2c3;--accent:#b5442f;--ok:#2c7a3f;--soft:#e8e0d0}
+  :root{--cream:#faf6ee;--ink:#1a1a1a;--muted:#6b665c;--line:#d8cfba;--accent:#b8452c;--ok:#2c7a3f;--soft:#e8e0d0}
   *{box-sizing:border-box;margin:0}
   body{background:var(--cream);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;max-width:520px;margin:0 auto;padding:16px 16px 48px}
-  h1{font-size:1.1rem;letter-spacing:.12em;text-transform:uppercase;margin:4px 0 14px}
+  h1{font-size:1.15rem;letter-spacing:.12em;text-transform:uppercase;margin:4px 0 14px}
+  h1 span{color:var(--accent)}
   h1 a{color:var(--muted);text-decoration:none;font-weight:400;letter-spacing:0;text-transform:none;float:right;font-size:.9rem}
-  .bar{display:flex;gap:10px;margin-bottom:10px}
-  .bar select{flex:1;font-size:1.4rem;font-weight:800;border:2px solid var(--ink);border-radius:12px;background:#fff;padding:8px}
-  .bar button{flex:0 0 auto;font-size:1.1rem;font-weight:800;border:2px solid var(--ink);background:var(--ink);color:var(--cream);border-radius:12px;padding:0 16px;cursor:pointer}
-  #note{width:100%;min-height:64px;padding:10px;font-size:1rem;resize:vertical;border:2px solid var(--ink);border-radius:10px;background:#fff}
-  #notestat{font-size:.78rem;color:var(--muted);min-height:1em;margin:4px 0 12px;text-align:right}
-  #notestat.ok{color:var(--ok)}
-  .slots{display:grid;gap:10px}
-  .slot{display:grid;grid-template-columns:96px 1fr;gap:10px;align-items:center;background:#fff;border:2px solid var(--line);border-radius:12px;padding:8px}
-  .slot img,.slot .ph{width:96px;height:96px;object-fit:cover;border-radius:8px;background:var(--soft);display:block}
-  .slot .ph{display:flex;align-items:center;justify-content:center;font-size:1.6rem;color:var(--muted)}
-  .slot label{font-weight:800;letter-spacing:.04em}
-  .slot small{display:block;color:var(--muted);font-weight:400;margin-top:2px}
-  .slot .act{display:flex;gap:8px;margin-top:8px}
-  .slot button{font:inherit;padding:8px 12px;border-radius:8px;border:2px solid var(--ink);background:#fff;cursor:pointer}
-  .slot button.shoot{background:var(--accent);color:#fff;border-color:var(--accent)}
-  .slot button.x{border-color:var(--accent);color:var(--accent)}
-  .slot input[type=file]{display:none}
+  .tagbar{display:flex;align-items:stretch;gap:10px;margin-bottom:6px}
+  .tagbar button{flex:0 0 72px;font-size:2rem;border:2px solid var(--ink);background:#fff;border-radius:12px;cursor:pointer;touch-action:manipulation}
+  .tagbar button:disabled{opacity:.35}
+  .tagbar .tag{flex:1;text-align:center;font-size:2.6rem;font-weight:800;border:2px solid var(--ink);border-radius:12px;background:#fff;min-width:0;padding:8px 0;letter-spacing:.04em}
+  #count{text-align:center;font-size:.95rem;margin-bottom:14px;color:#555;min-height:1.2em}
+  #count b{color:var(--ok)}
+  .shots{background:var(--soft);border-radius:12px;padding:10px 14px;font-size:.85rem;line-height:1.55;margin-bottom:14px}
+  .shots b{letter-spacing:.06em}
+  #pick{display:block;width:100%;padding:22px 0;font-size:1.35rem;font-weight:800;letter-spacing:.06em;background:var(--accent);color:#fff;border:none;border-radius:14px;cursor:pointer;touch-action:manipulation}
+  #pick:disabled{opacity:.5}
   #status{text-align:center;margin:12px 0;font-size:.95rem;min-height:1.3em}
   #status.err{color:var(--accent);font-weight:700}
+  #thumbs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .cell{position:relative}
+  .cell img,.cell .ph{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;background:var(--soft);border:1px solid var(--line);display:block}
+  .cell .ph{display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:.7rem;color:#777;text-align:center;padding:6px;gap:4px}
+  .cell .ph big{font-size:1.4rem;color:var(--muted)}
+  .cell img{cursor:pointer}
+  .cell button.x{position:absolute;top:-6px;right:-6px;width:26px;height:26px;border-radius:50%;border:2px solid #fff;background:var(--accent);color:#fff;font-size:.8rem;line-height:1;cursor:pointer;padding:0}
+  .cell small{display:block;text-align:center;font-size:.72rem;color:var(--muted);margin-top:4px;letter-spacing:.04em}
+  .hint{font-size:.78rem;color:#777;margin-top:8px;text-align:center}
+  #note{width:100%;min-height:72px;padding:10px;font-size:1rem;resize:vertical;border:2px solid var(--ink);border-radius:10px;background:#fff;margin-top:22px}
+  #notestat{font-size:.78rem;color:var(--muted);min-height:1em;margin:4px 0 12px;text-align:right}
+  #notestat.ok{color:var(--ok)}
   #proc{display:block;width:100%;margin-top:14px;padding:16px 0;font-size:1.1rem;font-weight:800;letter-spacing:.06em;background:#fff;color:var(--muted);border:2px solid var(--line);border-radius:14px}
   #discard{display:block;margin:18px auto 0;background:none;border:none;color:var(--muted);text-decoration:underline;cursor:pointer;font:inherit}
-  .hidden{display:none}
+  input[type=file]{display:none}
 </style>
-<h1>Add a knife <a href="/blade-book/">← blade-book</a></h1>
+<h1>BLADE-<span>BOOK</span> — add a knife <a href="/blade-book/">← home</a></h1>
 
-<div class="bar">
-  <select id="draft" aria-label="open drafts"></select>
-  <button id="new" type="button">➕ New</button>
+<div class="tagbar">
+  <button id="prev" type="button" aria-label="previous draft">−</button>
+  <div class="tag" id="tag">…</div>
+  <button id="next" type="button" aria-label="next draft or new knife">+</button>
+</div>
+<div id="count"></div>
+
+<div class="shots">
+  <b>SHOT ORDER</b> — ① BOX + KIT + CARD in one shot (box, kit and card flat, date on the card legible!)
+  ② HERO open, blade side
+  ③ HERO closed, handle side<br>
+  <b>+</b> steps to the next draft, or reserves a new tag at the end.
 </div>
 
-<section id="editor" class="hidden">
-  <textarea id="note" aria-label="note" placeholder="Note — what you know about it (fed to the decoder as ground truth)&#10;e.g. Large 21, S35VN, bought from a collector 2019, box + card + pouch"></textarea>
-  <div id="notestat" aria-live="polite"></div>
+<button id="pick" type="button">📷 &nbsp;ADD PHOTOS TO <span id="picktag">…</span></button>
+<input id="file" type="file" multiple>
+<input id="refile" type="file">
+<div id="status" aria-live="polite"></div>
+<div id="thumbs"></div>
+<div class="hint">tap a photo to retake it · ✕ removes it</div>
 
-  <div class="slots" id="slots"></div>
-  <div id="status" aria-live="polite"></div>
+<textarea id="note" aria-label="note" placeholder="Note — what you know about it (fed to the decoder as ground truth)&#10;e.g. Large 21, S35VN, bought from a collector 2019, box + card + pouch"></textarea>
+<div id="notestat" aria-live="polite"></div>
 
-  <button id="proc" type="button" disabled>⚡ PROCESS — coming next</button>
-  <button id="discard" type="button">🗑 discard this draft</button>
-</section>
+<button id="proc" type="button" disabled>⚡ PROCESS — coming next</button>
+<button id="discard" type="button">🗑 discard this draft</button>
 
 <script>
 (function () {
   var API = '/blade-book/api';
   var $ = function (id) { return document.getElementById(id); };
-  var SLOTS = [[1, 'BOX + KIT + CARD', 'required — box, kit and card in one shot'],
-               [2, 'HERO', 'open, blade side'],
-               [3, 'HERO', 'closed, handle side']];
-  var current = null;
+  var SLOTS = [[1, 'BOX + KIT + CARD'], [2, 'HERO open'], [3, 'HERO closed']];
+  var drafts = [], idx = -1, current = null, photos = [], retakeSeq = 0;
+  var file = $('file'), refile = $('refile');
+  file.accept = 'image/*'; refile.accept = 'image/*';
 
   function say(t, err) { var s = $('status'); s.textContent = t; s.className = err ? 'err' : ''; }
   function api(path, opts) {
@@ -70,76 +87,109 @@
 
   function loadDrafts(selectId) {
     return api('/knives/?status=draft').then(function (res) {
-      var sel = $('draft'); while (sel.firstChild) sel.removeChild(sel.firstChild);
-      var ks = res.j.knives || [];
-      if (!ks.length) { var o = document.createElement('option'); o.textContent = 'no open drafts — tap ➕ New'; o.value = ''; sel.appendChild(o); }
-      ks.forEach(function (k) {
-        var o = document.createElement('option'); o.value = k.id;
-        o.textContent = k.tag + '  ·  ' + k.photo_count + '/3 photos'; sel.appendChild(o);
-      });
-      var pick = selectId || (ks[0] && ks[0].id) || '';
-      sel.value = pick; select(pick);
+      drafts = res.j.knives || [];
+      if (!drafts.length) return newDraft();
+      idx = 0;
+      drafts.forEach(function (k, i) { if (selectId && k.id === selectId) idx = i; });
+      return show();
     });
   }
 
-  function select(id) {
-    current = id ? +id : null;
-    $('editor').classList.toggle('hidden', !current);
-    if (!current) return;
-    api('/knives/' + current).then(function (res) {
+  function newDraft() {
+    return api('/knives/', { method: 'POST' }).then(function (res) {
+      if (!res.ok) { say(res.j.error || 'could not reserve a tag', true); return; }
+      say('reserved ' + res.j.tag);
+      return loadDrafts(res.j.id);
+    });
+  }
+
+  function show() {
+    var k = drafts[idx]; current = k.id;
+    $('tag').textContent = k.tag; $('picktag').textContent = k.tag;
+    $('prev').disabled = idx === 0;
+    $('next').textContent = idx === drafts.length - 1 ? '➕' : '+';
+    return api('/knives/' + current).then(function (res) {
       if (!res.ok) { say(res.j.error || 'load failed', true); return; }
-      $('note').value = res.j.notes_private || '';
-      $('notestat').textContent = '';
-      renderSlots(res.j.photos || []);
+      $('note').value = res.j.notes_private || ''; $('notestat').textContent = '';
+      photos = res.j.photos || [];
+      render(k);
     });
   }
 
-  function renderSlots(photos) {
+  function render(k) {
     var have = {}; photos.forEach(function (p) { have[p.seq] = p; });
-    var box = $('slots'); while (box.firstChild) box.removeChild(box.firstChild);
+    var n = photos.length;
+    var c = $('count'); while (c.firstChild) c.removeChild(c.firstChild);
+    var b = document.createElement('b'); b.textContent = n + '/3 photos';
+    c.appendChild(b); c.appendChild(document.createTextNode(' · draft ' + (idx + 1) + ' of ' + drafts.length));
+    $('pick').disabled = n >= 3;
+    $('pick').firstChild.textContent = n >= 3 ? '✓ 3/3 — tap a photo to retake ' : '📷  ADD PHOTOS TO ';
+    var th = $('thumbs'); while (th.firstChild) th.removeChild(th.firstChild);
     SLOTS.forEach(function (s) {
       var seq = s[0], p = have[seq];
-      var row = document.createElement('div'); row.className = 'slot';
-      var pic;
-      if (p && p.has_thumb) { pic = new Image(); pic.src = API + '/knives/' + current + '/photos/' + seq + '/thumb?v=' + p.sha256.slice(0, 8); pic.alt = s[1]; }
-      else { pic = document.createElement('div'); pic.className = 'ph'; pic.textContent = p ? '✓' : '①②③'.charAt(seq - 1); }
-      var meta = document.createElement('div');
-      var label = document.createElement('label'); label.textContent = '' + seq + ' ' + s[1];
-      var small = document.createElement('small'); small.textContent = p ? 'saved ✓' : s[2];
-      label.appendChild(small); meta.appendChild(label);
-      var act = document.createElement('div'); act.className = 'act';
-      var file = document.createElement('input'); file.type = 'file'; file.accept = 'image/*'; file.setAttribute('capture', 'environment');
-      var shoot = document.createElement('button'); shoot.type = 'button'; shoot.className = 'shoot';
-      shoot.textContent = p ? '📷 retake' : '📷 shoot';
-      shoot.addEventListener('click', function () { file.click(); });
-      file.addEventListener('change', function () { if (file.files[0]) upload(seq, file.files[0], !!p); });
-      act.appendChild(shoot); act.appendChild(file);
+      var cell = document.createElement('div'); cell.className = 'cell';
+      if (p && p.has_thumb) {
+        var img = new Image();
+        img.src = API + '/knives/' + k.id + '/photos/' + seq + '/thumb?v=' + p.sha256.slice(0, 8);
+        img.alt = s[1];
+        img.addEventListener('click', function () { retakeSeq = seq; refile.value = ''; refile.click(); });
+        cell.appendChild(img);
+      } else {
+        var ph = document.createElement('div'); ph.className = 'ph';
+        var big = document.createElement('big'); big.textContent = '①②③'.charAt(seq - 1);
+        ph.appendChild(big); ph.appendChild(document.createTextNode(p ? 'saved ✓' : s[1]));
+        if (p) ph.addEventListener('click', function () { retakeSeq = seq; refile.value = ''; refile.click(); });
+        cell.appendChild(ph);
+      }
       if (p) {
         var x = document.createElement('button'); x.type = 'button'; x.className = 'x'; x.textContent = '✕';
+        x.setAttribute('aria-label', 'remove photo ' + seq);
         x.addEventListener('click', function () { removeSlot(seq); });
-        act.appendChild(x);
+        cell.appendChild(x);
       }
-      meta.appendChild(act);
-      row.appendChild(pic); row.appendChild(meta); box.appendChild(row);
+      var small = document.createElement('small'); small.textContent = seq + ' ' + s[1];
+      cell.appendChild(small);
+      th.appendChild(cell);
     });
   }
 
   function upload(seq, f, replace) {
     var id = current;
-    say('uploading ' + seq + '…');
     var fd = new FormData(); fd.append('photo', f, f.name || ('shot' + seq + '.jpg'));
-    var url = '/knives/' + id + '/photos/' + seq + (replace ? '?replace=1' : '');
-    return api(url, { method: 'POST', body: fd })
+    return api('/knives/' + id + '/photos/' + seq + (replace ? '?replace=1' : ''), { method: 'POST', body: fd })
       .then(function (res) {
         if (!res.ok) throw new Error(res.j.error || 'upload failed');
-        say('✓ saved ' + seq + (res.j.has_thumb ? '' : ' (no preview for this format — stored)'));
-      })
-      .catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); })
-      .then(function () { return loadDrafts(id); });
+        return res.j;
+      });
   }
 
+  file.addEventListener('change', function () {
+    var files = Array.prototype.slice.call(file.files); if (!files.length) return;
+    var have = {}; photos.forEach(function (p) { have[p.seq] = true; });
+    var empty = SLOTS.map(function (s) { return s[0]; }).filter(function (q) { return !have[q]; });
+    var todo = files.slice(0, empty.length), id = current, done = 0;
+    $('pick').disabled = true;
+    say('uploading ' + todo.length + '…');
+    var chain = Promise.resolve();
+    todo.forEach(function (f, i) {
+      chain = chain.then(function () { return upload(empty[i], f, false).then(function () { done++; say('uploading ' + todo.length + '… ' + done + ' saved'); }); });
+    });
+    chain.then(function () {
+      say('✓ saved ' + done + (files.length > todo.length ? ' — only ' + empty.length + ' slot(s) were free' : ''));
+    }).catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message + (done ? ' (' + done + ' saved)' : ''), true); })
+      .then(function () { file.value = ''; return loadDrafts(id); });
+  });
+
+  refile.addEventListener('change', function () {
+    var f = refile.files[0], seq = retakeSeq, id = current; if (!f || !seq) return;
+    say('replacing ' + seq + '…');
+    upload(seq, f, true).then(function () { say('✓ replaced ' + seq); })
+      .catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); })
+      .then(function () { refile.value = ''; return loadDrafts(id); });
+  });
+
   function removeSlot(seq) {
-    if (!confirm('Delete photo ' + seq + '?')) return;
+    if (!confirm('Remove photo ' + seq + '?')) return;
     var id = current;
     api('/knives/' + id + '/photos/' + seq, { method: 'DELETE' })
       .catch(function () { say('✗ network error', true); })
@@ -155,28 +205,24 @@
         var ns = $('notestat');
         if (!res.ok) { ns.className = ''; ns.textContent = '✗ ' + (res.j.error || 'not saved'); return; }
         if (id === current) { ns.className = 'ok'; ns.textContent = 'note saved ✓'; }
-      });
+      }).catch(function () {});
   }
   $('note').addEventListener('input', function () { $('notestat').className = ''; $('notestat').textContent = 'typing…'; clearTimeout(noteTimer); noteTimer = setTimeout(saveNote, 1200); });
   $('note').addEventListener('blur', function () { clearTimeout(noteTimer); saveNote(); });
 
-  $('new').addEventListener('click', function () {
-    api('/knives/', { method: 'POST' })
-      .then(function (res) {
-        if (!res.ok) { say(res.j.error || 'could not create', true); return; }
-        say('reserved ' + res.j.tag); loadDrafts(res.j.id);
-      })
-      .catch(function () { say('✗ network error', true); });
+  $('pick').addEventListener('click', function () { file.value = ''; file.click(); });
+  $('prev').addEventListener('click', function () { if (idx > 0) { idx--; show(); } });
+  $('next').addEventListener('click', function () {
+    if (idx < drafts.length - 1) { idx++; show(); } else { newDraft().catch(function () { say('✗ network error', true); }); }
   });
-  $('draft').addEventListener('change', function () { select(this.value); });
   $('discard').addEventListener('click', function () {
-    if (!current || !confirm('Discard this draft and its photos?')) return;
+    if (!current || !confirm('Discard ' + drafts[idx].tag + ' and its photos?')) return;
     api('/knives/' + current, { method: 'DELETE' })
-      .then(function () { say('draft discarded'); loadDrafts(); })
+      .then(function () { say('draft discarded'); return loadDrafts(); })
       .catch(function () { say('✗ network error', true); });
   });
 
-  api('/auth/me').then(function () { loadDrafts(); })
+  api('/auth/me').then(function () { return loadDrafts(); })
     .catch(function () { say('✗ could not reach blade-book', true); });
 })();
 </script>
