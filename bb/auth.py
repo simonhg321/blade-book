@@ -60,8 +60,8 @@ def handle_for_email(con, email):
 # --- sessions ----------------------------------------------------------------
 
 DEFAULT_BASE_URL = 'https://billboard.instockornot.club'
-PUBLIC_USER_FIELDS = ('id', 'email', 'handle', 'display_name', 'verified_at',
-                      'is_admin', 'sub_status', 'created')
+SELF_VIEW_FIELDS = ('id', 'email', 'handle', 'display_name', 'verified_at',
+                    'is_admin', 'sub_status', 'created')
 
 
 def base_url():
@@ -113,8 +113,9 @@ def current_user(con):
     return g.user
 
 
-def public_user(user):
-    return {k: user[k] for k in PUBLIC_USER_FIELDS}
+def self_view(user):
+    """The signed-in user's own view — includes email; never use for another user's page."""
+    return {k: user[k] for k in SELF_VIEW_FIELDS}
 
 
 def sign_in_by_email(con, email, provider=None, sub=None, verified=True):

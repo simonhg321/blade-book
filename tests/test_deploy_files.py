@@ -58,3 +58,8 @@ def test_env_doc_lists_every_key_the_code_reads():
                 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'APPLE_CLIENT_ID',
                 'APPLE_TEAM_ID', 'APPLE_KEY_ID', 'APPLE_PRIVATE_KEY'):
         assert key in doc, key
+
+
+def test_install_has_purge_cron():
+    sh = open(os.path.join(ROOT, 'scripts', 'install.sh')).read()
+    assert 'scripts/purge_drafts.py' in sh and 'purge.log' in sh

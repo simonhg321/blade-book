@@ -69,7 +69,7 @@ def click_magic_link():
 @bp.get('/me')
 @auth.login_required
 def me():
-    return jsonify(auth.public_user(g.user))
+    return jsonify(auth.self_view(g.user))
 
 
 @bp.post('/signout')

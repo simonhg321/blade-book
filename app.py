@@ -11,7 +11,7 @@ import subprocess
 from datetime import timedelta
 from logging.handlers import RotatingFileHandler
 
-from flask import Blueprint, Flask, jsonify
+from flask import Blueprint, Flask, current_app, jsonify
 
 from bb import config, db, paths
 
@@ -69,7 +69,7 @@ def healthz():
     usage = shutil.disk_usage(paths.DATA_DIR)
     body = {'ok': ok_db, 'db': ok_db,
             'disk_free_pct': int(usage.free * 100 / usage.total),
-            'version': _version()}
+            'version': current_app.config['VERSION']}
     return jsonify(body), (200 if ok_db else 503)
 
 
@@ -101,6 +101,7 @@ def create_app(mailer=None, store=None):
         PERMANENT_SESSION_LIFETIME=timedelta(days=90),
         MAILER=mailer or mail.from_env(),
         STORE=store or store_mod.from_paths(),
+        VERSION=_version(),
     )
 
     from bb.routes import auth as auth_routes, knives as knife_routes
@@ -108,7 +109,7 @@ def create_app(mailer=None, store=None):
     app.register_blueprint(auth_routes.bp)
     app.register_blueprint(knife_routes.bp)
     log.info('blade-book app created, version %s, data %s, mailer %s',
-             _version(), paths.DATA_DIR, type(app.config['MAILER']).__name__)
+             app.config['VERSION'], paths.DATA_DIR, type(app.config['MAILER']).__name__)
     return app
 
 

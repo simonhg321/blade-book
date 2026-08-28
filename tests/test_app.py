@@ -43,3 +43,11 @@ def test_app_log_is_not_world_readable(env):
     create_app()
     app_log = os.path.join(env.LOG_DIR, 'app.log')
     assert stat.S_IMODE(os.stat(app_log).st_mode) == 0o640
+
+
+def test_healthz_version_is_captured_at_app_creation(env, monkeypatch):
+    import app as app_module
+    monkeypatch.setattr(app_module, '_version', lambda: 'abc1234')
+    a = app_module.create_app()
+    monkeypatch.setattr(app_module, '_version', lambda: 'zzz9999')  # git moved on; process did not
+    assert a.test_client().get('/blade-book/api/healthz').get_json()['version'] == 'abc1234'
