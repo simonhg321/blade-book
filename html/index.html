@@ -23,6 +23,12 @@
   a.big{display:block;padding:1.2rem 0;font-size:1.35rem;font-weight:800;letter-spacing:.06em;background:var(--accent);color:#fff;border-radius:14px;text-decoration:none}
   #drafts{color:var(--muted);font-size:.95rem;min-height:1.2em}
   #signout{background:none;color:var(--muted);border:none;text-decoration:underline;padding:.25rem}
+  #sent{display:grid;gap:.6rem;padding:1.2rem 1rem;border:1px solid var(--line);border-radius:14px;background:#fff}
+  #sent h2{margin:0;font-size:1.5rem}
+  #sent p{color:var(--ink);margin:0}
+  #sent .big-note{font-size:2.6rem;line-height:1}
+  #sent button[disabled]{opacity:.55;cursor:default}
+  button.link{background:none;color:var(--muted);border:none;text-decoration:underline;padding:.25rem}
 </style>
 <main>
   <h1>BLADE-BOOK</h1>
@@ -38,6 +44,17 @@
     <small>No passwords. The link works once and expires in 15 minutes.</small>
   </section>
 
+  <section id="sent" class="hidden" aria-live="polite">
+    <div class="big-note">📬</div>
+    <h2>Check your email</h2>
+    <p>We sent a sign-in link to <strong id="sent-to"></strong>.<br>
+      Tap it on this phone to sign in. It works once and expires in 15 minutes.</p>
+    <small>Nothing there? Give it a minute and check spam.</small>
+    <div id="sent-msg" class="msg"></div>
+    <button id="resend" type="button" class="alt" disabled></button>
+    <button id="change" type="button" class="link">use a different email</button>
+  </section>
+
   <section id="signed-in" class="hidden">
     <div class="who">signed in as <strong id="handle"></strong></div>
     <a class="big" href="/blade-book/me/add/">📷 &nbsp;ADD A KNIFE</a>
@@ -49,7 +66,7 @@
 (async function () {
   const API = '/blade-book/api/auth';
   const $ = id => document.getElementById(id);
-  const msg = (t, err) => { $('msg').textContent = t; $('msg').className = 'msg' + (err ? ' err' : ''); };
+  const msg = (t, err) => { for (const id of ['msg', 'sent-msg']) { $(id).textContent = t; $(id).className = 'msg' + (err ? ' err' : ''); } };
 
   const flag = new URLSearchParams(location.search).get('auth');
   if (flag === 'expired') msg('That link has expired or was already used — request a new one.', true);
@@ -84,17 +101,58 @@
     }
   }
 
-  $('magic').addEventListener('submit', async e => {
-    e.preventDefault();
+  // one send at a time; after a send the form is replaced by the "check your email"
+  // panel and a resend is held back for RESEND_WAIT seconds — people were tapping
+  // the button three or four times before the first mail landed
+  const RESEND_WAIT = 60;
+  let sending = false, timer = null;
+  const submitBtn = $('magic').querySelector('button[type=submit]');
+
+  function startCountdown() {
+    let left = RESEND_WAIT;
+    const tick = () => {
+      if (left > 0) { $('resend').disabled = true; $('resend').textContent = 'Resend in ' + left + 's'; left--; }
+      else { clearInterval(timer); timer = null; $('resend').disabled = false; $('resend').textContent = 'Send another link'; }
+    };
+    clearInterval(timer); tick(); timer = setInterval(tick, 1000);
+  }
+
+  async function sendLink() {
+    if (sending) return;
+    sending = true; submitBtn.disabled = true; $('resend').disabled = true;
     msg('Sending…');
-    const r = await fetch(API + '/magic', {
-      method: 'POST', credentials: 'same-origin',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({email: $('email').value.trim()})
-    });
-    const body = await r.json().catch(() => ({}));
-    if (r.status === 202) msg('Check your email — the link is on its way.');
-    else msg(body.error || 'Something went wrong.', true);
+    try {
+      const r = await fetch(API + '/magic', {
+        method: 'POST', credentials: 'same-origin',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({email: $('email').value.trim()})
+      });
+      const body = await r.json().catch(() => ({}));
+      if (r.status === 202) {
+        msg('');
+        $('sent-to').textContent = $('email').value.trim();
+        $('signed-out').classList.add('hidden');
+        $('sent').classList.remove('hidden');
+        startCountdown();
+      } else {
+        msg(body.error || 'Something went wrong.', true);
+        if (!timer) { $('resend').disabled = false; $('resend').textContent = 'Try again'; }
+      }
+    } catch (err) {
+      msg('Could not reach the server — check your connection and try again.', true);
+      if (!timer) { $('resend').disabled = false; $('resend').textContent = 'Try again'; }
+    } finally {
+      sending = false; submitBtn.disabled = false;
+    }
+  }
+
+  $('magic').addEventListener('submit', e => { e.preventDefault(); sendLink(); });
+  $('resend').addEventListener('click', sendLink);
+  $('change').addEventListener('click', () => {
+    clearInterval(timer); timer = null;
+    $('sent').classList.add('hidden');
+    $('signed-out').classList.remove('hidden');
+    $('email').focus();
   });
 
   $('signout').addEventListener('click', async () => {

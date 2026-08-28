@@ -47,7 +47,9 @@ def test_runbook_move_exists_and_names_the_steps():
 def test_landing_has_sign_in_wiring():
     html = open(os.path.join(ROOT, 'html', 'index.html')).read()
     for needle in ("'/blade-book/api/auth'", "'/magic'", "'/me'", "'/providers'",
-                   "'/signout'", "'expired'", "'failed'", "'unverified'", 'type="email"'):
+                   "'/signout'", "'expired'", "'failed'", "'unverified'", "'required'", 'type="email"',
+                   # post-send panel: replaces the form, holds the resend button for 60 s
+                   'id="sent"', 'id="sent-to"', 'id="resend"', 'RESEND_WAIT = 60', 'if (sending) return;'):
         assert needle in html, needle
     assert 'fonts.googleapis.com' not in html  # billboard vhost CSP blocks it (plan 05 self-hosts)
 
