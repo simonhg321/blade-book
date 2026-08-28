@@ -16,8 +16,18 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 
 ALLOWED_EXT = frozenset({'jpg', 'jpeg', 'png', 'heic', 'heif', 'webp', 'tif', 'tiff', 'dng', 'gif'})
 MAX_PHOTO_BYTES = 20 * 1024 * 1024
-MAX_PIXELS = 80_000_000  # above any phone (48 MP) or DSLR (61 MP); a bigger "photo" is a bomb
+MAX_PIXELS = 80_000_000  # JPEG/MPO only — decoded cheaply via draft mode, so a bigger
+                          # cap is safe; above any phone (48 MP) or DSLR (61 MP)
+MAX_PIXELS_NON_JPEG = 30_000_000  # everything else is fully decoded — keep the cap tight
 THUMB_EDGE = 400
+_CHEAP_FORMATS = ('JPEG', 'MPO')  # Pillow can decode these at reduced scale via draft()
+# NOTE: 'MPO' is deliberately absent here — Pillow never registers a separate 'MPO'
+# opener (Image.OPEN has no 'MPO' key; passing it to formats= raises KeyError). MPO
+# files are JPEGs with extra APP2 frames: the 'JPEG' factory detects them and swaps
+# in an MpoImageFile (img.format == 'MPO') internally, so 'JPEG' alone covers both.
+_OPEN_FORMATS = ['JPEG', 'PNG', 'GIF', 'WEBP', 'TIFF']  # Pillow only dispatches to
+                                                          # these decoders regardless
+                                                          # of the sniffed content
 MIME = {'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png',
         'heic': 'image/heic', 'heif': 'image/heif', 'webp': 'image/webp',
         'tif': 'image/tiff', 'tiff': 'image/tiff', 'dng': 'image/x-adobe-dng',
@@ -48,31 +58,41 @@ def ext_for(filename):
 
 def _open(data):
     """Header-only open; None if Pillow can't identify it; TooBig if the declared
-    dimensions exceed MAX_PIXELS (checked BEFORE any pixel data is decoded)."""
+    dimensions exceed the format's cap (checked BEFORE any pixel data is decoded).
+    `formats=` restricts Pillow to decoders we've vetted — it only ever dispatches
+    to these regardless of what the file's bytes claim to be."""
     import warnings
     try:
         with warnings.catch_warnings():
             warnings.simplefilter('ignore', Image.DecompressionBombWarning)
-            img = Image.open(io.BytesIO(data))
+            img = Image.open(io.BytesIO(data), formats=_OPEN_FORMATS)
     except Image.DecompressionBombError as e:
         raise TooBig(f'declared {e}') from e
     except (UnidentifiedImageError, OSError, ValueError):
         return None
     w, h = img.size
-    if w * h > MAX_PIXELS:
-        raise TooBig(f'{w}x{h} = {w * h} pixels > {MAX_PIXELS}')
+    cap = MAX_PIXELS if img.format in _CHEAP_FORMATS else MAX_PIXELS_NON_JPEG
+    if w * h > cap:
+        raise TooBig(f'{w}x{h} = {w * h} pixels > {cap}')
     return img
 
 
 def _decode(data):
+    """Returns (img, width, height) of the ORIGINAL (pre-draft) dimensions, or
+    (None, None, None) if undecodable. For JPEG/MPO, img.draft() runs before
+    img.load() so the decoder works at DCT-reduced scale — width/height are
+    captured first because draft() changes img.size."""
     img = _open(data)
     if img is None:
-        return None
+        return None, None, None
+    width, height = img.size
     try:
+        if img.format in _CHEAP_FORMATS:
+            img.draft('RGB', (THUMB_EDGE * 2, THUMB_EDGE * 2))
         img.load()
-        return img
+        return img, width, height
     except (OSError, ValueError):
-        return None
+        return None, None, None
 
 
 def ingest(data, filename):
@@ -82,10 +102,9 @@ def ingest(data, filename):
     if ext is None:
         raise BadType(f'{filename!r}: allowed {sorted(ALLOWED_EXT)}')
     sha = hashlib.sha256(data).hexdigest()
-    img = _decode(data)
+    img, width, height = _decode(data)
     if img is None:
         return Ingested(ext, sha, None, None, None)
-    width, height = img.size
     thumb = ImageOps.exif_transpose(img).convert('RGB')
     thumb.thumbnail((THUMB_EDGE, THUMB_EDGE))
     buf = io.BytesIO()

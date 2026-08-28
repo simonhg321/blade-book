@@ -75,5 +75,23 @@ def test_ingest_rejects_decompression_bombs_before_decoding():
         photos.ingest(small, 'bomb.png')
     with pytest.raises(photos.TooBig):      # 81 MP: under Pillow's threshold, over ours
         photos.ingest(_png_1bit(9000, 9000), 'big.png')
-    r = photos.ingest(_png_1bit(8000, 6000), 'ok.png')   # 48 MP — an iPhone is fine
-    assert (r.width, r.height) == (8000, 6000) and r.thumb is not None
+    r = photos.ingest(_png_1bit(5000, 5000), 'ok.png')   # 25 MP — under the non-JPEG cap
+    assert (r.width, r.height) == (5000, 5000) and r.thumb is not None
+
+
+def test_non_jpeg_pixel_cap_is_lower_than_jpeg():
+    with pytest.raises(photos.TooBig):      # 36 MP PNG > MAX_PIXELS_NON_JPEG (30 MP)
+        photos.ingest(_png_1bit(6000, 6000), 'big.png')
+    r = photos.ingest(_png_1bit(5000, 5000), 'ok.png')  # 25 MP — fine
+    assert (r.width, r.height) == (5000, 5000)
+
+
+def test_large_jpeg_decodes_via_draft_mode():
+    buf = io.BytesIO()
+    Image.new('RGB', (8000, 6000), (10, 120, 200)).save(buf, 'JPEG', quality=30)
+    data = buf.getvalue()
+    assert len(data) < photos.MAX_PHOTO_BYTES  # well under the 48 MP JPEG/MPO cap
+    r = photos.ingest(data, 'big.jpg')
+    assert (r.width, r.height) == (8000, 6000)  # original dims, captured before draft()
+    t = Image.open(io.BytesIO(r.thumb))
+    assert t.format == 'JPEG' and max(t.size) == 400

@@ -1,6 +1,6 @@
 <!doctype html>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
 <title>blade-book — add a knife</title>
 <style>
@@ -40,7 +40,7 @@
 </div>
 
 <section id="editor" class="hidden">
-  <textarea id="note" placeholder="Note — what you know about it (fed to the decoder as ground truth)&#10;e.g. Large 21, S35VN, bought from a collector 2019, box + card + pouch"></textarea>
+  <textarea id="note" aria-label="note" placeholder="Note — what you know about it (fed to the decoder as ground truth)&#10;e.g. Large 21, S35VN, bought from a collector 2019, box + card + pouch"></textarea>
   <div id="notestat" aria-live="polite"></div>
 
   <div class="slots" id="slots"></div>
@@ -176,6 +176,7 @@
       .catch(function () { say('✗ network error', true); });
   });
 
-  api('/auth/me').then(function () { loadDrafts(); });
+  api('/auth/me').then(function () { loadDrafts(); })
+    .catch(function () { say('✗ could not reach blade-book', true); });
 })();
 </script>

@@ -78,6 +78,11 @@ def _not_found(_e):
     return jsonify({'error': 'not found'}), 404
 
 
+@api.app_errorhandler(413)
+def _too_large(_e):
+    return jsonify({'error': 'photo over 20 MB'}), 413
+
+
 def create_app(mailer=None, store=None):
     config.load()
     _setup_logging()

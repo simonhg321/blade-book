@@ -65,6 +65,17 @@ def test_install_has_purge_cron():
     assert 'scripts/purge_drafts.py' in sh and 'purge.log' in sh
 
 
+def test_install_ships_the_whole_html_tree():
+    sh = open(os.path.join(ROOT, 'scripts', 'install.sh')).read()
+    assert 'cp -r "$CODE/html/." /var/www/html/blade-book/' in sh
+    assert 'cp "$CODE/html/index.html"' not in sh
+
+
+def test_runbook_move_lists_both_crontab_lines():
+    s = _read('docs/RUNBOOK-move.md')
+    assert 'scripts/backup.sh' in s and 'scripts/purge_drafts.py' in s
+
+
 def test_intake_page_wiring():
     html = open(os.path.join(ROOT, 'html', 'me', 'add', 'index.html')).read()
     for needle in ("'/blade-book/api'", "'/auth/me'", "'/knives/'", "/photos/", "/note",

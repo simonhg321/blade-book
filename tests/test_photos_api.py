@@ -33,6 +33,7 @@ def test_upload_slot_stores_original_and_thumb(client, mailer, app):
     assert store.exists(f"{me['id']}/{kid}/1.thumb.jpg")
     k = client.get(f'{K}/{kid}').get_json()
     assert [p['seq'] for p in k['photos']] == [1] and 'store_key' not in str(k)
+    assert k['photos'][0]['has_original'] is True
     assert client.get(K + '/').get_json()['knives'][0]['photo_count'] == 1
 
 
@@ -132,6 +133,33 @@ def test_delete_draft_removes_its_files(client, mailer, app, env):
     for key in (f"{me['id']}/{kid}/1.jpg", f"{me['id']}/{kid}/1.thumb.jpg",
                 f"{me['id']}/{kid}/2.jpg", f"{me['id']}/{kid}/2.thumb.jpg"):
         assert not store.exists(key), key
+
+
+def test_photo_mutations_blocked_once_knife_is_live(client, mailer, app, env):
+    signed_in(client, mailer)
+    kid = client.post(K + '/').get_json()['id']
+    assert _up(client, kid, 1).status_code == 201
+    con = db.connect()
+    con.execute("UPDATE knives SET status='live' WHERE id=?", (kid,)); con.commit()
+    con.close()
+    r = _up(client, kid, 2)
+    assert r.status_code == 409 and 'draft' in r.get_json()['error']
+    r = client.delete(f'{K}/{kid}/photos/1')
+    assert r.status_code == 409 and 'draft' in r.get_json()['error']
+    # the existing photo is untouched
+    k = client.get(f'{K}/{kid}').get_json()
+    assert [p['seq'] for p in k['photos']] == [1]
+
+
+def test_oversized_body_is_json_413(client, mailer):
+    signed_in(client, mailer)
+    kid = client.post(K + '/').get_json()['id']
+    huge = b'x' * (26 * 1024 * 1024)
+    r = client.post(f'{K}/{kid}/photos/1',
+                    data={'photo': (io.BytesIO(huge), 'big.jpg')},
+                    content_type='multipart/form-data')
+    assert r.status_code == 413
+    assert r.get_json() == {'error': 'photo over 20 MB'}
 
 
 def test_replace_swaps_slot_in_one_request_and_bad_file_keeps_old(client, mailer, app, env):

@@ -393,6 +393,12 @@ def create_draft_knife(con, owner_id, maker='crk'):
     return get_knife(con, owner_id, cur.lastrowid)
 
 
+def count_drafts(con, owner_id):
+    return con.execute(
+        "SELECT count(*) FROM knives WHERE owner_id = ? AND status = 'draft'",
+        (owner_id,)).fetchone()[0]
+
+
 def get_knife(con, owner_id, knife_id):
     return _knife_row(con, con.execute(
         'SELECT * FROM knives WHERE id = ? AND owner_id = ?',

@@ -29,6 +29,24 @@ def test_create_list_get(client, mailer):
     assert 'store_key' not in str(one)
 
 
+def test_bad_status_filter_is_400(client, mailer):
+    signed_in(client, mailer)
+    r = client.get(K + '/?status=bogus')
+    assert r.status_code == 400 and r.get_json() == {'error': 'bad status'}
+
+
+def test_open_draft_cap(client, mailer):
+    signed_in(client, mailer)
+    for _ in range(20):
+        assert client.post(K + '/').status_code == 201
+    r = client.post(K + '/')
+    assert r.status_code == 429
+    assert r.get_json() == {'error': 'you have 20 open drafts — finish or discard some first'}
+    first_id = client.get(K + '/').get_json()['knives'][-1]['id']
+    assert client.delete(f'{K}/{first_id}').status_code == 200
+    assert client.post(K + '/').status_code == 201
+
+
 def test_other_users_knives_are_404(app, mailer):
     a, b = app.test_client(), app.test_client()
     signed_in(a, mailer, 'a@example.com')
@@ -52,6 +70,14 @@ def test_note_round_trip_and_limits(client, mailer):
     assert client.put(f'{K}/{kid}/note', json={}).status_code == 200  # empty clears
     assert client.get(f'{K}/{kid}').get_json()['notes_private'] == ''
     assert client.get(f'{K}/999').status_code == 404
+
+
+def test_set_note_tolerates_non_dict_json_body(client, mailer):
+    signed_in(client, mailer)
+    kid = client.post(K + '/').get_json()['id']
+    r = client.put(f'{K}/{kid}/note', json=['not', 'a', 'dict'])
+    assert r.status_code == 200 and r.get_json() == {'ok': True}
+    assert client.get(f'{K}/{kid}').get_json()['notes_private'] == ''
 
 
 def test_delete_draft_only(client, mailer, env):

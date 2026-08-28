@@ -55,6 +55,8 @@ class LocalFSStore(PhotoStore):
         try:
             with open(tmp, 'wb') as f:
                 f.write(data)
+                f.flush()
+                os.fsync(f.fileno())
             os.replace(tmp, p)  # atomic: a reader never sees a half-written original
         except BaseException:
             try:

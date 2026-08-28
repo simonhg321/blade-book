@@ -15,7 +15,7 @@ for v in /etc/apache2/sites-enabled/billboard.conf /etc/apache2/sites-enabled/bi
   grep -q 'conf-available/blade-book.conf' "$v" || \
     sed -i 's#^\(\s*\)ProxyPass        /api/#\1Include /etc/apache2/conf-available/blade-book.conf\n\1ProxyPass        /api/#' "$v"
 done
-cp "$CODE/html/index.html" /var/www/html/blade-book/index.html
+mkdir -p /var/www/html/blade-book && cp -r "$CODE/html/." /var/www/html/blade-book/
 apache2ctl configtest
 systemctl reload apache2
 supervisorctl reread && supervisorctl update && supervisorctl restart blade_book || supervisorctl start blade_book

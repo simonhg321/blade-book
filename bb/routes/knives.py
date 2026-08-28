@@ -15,6 +15,8 @@ log = logging.getLogger('blade-book.knives')
 bp = Blueprint('knives', __name__, url_prefix=paths.API_PREFIX + '/knives')
 
 MAX_NOTE = 2000
+MAX_OPEN_DRAFTS = 20
+DRAFT_ONLY = 'photos can only change on a draft — plan 05 adds editing'
 
 
 def _store():
@@ -25,15 +27,18 @@ def _not_found():
     return jsonify({'error': 'not found'}), 404
 
 
-def _public_photo(p, store):
+def _owner_photo(p, store):
+    """the signed-in owner's own view — includes private columns; never use for /@handle"""
     return {'id': p['id'], 'seq': p['seq'], 'sha256': p['sha256'],
             'width': p['width'], 'height': p['height'],
-            'has_thumb': store.exists(db.thumb_key(p['store_key']))}
+            'has_thumb': store.exists(db.thumb_key(p['store_key'])),
+            'has_original': store.exists(p['store_key'])}
 
 
-def _public_knife(k, store):
+def _owner_knife(k, store):
+    """the signed-in owner's own view — includes private columns; never use for /@handle"""
     out = {key: v for key, v in k.items() if key != 'photos'}
-    out['photos'] = [_public_photo(p, store) for p in k['photos']]
+    out['photos'] = [_owner_photo(p, store) for p in k['photos']]
     return out
 
 
@@ -55,11 +60,14 @@ def _delete_keys(store, keys, what):
 def create_draft():
     con = db.connect()
     try:
+        if db.count_drafts(con, g.user['id']) >= MAX_OPEN_DRAFTS:
+            return jsonify({'error': f'you have {MAX_OPEN_DRAFTS} open drafts — '
+                                      'finish or discard some first'}), 429
         k = db.create_draft_knife(con, g.user['id'])
     finally:
         con.close()
     log.info('draft %s created for @%s', k['tag'], g.user['handle'])
-    return jsonify(_public_knife(k, _store())), 201
+    return jsonify(_owner_knife(k, _store())), 201
 
 
 @bp.get('/')
@@ -86,13 +94,15 @@ def get_knife(knife_id):
         con.close()
     if k is None:
         return _not_found()
-    return jsonify(_public_knife(k, _store()))
+    return jsonify(_owner_knife(k, _store()))
 
 
 @bp.put('/<int:knife_id>/note')
 @auth.login_required
 def set_note(knife_id):
     body = request.get_json(silent=True) or {}
+    if not isinstance(body, dict):
+        body = {}
     note = body.get('note')
     if note is None:
         note = ''
@@ -143,23 +153,28 @@ def upload_photo(knife_id, seq):
     f = request.files.get('photo')
     if f is None or not f.filename:
         return jsonify({'error': 'no photo'}), 400
-    data = f.read()
-    try:
-        ing = photos.ingest(data, f.filename)
-    except photos.TooBig:
-        return jsonify({'error': f'photo over {photos.MAX_PHOTO_BYTES // (1024 * 1024)} MB'}), 400
-    except photos.BadType:
-        return jsonify({'error': 'not an accepted image type'}), 415
     owner = g.user['id']
-    key = f'{owner}/{knife_id}/{seq}.{ing.ext}'
-    tkey = db.thumb_key(key)
     store = _store()
     con = db.connect()
     # Row first, files second — UNIQUE(knife_id, seq) is the lock, so a 409 never
     # touches the store; a failed write deletes its own row.
     try:
-        if db.get_knife(con, owner, knife_id) is None:
+        # Ownership + draft-status check BEFORE ingest — don't decode up to 20 MB
+        # for a knife you don't own or can no longer edit.
+        k = db.get_knife(con, owner, knife_id)
+        if k is None:
             return _not_found()
+        if k['status'] != 'draft':
+            return jsonify({'error': DRAFT_ONLY}), 409
+        data = f.read()
+        try:
+            ing = photos.ingest(data, f.filename)
+        except photos.TooBig:
+            return jsonify({'error': f'photo over {photos.MAX_PHOTO_BYTES // (1024 * 1024)} MB'}), 400
+        except photos.BadType:
+            return jsonify({'error': 'not an accepted image type'}), 415
+        key = f'{owner}/{knife_id}/{seq}.{ing.ext}'
+        tkey = db.thumb_key(key)
         if request.args.get('replace') == '1':
             old = db.delete_photo(con, owner, knife_id, seq)
             if old:
@@ -189,9 +204,15 @@ def upload_photo(knife_id, seq):
 @bp.delete('/<int:knife_id>/photos/<int:seq>')
 @auth.login_required
 def delete_photo(knife_id, seq):
+    owner = g.user['id']
     con = db.connect()
     try:
-        row = db.delete_photo(con, g.user['id'], knife_id, seq)
+        k = db.get_knife(con, owner, knife_id)
+        if k is None:
+            return _not_found()
+        if k['status'] != 'draft':
+            return jsonify({'error': DRAFT_ONLY}), 409
+        row = db.delete_photo(con, owner, knife_id, seq)
     finally:
         con.close()
     if row is None:
