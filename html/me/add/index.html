@@ -1,0 +1,175 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>blade-book — add a knife</title>
+<style>
+  :root{--cream:#f6f1e7;--ink:#1a1a1a;--muted:#6b665c;--line:#d9d2c3;--accent:#b5442f;--ok:#2c7a3f;--soft:#e8e0d0}
+  *{box-sizing:border-box;margin:0}
+  body{background:var(--cream);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;max-width:520px;margin:0 auto;padding:16px 16px 48px}
+  h1{font-size:1.1rem;letter-spacing:.12em;text-transform:uppercase;margin:4px 0 14px}
+  h1 a{color:var(--muted);text-decoration:none;font-weight:400;letter-spacing:0;text-transform:none;float:right;font-size:.9rem}
+  .bar{display:flex;gap:10px;margin-bottom:10px}
+  .bar select{flex:1;font-size:1.4rem;font-weight:800;border:2px solid var(--ink);border-radius:12px;background:#fff;padding:8px}
+  .bar button{flex:0 0 auto;font-size:1.1rem;font-weight:800;border:2px solid var(--ink);background:var(--ink);color:var(--cream);border-radius:12px;padding:0 16px;cursor:pointer}
+  #note{width:100%;min-height:64px;padding:10px;font-size:1rem;resize:vertical;border:2px solid var(--ink);border-radius:10px;background:#fff}
+  #notestat{font-size:.78rem;color:var(--muted);min-height:1em;margin:4px 0 12px;text-align:right}
+  #notestat.ok{color:var(--ok)}
+  .slots{display:grid;gap:10px}
+  .slot{display:grid;grid-template-columns:96px 1fr;gap:10px;align-items:center;background:#fff;border:2px solid var(--line);border-radius:12px;padding:8px}
+  .slot img,.slot .ph{width:96px;height:96px;object-fit:cover;border-radius:8px;background:var(--soft);display:block}
+  .slot .ph{display:flex;align-items:center;justify-content:center;font-size:1.6rem;color:var(--muted)}
+  .slot label{font-weight:800;letter-spacing:.04em}
+  .slot small{display:block;color:var(--muted);font-weight:400;margin-top:2px}
+  .slot .act{display:flex;gap:8px;margin-top:8px}
+  .slot button{font:inherit;padding:8px 12px;border-radius:8px;border:2px solid var(--ink);background:#fff;cursor:pointer}
+  .slot button.shoot{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .slot button.x{border-color:var(--accent);color:var(--accent)}
+  .slot input[type=file]{display:none}
+  #status{text-align:center;margin:12px 0;font-size:.95rem;min-height:1.3em}
+  #status.err{color:var(--accent);font-weight:700}
+  #proc{display:block;width:100%;margin-top:14px;padding:16px 0;font-size:1.1rem;font-weight:800;letter-spacing:.06em;background:#fff;color:var(--muted);border:2px solid var(--line);border-radius:14px}
+  #discard{display:block;margin:18px auto 0;background:none;border:none;color:var(--muted);text-decoration:underline;cursor:pointer;font:inherit}
+  .hidden{display:none}
+</style>
+<h1>Add a knife <a href="/blade-book/">← blade-book</a></h1>
+
+<div class="bar">
+  <select id="draft" aria-label="open drafts"></select>
+  <button id="new" type="button">➕ New</button>
+</div>
+
+<section id="editor" class="hidden">
+  <textarea id="note" placeholder="Note — what you know about it (fed to the decoder as ground truth)&#10;e.g. Large 21, S35VN, bought from a collector 2019, box + card + pouch"></textarea>
+  <div id="notestat" aria-live="polite"></div>
+
+  <div class="slots" id="slots"></div>
+  <div id="status" aria-live="polite"></div>
+
+  <button id="proc" type="button" disabled>⚡ PROCESS — coming next</button>
+  <button id="discard" type="button">🗑 discard this draft</button>
+</section>
+
+<script>
+(function () {
+  var API = '/blade-book/api';
+  var $ = function (id) { return document.getElementById(id); };
+  var SLOTS = [[1, 'BOX + KIT + CARD', 'required — box, kit and card in one shot'],
+               [2, 'HERO', 'open, blade side'],
+               [3, 'HERO', 'closed, handle side']];
+  var current = null;
+
+  function say(t, err) { var s = $('status'); s.textContent = t; s.className = err ? 'err' : ''; }
+  function api(path, opts) {
+    opts = opts || {}; opts.credentials = 'same-origin';
+    return fetch(API + path, opts).then(function (r) {
+      if (r.status === 401) { location.href = '/blade-book/'; throw new Error('sign in'); }
+      return r.json().catch(function () { return {}; }).then(function (j) { return { ok: r.ok, status: r.status, j: j }; });
+    });
+  }
+
+  function loadDrafts(selectId) {
+    return api('/knives/?status=draft').then(function (res) {
+      var sel = $('draft'); while (sel.firstChild) sel.removeChild(sel.firstChild);
+      var ks = res.j.knives || [];
+      if (!ks.length) { var o = document.createElement('option'); o.textContent = 'no open drafts — tap ➕ New'; o.value = ''; sel.appendChild(o); }
+      ks.forEach(function (k) {
+        var o = document.createElement('option'); o.value = k.id;
+        o.textContent = k.tag + '  ·  ' + k.photo_count + '/3 photos'; sel.appendChild(o);
+      });
+      var pick = selectId || (ks[0] && ks[0].id) || '';
+      sel.value = pick; select(pick);
+    });
+  }
+
+  function select(id) {
+    current = id ? +id : null;
+    $('editor').classList.toggle('hidden', !current);
+    if (!current) return;
+    api('/knives/' + current).then(function (res) {
+      if (!res.ok) { say(res.j.error || 'load failed', true); return; }
+      $('note').value = res.j.notes_private || '';
+      $('notestat').textContent = '';
+      renderSlots(res.j.photos || []);
+    });
+  }
+
+  function renderSlots(photos) {
+    var have = {}; photos.forEach(function (p) { have[p.seq] = p; });
+    var box = $('slots'); while (box.firstChild) box.removeChild(box.firstChild);
+    SLOTS.forEach(function (s) {
+      var seq = s[0], p = have[seq];
+      var row = document.createElement('div'); row.className = 'slot';
+      var pic;
+      if (p && p.has_thumb) { pic = new Image(); pic.src = API + '/knives/' + current + '/photos/' + seq + '/thumb?v=' + p.sha256.slice(0, 8); pic.alt = s[1]; }
+      else { pic = document.createElement('div'); pic.className = 'ph'; pic.textContent = p ? '✓' : '①②③'.charAt(seq - 1); }
+      var meta = document.createElement('div');
+      var label = document.createElement('label'); label.textContent = '' + seq + ' ' + s[1];
+      var small = document.createElement('small'); small.textContent = p ? 'saved ✓' : s[2];
+      label.appendChild(small); meta.appendChild(label);
+      var act = document.createElement('div'); act.className = 'act';
+      var file = document.createElement('input'); file.type = 'file'; file.accept = 'image/*'; file.setAttribute('capture', 'environment');
+      var shoot = document.createElement('button'); shoot.type = 'button'; shoot.className = 'shoot';
+      shoot.textContent = p ? '📷 retake' : '📷 shoot';
+      shoot.addEventListener('click', function () { file.click(); });
+      file.addEventListener('change', function () { if (file.files[0]) upload(seq, file.files[0], !!p); });
+      act.appendChild(shoot); act.appendChild(file);
+      if (p) {
+        var x = document.createElement('button'); x.type = 'button'; x.className = 'x'; x.textContent = '✕';
+        x.addEventListener('click', function () { removeSlot(seq); });
+        act.appendChild(x);
+      }
+      meta.appendChild(act);
+      row.appendChild(pic); row.appendChild(meta); box.appendChild(row);
+    });
+  }
+
+  function upload(seq, f, replace) {
+    var id = current;
+    var go = replace ? api('/knives/' + id + '/photos/' + seq, { method: 'DELETE' }) : Promise.resolve({ ok: true });
+    say('uploading ' + seq + '…');
+    go.then(function () {
+      var fd = new FormData(); fd.append('photo', f, f.name || ('shot' + seq + '.jpg'));
+      return api('/knives/' + id + '/photos/' + seq, { method: 'POST', body: fd });
+    }).then(function (res) {
+      if (!res.ok) throw new Error(res.j.error || 'upload failed');
+      say('✓ saved ' + seq + (res.j.has_thumb ? '' : ' (no preview for this format — stored)'));
+      return loadDrafts(id);
+    }).catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); });
+  }
+
+  function removeSlot(seq) {
+    if (!confirm('Delete photo ' + seq + '?')) return;
+    var id = current;
+    api('/knives/' + id + '/photos/' + seq, { method: 'DELETE' }).then(function () { return loadDrafts(id); });
+  }
+
+  var noteTimer = null;
+  function saveNote() {
+    if (!current) return;
+    var id = current, text = $('note').value;
+    api('/knives/' + id + '/note', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ note: text }) })
+      .then(function (res) {
+        var ns = $('notestat');
+        if (!res.ok) { ns.className = ''; ns.textContent = '✗ ' + (res.j.error || 'not saved'); return; }
+        if (id === current) { ns.className = 'ok'; ns.textContent = 'note saved ✓'; }
+      });
+  }
+  $('note').addEventListener('input', function () { $('notestat').className = ''; $('notestat').textContent = 'typing…'; clearTimeout(noteTimer); noteTimer = setTimeout(saveNote, 1200); });
+  $('note').addEventListener('blur', function () { clearTimeout(noteTimer); saveNote(); });
+
+  $('new').addEventListener('click', function () {
+    api('/knives/', { method: 'POST' }).then(function (res) {
+      if (!res.ok) { say(res.j.error || 'could not create', true); return; }
+      say('reserved ' + res.j.tag); loadDrafts(res.j.id);
+    });
+  });
+  $('draft').addEventListener('change', function () { select(this.value); });
+  $('discard').addEventListener('click', function () {
+    if (!current || !confirm('Discard this draft and its photos?')) return;
+    api('/knives/' + current, { method: 'DELETE' }).then(function () { say('draft discarded'); loadDrafts(); });
+  });
+
+  api('/auth/me').then(function () { loadDrafts(); });
+})();
+</script>

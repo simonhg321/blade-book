@@ -63,3 +63,15 @@ def test_env_doc_lists_every_key_the_code_reads():
 def test_install_has_purge_cron():
     sh = open(os.path.join(ROOT, 'scripts', 'install.sh')).read()
     assert 'scripts/purge_drafts.py' in sh and 'purge.log' in sh
+
+
+def test_intake_page_wiring():
+    html = open(os.path.join(ROOT, 'html', 'me', 'add', 'index.html')).read()
+    for needle in ("'/blade-book/api'", "'/auth/me'", "'/knives/'", "/photos/", "/note",
+                   "setAttribute('capture', 'environment')", "file.accept = 'image/*'",
+                   'BOX + KIT + CARD', 'HERO', 'PROCESS'):
+        assert needle in html, needle
+    assert 'fonts.googleapis.com' not in html
+    assert 'innerHTML' not in html
+    landing = open(os.path.join(ROOT, 'html', 'index.html')).read()
+    assert '/blade-book/me/add/' in landing
