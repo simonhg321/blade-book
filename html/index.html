@@ -2,11 +2,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>blade-book</title>
+<link rel="stylesheet" href="/blade-book/vibe.css">
 <style>
-  :root{--cream:#f6f1e7;--ink:#1a1a1a;--muted:#6b665c;--line:#d9d2c3;--accent:#b5442f}
-  body{font-family:system-ui,sans-serif;background:var(--cream);color:var(--ink);margin:0;min-height:100vh;display:grid;place-items:center}
+  body{background:var(--cream);color:var(--ink);margin:0;min-height:100vh;display:grid;place-items:center}
   main{width:min(92vw,420px);text-align:center}
-  h1{font-size:3rem;letter-spacing:.06em;margin:0 0 .25rem}
+  h1{font-family:'Bebas Neue',Impact,sans-serif;font-weight:400;font-size:3.4rem;letter-spacing:.06em}
   p{color:var(--muted);margin:.25rem 0 1.25rem}
   form{display:grid;gap:.6rem}
   input,button{font:inherit;padding:.75rem .9rem;border-radius:8px;border:1px solid var(--line)}
@@ -21,7 +21,9 @@
   #signed-in .who{color:var(--muted)}
   #signed-in .who strong{color:var(--ink)}
   a.big{display:block;padding:1.2rem 0;font-size:1.35rem;font-weight:800;letter-spacing:.06em;background:var(--accent);color:#fff;border-radius:14px;text-decoration:none}
+  a.big.alt{background:#fff;color:var(--ink);border:2px solid var(--ink)}
   #drafts{color:var(--muted);font-size:.95rem;min-height:1.2em}
+  #regcount{color:var(--muted);font-size:.95rem;min-height:1.2em}
   #signout{background:none;color:var(--muted);border:none;text-decoration:underline;padding:.25rem}
   #sent{display:grid;gap:.6rem;padding:1.2rem 1rem;border:1px solid var(--line);border-radius:14px;background:#fff}
   #sent h2{margin:0;font-size:1.5rem}
@@ -58,6 +60,8 @@
   <section id="signed-in" class="hidden">
     <div class="who">signed in as <strong id="handle"></strong></div>
     <a class="big" href="/blade-book/me/add/">📷 &nbsp;ADD A KNIFE</a>
+    <a class="big alt" href="/blade-book/me/">📖 &nbsp;MY REGISTER</a>
+    <div id="regcount" aria-live="polite"></div>
     <div id="drafts" aria-live="polite"></div>
     <button id="signout" type="button">sign out</button>
   </section>
@@ -85,6 +89,11 @@
         const n = (j.knives || []).length;
         $('drafts').textContent = n ? n + ' open draft' + (n > 1 ? 's' : '') + ' — ' +
           j.knives.map(k => k.tag + ' ' + k.photo_count + '/3').join(' · ') : 'no open drafts yet';
+      }).catch(() => {});
+    fetch('/blade-book/api/knives/?status=live', {credentials: 'same-origin'})
+      .then(r => r.json()).then(j => {
+        const n = (j.knives || []).length;
+        $('regcount').textContent = n ? n + ' knife' + (n > 1 ? 's' : '') + ' in your register' : 'your register is empty — add the first knife';
       }).catch(() => {});
   } else {
     const p = await fetch(API + '/providers').then(r => r.json()).catch(() => ({providers: []}));

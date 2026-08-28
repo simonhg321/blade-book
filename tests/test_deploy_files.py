@@ -113,3 +113,27 @@ def test_wire_anthropic_script():
                    'supervisorctl restart blade_book'):
         assert needle in s, needle
     assert 'echo "$KEY"' not in s and 'echo $KEY' not in s
+
+
+def test_vibe_fonts_are_self_hosted():
+    css = open(os.path.join(ROOT, 'html', 'vibe.css')).read()
+    for needle in ("font-family: 'Bebas Neue'", "font-family: 'DM Sans'", "url('/blade-book/fonts/BebasNeue-Regular.woff2')",
+                   "url('/blade-book/fonts/DMSans.woff2')", "url('/blade-book/fonts/DMSans-Italic.woff2')",
+                   '.bb-display', '.card', '.dot.high', '.badge', '--cream'):
+        assert needle in css, needle
+    for f in ('BebasNeue-Regular.woff2', 'DMSans.woff2', 'DMSans-Italic.woff2'):
+        p = os.path.join(ROOT, 'html', 'fonts', f)
+        assert os.path.getsize(p) > 10_000, f
+        assert open(p, 'rb').read(4) == b'wOF2', f
+    assert 'Open Font License' in open(os.path.join(ROOT, 'html', 'fonts', 'OFL.txt')).read()
+    for dirpath, _, files in os.walk(os.path.join(ROOT, 'html')):
+        for f in files:
+            if f.endswith(('.html', '.css', '.js')):
+                body = open(os.path.join(dirpath, f)).read()
+                assert 'fonts.googleapis.com' not in body and 'fonts.gstatic.com' not in body, f
+
+
+def test_landing_links_the_register():
+    html = open(os.path.join(ROOT, 'html', 'index.html')).read()
+    for needle in ('href="/blade-book/vibe.css"', 'href="/blade-book/me/"', "/api/knives/?status=live'", 'id="regcount"'):
+        assert needle in html, needle
