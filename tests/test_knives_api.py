@@ -48,6 +48,7 @@ def test_note_round_trip_and_limits(client, mailer):
     assert r.status_code == 200 and r.get_json() == {'ok': True}
     assert client.get(f'{K}/{kid}').get_json()['notes_private'] == 'Large 21, from a collector'
     assert client.put(f'{K}/{kid}/note', json={'note': 'x' * 2001}).status_code == 400
+    assert client.put(f'{K}/{kid}/note', json={'note': 123}).status_code == 400
     assert client.put(f'{K}/{kid}/note', json={}).status_code == 200  # empty clears
     assert client.get(f'{K}/{kid}').get_json()['notes_private'] == ''
     assert client.get(f'{K}/999').status_code == 404
@@ -64,3 +65,27 @@ def test_delete_draft_only(client, mailer, env):
     assert client.delete(f'{K}/{kid2}').status_code == 404
     assert client.get(f'{K}/{kid2}').status_code == 200
     assert client.post(K + '/').get_json()['tag'] == 'K03'
+
+
+def test_delete_survives_store_errors(client, mailer, app):
+    me = signed_in(client, mailer)
+    kid = client.post(K + '/').get_json()['id']
+    con = db.connect()
+    db.add_photo(con, me['id'], kid, 1, f'{me["id"]}/{kid}/1.jpg', 'deadbeef', 10, 10)
+    con.close()
+
+    store = app.config['STORE']
+    orig_delete = store.delete
+    calls = []
+
+    def flaky_delete(key):
+        calls.append(key)
+        if len(calls) == 1:
+            raise PermissionError('nope')
+        return orig_delete(key)
+
+    store.delete = flaky_delete
+
+    r = client.delete(f'{K}/{kid}')
+    assert r.status_code == 200 and r.get_json() == {'ok': True}
+    assert client.get(f'{K}/{kid}').status_code == 404

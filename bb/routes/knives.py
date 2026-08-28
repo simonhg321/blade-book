@@ -37,6 +37,19 @@ def _public_knife(k, store):
     return out
 
 
+def _delete_keys(store, keys, what):
+    """Best-effort file cleanup AFTER the DB is the source of truth. Never raises:
+    a file we can't remove is logged and left for the purge/backup sweep, not
+    turned into a 500 for a request whose DB side already succeeded."""
+    removed = 0
+    for key in keys:
+        try:
+            removed += bool(store.delete(key))
+        except Exception:  # noqa: BLE001 — surfaced in the log, never swallowed silently
+            log.exception('%s: could not delete %s', what, key)
+    return removed
+
+
 @bp.post('/')
 @auth.login_required
 def create_draft():
@@ -80,7 +93,12 @@ def get_knife(knife_id):
 @auth.login_required
 def set_note(knife_id):
     body = request.get_json(silent=True) or {}
-    text = (body.get('note') or '').strip()
+    note = body.get('note')
+    if note is None:
+        note = ''
+    if not isinstance(note, str):
+        return jsonify({'error': 'note must be a string'}), 400
+    text = note.strip()
     if len(text) > MAX_NOTE:
         return jsonify({'error': f'note over {MAX_NOTE} characters'}), 400
     con = db.connect()
@@ -103,7 +121,6 @@ def delete_draft(knife_id):
     if k is None or k['status'] != 'draft':
         return _not_found()
     store = _store()
-    for key in keys:
-        store.delete(key)
-    log.info('draft %s deleted by @%s (%d files)', k['tag'], g.user['handle'], len(keys))
+    removed = _delete_keys(store, keys, f'draft {k["tag"]}')
+    log.info('draft %s deleted by @%s (%d files)', k['tag'], g.user['handle'], removed)
     return jsonify({'ok': True})
