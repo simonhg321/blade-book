@@ -62,6 +62,7 @@ def test_norm_collapses_case_prefixes_and_aliases():
     assert crk.norm('size', 'large') == 'large'
     assert crk.norm('hand', 'Left-handed') == 'left'
     assert crk.norm('born_on', '2022-03-30') == '2022-03-30'
+    assert crk.norm('born_on', '2011-12-01') == crk.norm('born_on', '2011-12') == '2011-12'
     assert crk.norm('has_box', True) == '1' and crk.norm('has_box', 0) == '0'
     assert crk.norm('crk_sku', 'l31-1633') == 'L31-1633'
     assert crk.norm('anything', None) == ''

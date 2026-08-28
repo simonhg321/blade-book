@@ -96,7 +96,10 @@ def norm(field, value):
     if field == 'crk_sku':
         return str(value).strip().upper()
     if field == 'born_on':
-        return str(value).strip()
+        # month-only cards ("DECEMBER, 2011") are stored day-padded as YYYY-MM-01 in
+        # crkinv; the decoder returns YYYY-MM — compare at month precision for those
+        s = str(value).strip()
+        return s[:-3] if re.fullmatch(r'\d{4}-\d{2}-01', s) else s
     return s
 
 
