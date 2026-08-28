@@ -152,17 +152,24 @@ def upload_photo(knife_id, seq):
     tkey = db.thumb_key(key)
     store = _store()
     con = db.connect()
+    # Row first, files second — UNIQUE(knife_id, seq) is the lock, so a 409 never
+    # touches the store; a failed write deletes its own row.
     try:
         if db.get_knife(con, owner, knife_id) is None:
             return _not_found()
-        store.put(key, data)
-        if ing.thumb:
-            store.put(tkey, ing.thumb)
         try:
             db.add_photo(con, owner, knife_id, seq, key, ing.sha256, ing.width, ing.height)
         except db.SlotTaken:
-            _delete_keys(store, [key, tkey], f'knife {knife_id} slot {seq} (409)')
             return jsonify({'error': f'slot {seq} is taken — delete it first'}), 409
+        try:
+            store.put(key, data)
+            if ing.thumb:
+                store.put(tkey, ing.thumb)
+        except Exception:  # noqa: BLE001 — row must not outlive a failed write
+            log.exception('store write failed for %s; rolling back photo row', key)
+            db.delete_photo(con, owner, knife_id, seq)
+            _delete_keys(store, [key, tkey], f'failed upload {key}')
+            return jsonify({'error': 'could not store the photo — try again'}), 500
     finally:
         con.close()
     log.info('photo %d/%d stored for @%s (%s, thumb=%s)', knife_id, seq, g.user['handle'],

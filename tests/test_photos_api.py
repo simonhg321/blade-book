@@ -104,6 +104,25 @@ def test_photos_are_owner_scoped(app, mailer):
     assert a.get(f'{K}/{kid}/photos/1/original').status_code == 200
 
 
+def test_failed_store_write_rolls_back_row(client, mailer, app, env):
+    signed_in(client, mailer)
+    kid = client.post(K + '/').get_json()['id']
+    store = app.config['STORE']
+    orig_put = store.put
+
+    def boom(key, data):
+        raise OSError('disk full')
+
+    store.put = boom
+    try:
+        r = _up(client, kid, 1)
+    finally:
+        store.put = orig_put
+    assert r.status_code == 500 and 'could not store' in r.get_json()['error']
+    assert client.get(f'{K}/{kid}').get_json()['photos'] == []
+    assert _up(client, kid, 1).status_code == 201
+
+
 def test_delete_draft_removes_its_files(client, mailer, app, env):
     me = signed_in(client, mailer)
     kid = client.post(K + '/').get_json()['id']
