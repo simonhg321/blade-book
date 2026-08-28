@@ -73,6 +73,10 @@ def _s(v):
 def norm(field, value):
     """Comparison form of a field (eval + matching): case/space-insensitive,
     aliases collapsed. Returns '' for None."""
+    if field == 'hand':
+        # CRK cards only say "left"; an unstated hand IS right-handed
+        s = _s(value)
+        return 'left' if 'left' in s else 'right'
     if value is None or value == '':
         return ''
     if field.startswith('has_'):
@@ -89,10 +93,9 @@ def norm(field, value):
                 return 'tilock' if m == 'ti-lock' else m
         return s
     if field == 'generation':
-        m = re.search(r'\b(classic|21|25|31)\b', s)
-        return m.group(1) if m else s
-    if field == 'hand':
-        return 'left' if 'left' in s else ('right' if 'right' in s else s)
+        # crkinv calls the pre-21 Sebenza "Regular"; the schema enum says "Classic"
+        m = re.search(r'\b(classic|regular|21|25|31)\b', s)
+        return 'classic' if m and m.group(1) == 'regular' else (m.group(1) if m else s)
     if field == 'crk_sku':
         return str(value).strip().upper()
     if field == 'born_on':
