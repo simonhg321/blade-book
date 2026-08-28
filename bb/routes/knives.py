@@ -9,7 +9,7 @@ import time
 
 from flask import Blueprint, Response, current_app, g, jsonify, request
 
-from bb import auth, db, decode, makers, paths, photos
+from bb import auth, db, decode, edit, makers, paths, photos
 from bb.makers import core as maker_core
 
 log = logging.getLogger('blade-book.knives')
@@ -18,7 +18,9 @@ bp = Blueprint('knives', __name__, url_prefix=paths.API_PREFIX + '/knives')
 
 MAX_NOTE = 2000
 MAX_OPEN_DRAFTS = 20
-DRAFT_ONLY = 'photos can only change on a draft — plan 05 adds editing'
+MAX_SELLER_NOTE = 500
+MAX_BULK = 200
+LIVE_KEEPS_ONE = 'a live knife keeps at least one photo'
 FREE_DECODES_PER_DAY = 20
 PAID_DECODES_PER_DAY = 200
 
@@ -43,6 +45,13 @@ def _owner_knife(k, store):
     """the signed-in owner's own view — includes private columns; never use for /@handle"""
     out = {key: v for key, v in k.items() if key != 'photos'}
     out['photos'] = [_owner_photo(p, store) for p in k['photos']]
+    return out
+
+
+def _register_view(k, store):
+    out = _owner_knife(k, store)
+    out['flags'] = edit.flags_for(k)
+    out['age_months'] = maker_core.age_months(k.get('born_on'))
     return out
 
 
@@ -123,6 +132,135 @@ def set_note(knife_id):
     return (jsonify({'ok': True}), 200) if ok else _not_found()
 
 
+@bp.get('/full')
+@auth.login_required
+def full_register():
+    """The owner's whole register: every knife with photos, events, flags, age."""
+    con = db.connect()
+    try:
+        ks = db.full_register(con, g.user['id'])
+    finally:
+        con.close()
+    store = _store()
+    out = []
+    for k in ks:
+        v = _register_view(k, store)
+        v['events'] = k['events']
+        out.append(v)
+    return jsonify({'knives': out})
+
+
+@bp.patch('/<int:knife_id>')
+@auth.login_required
+def edit_knife(knife_id):
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({'error': 'body must be a JSON object'}), 400
+    con = db.connect()
+    try:
+        k = db.get_knife(con, g.user['id'], knife_id)
+        if k is None:
+            return _not_found()
+        try:
+            fields = edit.validate(k['maker'], body, photo_seqs=[p['seq'] for p in k['photos']])
+        except edit.EditError as e:
+            return jsonify({'error': str(e)}), 400
+        if 'ext' in fields:
+            fields['ext'] = {**k['ext'], **fields['ext']}
+        changed = sorted(c for c, v in fields.items() if k.get(c) != v)
+        k2 = db.update_knife(con, g.user['id'], knife_id, fields)
+        if k2 is None:
+            return _not_found()
+        if changed and k['status'] == 'live':
+            db.add_event(con, g.user['id'], knife_id, 'edited', detail=', '.join(changed))
+    finally:
+        con.close()
+    if changed:
+        log.info('%s edited by @%s: %s', k['tag'], g.user['handle'], ', '.join(changed))
+    return jsonify(_register_view(k2, _store()))
+
+
+@bp.post('/<int:knife_id>/save')
+@auth.login_required
+def save_knife(knife_id):
+    """draft → live. Never gated (spec §10); the age travels back for the notice."""
+    con = db.connect()
+    try:
+        k, err = db.publish_knife(con, g.user['id'], knife_id)
+    finally:
+        con.close()
+    if k is None:
+        return _not_found()
+    if err:
+        return jsonify({'error': err}), 400
+    log.info('%s saved to the register by @%s', k['tag'], g.user['handle'])
+    return jsonify(_register_view(k, _store()))
+
+
+@bp.post('/<int:knife_id>/sale')
+@auth.login_required
+def sale_knife(knife_id):
+    body = request.get_json(silent=True) or {}
+    status = body.get('sale_status')
+    if status not in db.SALE_STATUSES:
+        return jsonify({'error': f'sale_status must be one of {list(db.SALE_STATUSES)}'}), 400
+    try:
+        asking = edit._number(body.get('asking_price'), 'asking_price', 0, 10_000_000)
+        amount = edit._number(body.get('amount'), 'amount', 0, 10_000_000)
+        note = edit._text(body.get('seller_note'), MAX_SELLER_NOTE, 'seller_note') or None
+        counterparty = edit._text(body.get('counterparty'), edit.SHORT, 'counterparty') or None
+    except edit.EditError as e:
+        return jsonify({'error': str(e)}), 400
+    if status == 'for_sale' and asking is None:
+        return jsonify({'error': 'asking price required to list for sale'}), 400
+    con = db.connect()
+    try:
+        k = db.get_knife(con, g.user['id'], knife_id)
+        if k is None:
+            return _not_found()
+        if k['status'] != 'live':
+            return jsonify({'error': 'save the knife first'}), 409
+        k2 = db.set_sale(con, g.user['id'], knife_id, status, asking_price=asking, seller_note=note,
+                         amount=amount, counterparty=counterparty)
+    finally:
+        con.close()
+    log.info('%s sale_status → %s by @%s', k['tag'], status, g.user['handle'])
+    return jsonify(_register_view(k2, _store()))
+
+
+@bp.post('/<int:knife_id>/public')
+@auth.login_required
+def public_knife(knife_id):
+    body = request.get_json(silent=True) or {}
+    if not isinstance(body.get('is_public'), bool):
+        return jsonify({'error': 'is_public must be true or false'}), 400
+    con = db.connect()
+    try:
+        n = db.set_public(con, g.user['id'], [knife_id], body['is_public'])
+    finally:
+        con.close()
+    if n == 0:
+        return _not_found()
+    return jsonify({'ok': True, 'is_public': 1 if body['is_public'] else 0})
+
+
+@bp.post('/bulk')
+@auth.login_required
+def bulk_public():
+    body = request.get_json(silent=True) or {}
+    ids = body.get('ids')
+    if (not isinstance(ids, list) or len(ids) > MAX_BULK
+            or not all(isinstance(i, int) and not isinstance(i, bool) for i in ids)
+            or not isinstance(body.get('is_public'), bool)):
+        return jsonify({'error': f'ids must be a list of up to {MAX_BULK} knife ids; is_public true/false'}), 400
+    con = db.connect()
+    try:
+        n = db.set_public(con, g.user['id'], ids, body['is_public'])
+    finally:
+        con.close()
+    return jsonify({'changed': n})
+
+
 @bp.post('/<int:knife_id>/decode')
 @auth.login_required
 def decode_knife(knife_id):
@@ -142,8 +280,6 @@ def decode_knife(knife_id):
         k = db.get_knife(con, owner, knife_id)
         if k is None:
             return _not_found()
-        if k['status'] != 'draft':
-            return jsonify({'error': 'decode only runs on a draft — plan 05 adds re-decode'}), 409
         if not k['photos']:
             return jsonify({'error': 'add the box + card photo first'}), 400
         if isinstance(decoder, decode.NoDecoder):
@@ -190,18 +326,18 @@ def decode_knife(knife_id):
 
 @bp.delete('/<int:knife_id>')
 @auth.login_required
-def delete_draft(knife_id):
+def delete_knife(knife_id):
     con = db.connect()
     try:
         k = db.get_knife(con, g.user['id'], knife_id)
-        keys = db.delete_draft_knife(con, g.user['id'], knife_id)
+        keys = db.delete_knife(con, g.user['id'], knife_id)
     finally:
         con.close()
-    if k is None or k['status'] != 'draft':
+    if keys is None:
         return _not_found()
     store = _store()
-    removed = _delete_keys(store, keys, f'draft {k["tag"]}')
-    log.info('draft %s deleted by @%s (%d files)', k['tag'], g.user['handle'], removed)
+    removed = _delete_keys(store, keys, k['tag'])
+    log.info('%s deleted by @%s (%d files)', k['tag'], g.user['handle'], removed)
     return jsonify({'ok': True})
 
 
@@ -233,8 +369,6 @@ def upload_photo(knife_id, seq):
         k = db.get_knife(con, owner, knife_id)
         if k is None:
             return _not_found()
-        if k['status'] != 'draft':
-            return jsonify({'error': DRAFT_ONLY}), 409
         data = f.read()
         try:
             ing = photos.ingest(data, f.filename)
@@ -279,8 +413,8 @@ def delete_photo(knife_id, seq):
         k = db.get_knife(con, owner, knife_id)
         if k is None:
             return _not_found()
-        if k['status'] != 'draft':
-            return jsonify({'error': DRAFT_ONLY}), 409
+        if k['status'] == 'live' and len(k['photos']) <= 1:
+            return jsonify({'error': LIVE_KEEPS_ONE}), 409
         row = db.delete_photo(con, owner, knife_id, seq)
     finally:
         con.close()

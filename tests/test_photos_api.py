@@ -135,7 +135,7 @@ def test_delete_draft_removes_its_files(client, mailer, app, env):
         assert not store.exists(key), key
 
 
-def test_photo_mutations_blocked_once_knife_is_live(client, mailer, app, env):
+def test_live_knife_keeps_one_photo(client, mailer, app, env):
     signed_in(client, mailer)
     kid = client.post(K + '/').get_json()['id']
     assert _up(client, kid, 1).status_code == 201
@@ -143,9 +143,11 @@ def test_photo_mutations_blocked_once_knife_is_live(client, mailer, app, env):
     con.execute("UPDATE knives SET status='live' WHERE id=?", (kid,)); con.commit()
     con.close()
     r = _up(client, kid, 2)
-    assert r.status_code == 409 and 'draft' in r.get_json()['error']
+    assert r.status_code == 201
+    r = client.delete(f'{K}/{kid}/photos/2')
+    assert r.status_code == 200
     r = client.delete(f'{K}/{kid}/photos/1')
-    assert r.status_code == 409 and 'draft' in r.get_json()['error']
+    assert r.status_code == 409 and 'at least one' in r.get_json()['error']
     # the existing photo is untouched
     k = client.get(f'{K}/{kid}').get_json()
     assert [p['seq'] for p in k['photos']] == [1]

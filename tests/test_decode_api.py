@@ -49,17 +49,17 @@ def test_decode_passes_note_and_no_card(client, mailer, decoder):
     assert decoder.calls[-1] == (1, 'Large 31 from a collector', 'crk', True)
 
 
-def test_decode_requires_photo_draft_and_ownership(client, mailer, decoder):
+def test_decode_requires_photo_and_ownership(client, mailer, decoder):
     signed_in(client, mailer, 'a@example.com')
     kid = client.post(K + '/').get_json()['id']
     assert client.post(f'{K}/{kid}/decode').status_code == 400        # no photos
     client.post(f'{K}/{kid}/photos/1', data={'photo': (io.BytesIO(_jpeg()), 'a.jpg')}, content_type='multipart/form-data')
     con = db.connect(); con.execute("UPDATE knives SET status = 'live' WHERE id = ?", (kid,)); con.commit(); con.close()
-    assert client.post(f'{K}/{kid}/decode').status_code == 409        # live
+    assert client.post(f'{K}/{kid}/decode').status_code == 200        # live: re-decode allowed
     client.post('/blade-book/api/auth/signout')
     signed_in(client, mailer, 'b@example.com')
     assert client.post(f'{K}/{kid}/decode').status_code == 404        # not yours
-    assert decoder.calls == []
+    assert len(decoder.calls) == 1
 
 
 def test_decode_unauth_is_401(client):

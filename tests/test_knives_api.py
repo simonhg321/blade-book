@@ -80,7 +80,7 @@ def test_set_note_tolerates_non_dict_json_body(client, mailer):
     assert client.get(f'{K}/{kid}').get_json()['notes_private'] == ''
 
 
-def test_delete_draft_only(client, mailer, env):
+def test_delete_any_status(client, mailer, env):
     me = signed_in(client, mailer)
     kid = client.post(K + '/').get_json()['id']
     assert client.delete(f'{K}/{kid}').status_code == 200
@@ -88,8 +88,8 @@ def test_delete_draft_only(client, mailer, env):
     kid2 = client.post(K + '/').get_json()['id']
     con = db.connect()
     con.execute("UPDATE knives SET status='live' WHERE id=?", (kid2,)); con.commit()
-    assert client.delete(f'{K}/{kid2}').status_code == 404
-    assert client.get(f'{K}/{kid2}').status_code == 200
+    assert client.delete(f'{K}/{kid2}').status_code == 200
+    assert client.get(f'{K}/{kid2}').status_code == 404
     assert client.post(K + '/').get_json()['tag'] == 'K03'
 
 
