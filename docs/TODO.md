@@ -13,3 +13,4 @@ Small items that don't warrant a plan. Bigger work lives in the plan roadmap
   `variant` the configuration, or drop one.
 - [ ] Vhost `Permissions-Policy: camera=()` → `camera=(self)` if iPhone capture is blocked
   on `/blade-book/me/add/` (sudo; unverified).
+- [ ] /me: photo re-order / replace from the register (today: only via /me/add before save, or re-upload by slot through the API).
