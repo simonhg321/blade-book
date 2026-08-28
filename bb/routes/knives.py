@@ -8,7 +8,8 @@ import logging
 
 from flask import Blueprint, Response, current_app, g, jsonify, request
 
-from bb import auth, db, paths, photos
+from bb import auth, db, decode, paths, photos
+from bb.makers import core as maker_core
 
 log = logging.getLogger('blade-book.knives')
 
@@ -17,6 +18,8 @@ bp = Blueprint('knives', __name__, url_prefix=paths.API_PREFIX + '/knives')
 MAX_NOTE = 2000
 MAX_OPEN_DRAFTS = 20
 DRAFT_ONLY = 'photos can only change on a draft — plan 05 adds editing'
+FREE_DECODES_PER_DAY = 20
+PAID_DECODES_PER_DAY = 200
 
 
 def _store():
@@ -117,6 +120,53 @@ def set_note(knife_id):
     finally:
         con.close()
     return (jsonify({'ok': True}), 200) if ok else _not_found()
+
+
+@bp.post('/<int:knife_id>/decode')
+@auth.login_required
+def decode_knife(knife_id):
+    """⚡ PROCESS: the draft's photos + note → one model call → core/ext/
+    confidence written onto the draft. Drafts only; metered per day; the
+    record is written even when consistency rules flag it (flags returned)."""
+    owner = g.user['id']
+    body = request.get_json(silent=True)
+    no_card = bool(body.get('no_card')) if isinstance(body, dict) else False
+    decoder = current_app.config['DECODER']
+    store = _store()
+    con = db.connect()
+    try:
+        k = db.get_knife(con, owner, knife_id)
+        if k is None:
+            return _not_found()
+        if k['status'] != 'draft':
+            return jsonify({'error': 'decode only runs on a draft — plan 05 adds re-decode'}), 409
+        if not k['photos']:
+            return jsonify({'error': 'add the box + card photo first'}), 400
+        if isinstance(decoder, decode.NoDecoder):
+            return jsonify({'error': 'decoder not configured'}), 503
+        cap = PAID_DECODES_PER_DAY if g.user.get('sub_status') == 'active' else FREE_DECODES_PER_DAY
+        if db.decodes_today(con, owner) >= cap:
+            return jsonify({'error': f'{cap} decodes today already — try again tomorrow'}), 429
+        jpegs = decode.images_for(store, k)
+        if not jpegs:
+            return jsonify({'error': 'none of the photos are decodable — re-shoot as JPEG/HEIC'}), 400
+        try:
+            d = decoder.decode(jpegs, k.get('notes_private') or '', k['maker'], no_card=no_card)
+        except decode.DecodeError as e:
+            log.warning('decode failed for %s/%s: %s', g.user['handle'], k['tag'], e)
+            decode.log_call(owner, knife_id, getattr(decoder, 'model', None), False, error=str(e)[:300])
+            return jsonify({'error': 'the decoder failed — try again in a minute'}), 502
+        decode.log_call(owner, knife_id, d.model, True, decoded=d)
+        k2 = db.apply_decode(con, owner, knife_id, d)
+    finally:
+        con.close()
+    log.info('decoded %s for @%s via %s (%d flags, %dms)', k['tag'], g.user['handle'], d.model,
+             len(d.flags), d.latency_ms)
+    out = _owner_knife(k2, store)
+    out['decoded'] = {'flags': d.flags, 'reasoning': d.reasoning, 'card_text': d.card_text,
+                      'no_card': d.no_card, 'model': d.model,
+                      'age_months': maker_core.age_months(d.core.get('born_on'))}
+    return jsonify(out)
 
 
 @bp.delete('/<int:knife_id>')

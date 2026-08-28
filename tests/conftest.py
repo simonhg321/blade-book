@@ -26,12 +26,36 @@ def mailer():
     return mail.FakeMailer()
 
 
+def ok_result(**over):
+    """A canned schema-shaped decode result (CRK Sebenza 31) for FakeDecoder.
+    Lives here (not in tests/test_decode_api.py) so both conftest's `decoder`
+    fixture and the test module can import it without a cycle."""
+    from bb.makers import core, crk
+    r = {f: '' for f in core.CORE_FIELDS}
+    r.update({'blade_length_in': None, 'condition': 1, 'has_box': True, 'has_card': True, 'has_papers': False,
+              'has_pouch': True, 'has_lanyard': False, 'has_spare_hardware': False, 'model': 'Sebenza',
+              'blade_steel': 'CPM MagnaCut', 'blade_shape': 'Drop Point', 'born_on': '2025-09-29',
+              'born_on_precision': 'day', 'born_on_source': 'card'})
+    r['ext'] = {k: '' for k in crk.EXT_PROPS}
+    r['ext'].update({'generation': '31', 'size': 'Large', 'crk_sku': 'L31-1400-0004', 'hand': 'right'})
+    r.update({'card_text': 'LARGE SEBENZA 31', 'no_card': False, 'reasoning': 'card read',
+              'confidence': {f: 'high' for f in list(core.CORE_FIELDS) + list(crk.EXT_PROPS)}})
+    r.update(over)
+    return r
+
+
 @pytest.fixture
-def app(env, mailer, monkeypatch):
+def decoder():
+    from bb import decode
+    return decode.FakeDecoder(ok_result())
+
+
+@pytest.fixture
+def app(env, mailer, decoder, monkeypatch):
     monkeypatch.setenv('SESSION_KEY', 'test-session-key-not-secret')
     monkeypatch.setenv('BASE_URL', 'http://localhost')
     from app import create_app
-    return create_app(mailer=mailer)
+    return create_app(mailer=mailer, decoder=decoder)
 
 
 @pytest.fixture

@@ -83,7 +83,7 @@ def _too_large(_e):
     return jsonify({'error': 'photo over 20 MB'}), 413
 
 
-def create_app(mailer=None, store=None):
+def create_app(mailer=None, store=None, decoder=None):
     config.load()
     _setup_logging()
     app = Flask(__name__)
@@ -94,7 +94,7 @@ def create_app(mailer=None, store=None):
         secret = secrets.token_hex(32)
         log.warning('SESSION_KEY missing from .env — each gunicorn worker will mint its own '
                     'key and sessions will break across workers/restarts')
-    from bb import auth, mail
+    from bb import auth, decode, mail
     from bb import store as store_mod
     app.config.update(
         SECRET_KEY=secret,
@@ -106,6 +106,7 @@ def create_app(mailer=None, store=None):
         PERMANENT_SESSION_LIFETIME=timedelta(days=90),
         MAILER=mailer or mail.from_env(),
         STORE=store or store_mod.from_paths(),
+        DECODER=decoder or decode.from_env(),
         VERSION=_version(),
     )
 
@@ -113,8 +114,9 @@ def create_app(mailer=None, store=None):
     app.register_blueprint(api)
     app.register_blueprint(auth_routes.bp)
     app.register_blueprint(knife_routes.bp)
-    log.info('blade-book app created, version %s, data %s, mailer %s',
-             app.config['VERSION'], paths.DATA_DIR, type(app.config['MAILER']).__name__)
+    log.info('blade-book app created, version %s, data %s, mailer %s, decoder %s',
+             app.config['VERSION'], paths.DATA_DIR, type(app.config['MAILER']).__name__,
+             type(app.config['DECODER']).__name__)
     return app
 
 

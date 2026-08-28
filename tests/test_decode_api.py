@@ -1,0 +1,114 @@
+# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+import io
+import json
+
+import pytest
+from PIL import Image
+
+from bb import db, decode
+from tests.conftest import ok_result, signed_in
+
+K = '/blade-book/api/knives'
+
+
+def _jpeg(w=800, h=600):
+    img = Image.new('RGB', (w, h), (10, 120, 200))
+    buf = io.BytesIO(); img.save(buf, 'JPEG'); return buf.getvalue()
+
+
+def _draft_with_photo(client, mailer, email='a@example.com'):
+    signed_in(client, mailer, email)
+    kid = client.post(K + '/').get_json()['id']
+    r = client.post(f'{K}/{kid}/photos/1', data={'photo': (io.BytesIO(_jpeg()), 'a.jpg')},
+                    content_type='multipart/form-data')
+    assert r.status_code == 201
+    return kid
+
+
+def test_decode_happy_path(client, mailer, decoder):
+    kid = _draft_with_photo(client, mailer)
+    r = client.post(f'{K}/{kid}/decode')
+    assert r.status_code == 200, r.get_json()
+    j = r.get_json()
+    assert j['model'] == 'Sebenza' and j['ext']['generation'] == '31'
+    assert j['card_text'] == 'LARGE SEBENZA 31' and j['status'] == 'draft'
+    assert j['decoded']['flags'] == [] and j['decoded']['model'] == 'fake'
+    assert j['decoded']['age_months'] is not None and j['decoded']['no_card'] is False
+    assert decoder.calls == [(1, '', 'crk', False)]
+    # ledger line written
+    from bb import paths
+    line = json.loads(open(paths.ai_log()).read().splitlines()[-1])
+    assert line['ok'] is True and line['knife'] == kid
+
+
+def test_decode_passes_note_and_no_card(client, mailer, decoder):
+    kid = _draft_with_photo(client, mailer)
+    client.put(f'{K}/{kid}/note', json={'note': 'Large 31 from a collector'})
+    r = client.post(f'{K}/{kid}/decode', json={'no_card': True})
+    assert r.status_code == 200
+    assert decoder.calls[-1] == (1, 'Large 31 from a collector', 'crk', True)
+
+
+def test_decode_requires_photo_draft_and_ownership(client, mailer, decoder):
+    signed_in(client, mailer, 'a@example.com')
+    kid = client.post(K + '/').get_json()['id']
+    assert client.post(f'{K}/{kid}/decode').status_code == 400        # no photos
+    client.post(f'{K}/{kid}/photos/1', data={'photo': (io.BytesIO(_jpeg()), 'a.jpg')}, content_type='multipart/form-data')
+    con = db.connect(); con.execute("UPDATE knives SET status = 'live' WHERE id = ?", (kid,)); con.commit(); con.close()
+    assert client.post(f'{K}/{kid}/decode').status_code == 409        # live
+    client.post('/blade-book/api/auth/signout')
+    signed_in(client, mailer, 'b@example.com')
+    assert client.post(f'{K}/{kid}/decode').status_code == 404        # not yours
+    assert decoder.calls == []
+
+
+def test_decode_unauth_is_401(client):
+    assert client.post(f'{K}/1/decode').status_code == 401
+
+
+def test_decode_daily_cap_free_vs_paid(client, mailer, decoder):
+    from bb.routes import knives as kr
+    kid = _draft_with_photo(client, mailer)
+    con = db.connect()
+    for _ in range(kr.FREE_DECODES_PER_DAY):
+        db.add_event(con, 1, kid, 'decoded')
+    con.close()
+    r = client.post(f'{K}/{kid}/decode')
+    assert r.status_code == 429 and 'today' in r.get_json()['error']
+    con = db.connect(); con.execute("UPDATE users SET sub_status = 'active' WHERE id = 1"); con.commit(); con.close()
+    assert client.post(f'{K}/{kid}/decode').status_code == 200
+
+
+def test_decode_failure_is_502_and_logged(client, mailer, app):
+    app.config['DECODER'] = decode.FakeDecoder(decode.DecodeError('model refused'))
+    kid = _draft_with_photo(client, mailer)
+    r = client.post(f'{K}/{kid}/decode')
+    assert r.status_code == 502 and 'try again' in r.get_json()['error']
+    from bb import paths
+    line = json.loads(open(paths.ai_log()).read().splitlines()[-1])
+    assert line['ok'] is False and 'refused' in line['error']
+    assert db.decodes_today(db.connect(), 1) == 0                      # failures don't count against the cap
+
+
+def test_decode_not_configured_is_503(client, mailer, app):
+    app.config['DECODER'] = decode.NoDecoder()
+    kid = _draft_with_photo(client, mailer)
+    assert client.post(f'{K}/{kid}/decode').status_code == 503
+
+
+def test_decode_skips_undecodable_photos_and_400s_when_none(client, mailer, decoder):
+    signed_in(client, mailer, 'a@example.com')
+    kid = client.post(K + '/').get_json()['id']
+    r = client.post(f'{K}/{kid}/photos/1', data={'photo': (io.BytesIO(b'\x00' * 2000), 'raw.dng')}, content_type='multipart/form-data')
+    assert r.status_code == 201   # stored, no thumb (plan 03 behaviour)
+    r = client.post(f'{K}/{kid}/decode')
+    assert r.status_code == 400 and 'decodable' in r.get_json()['error']
+    assert decoder.calls == []
+
+
+def test_decode_result_appears_in_get_and_private_fields_stay_owner_only(client, mailer, decoder):
+    kid = _draft_with_photo(client, mailer)
+    client.post(f'{K}/{kid}/decode')
+    j = client.get(f'{K}/{kid}').get_json()
+    assert j['card_text'] == 'LARGE SEBENZA 31' and j['confidence']['model'] == 'high'
+    assert 'card_text' in db.PRIVATE_COLUMNS  # the /@handle bundle (plan 06) strips it

@@ -16,4 +16,5 @@ Paths and the port are NOT here — `BLADEBOOK_*_DIR` / `BLADEBOOK_PORT` are rea
 | `APPLE_CLIENT_ID` | 02 | The **Services ID** (e.g. `com.blade-book.web`), not the App ID. |
 | `APPLE_TEAM_ID`, `APPLE_KEY_ID` | 02 | From the Apple developer portal; the key must have Sign in with Apple enabled. |
 | `APPLE_PRIVATE_KEY` | 02 | The `.p8` contents on **one line** with `\n` for newlines. Any of the four Apple keys unset → the Apple button does not render. |
-| `DECODER_MODEL`, `ANTHROPIC_API_KEY` | 04 | Reserved — read by the decoder plan. |
+| `ANTHROPIC_API_KEY` | 04 | console.anthropic.com. **Unset → decode disabled**: `POST …/decode` answers 503 and the app still boots. |
+| `DECODER_MODEL` | 04 | Exact model id, e.g. `claude-sonnet-5` (default), `claude-haiku-4-5`, `claude-opus-5`. Choose from `scripts/eval_decode.py`'s table, not taste. |
