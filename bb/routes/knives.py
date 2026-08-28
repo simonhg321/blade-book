@@ -6,9 +6,9 @@ knife you don't own is indistinguishable from one that doesn't exist.
 """
 import logging
 
-from flask import Blueprint, current_app, g, jsonify, request
+from flask import Blueprint, Response, current_app, g, jsonify, request
 
-from bb import auth, db, paths
+from bb import auth, db, paths, photos
 
 log = logging.getLogger('blade-book.knives')
 
@@ -124,3 +124,104 @@ def delete_draft(knife_id):
     removed = _delete_keys(store, keys, f'draft {k["tag"]}')
     log.info('draft %s deleted by @%s (%d files)', k['tag'], g.user['handle'], removed)
     return jsonify({'ok': True})
+
+
+# --- photo slots ---------------------------------------------------------------
+
+def _slot_ok(seq):
+    return 1 <= seq <= 3
+
+
+@bp.post('/<int:knife_id>/photos/<int:seq>')
+@auth.login_required
+def upload_photo(knife_id, seq):
+    if not _slot_ok(seq):
+        return jsonify({'error': 'slot must be 1, 2 or 3'}), 400
+    f = request.files.get('photo')
+    if f is None or not f.filename:
+        return jsonify({'error': 'no photo'}), 400
+    data = f.read()
+    try:
+        ing = photos.ingest(data, f.filename)
+    except photos.TooBig:
+        return jsonify({'error': f'photo over {photos.MAX_PHOTO_BYTES // (1024 * 1024)} MB'}), 400
+    except photos.BadType:
+        return jsonify({'error': 'not an accepted image type'}), 415
+    owner = g.user['id']
+    key = f'{owner}/{knife_id}/{seq}.{ing.ext}'
+    tkey = db.thumb_key(key)
+    store = _store()
+    con = db.connect()
+    try:
+        if db.get_knife(con, owner, knife_id) is None:
+            return _not_found()
+        store.put(key, data)
+        if ing.thumb:
+            store.put(tkey, ing.thumb)
+        try:
+            db.add_photo(con, owner, knife_id, seq, key, ing.sha256, ing.width, ing.height)
+        except db.SlotTaken:
+            _delete_keys(store, [key, tkey], f'knife {knife_id} slot {seq} (409)')
+            return jsonify({'error': f'slot {seq} is taken — delete it first'}), 409
+    finally:
+        con.close()
+    log.info('photo %d/%d stored for @%s (%s, thumb=%s)', knife_id, seq, g.user['handle'],
+             ing.ext, bool(ing.thumb))
+    return jsonify({'seq': seq, 'sha256': ing.sha256, 'width': ing.width,
+                    'height': ing.height, 'has_thumb': bool(ing.thumb)}), 201
+
+
+@bp.delete('/<int:knife_id>/photos/<int:seq>')
+@auth.login_required
+def delete_photo(knife_id, seq):
+    con = db.connect()
+    try:
+        row = db.delete_photo(con, g.user['id'], knife_id, seq)
+    finally:
+        con.close()
+    if row is None:
+        return _not_found()
+    store = _store()
+    _delete_keys(store, [row['store_key'], db.thumb_key(row['store_key'])],
+                 f'photo {knife_id}/{seq}')
+    return jsonify({'ok': True})
+
+
+def _photo_or_404(knife_id, seq):
+    con = db.connect()
+    try:
+        k = db.get_knife(con, g.user['id'], knife_id)
+        p = db.get_photo(con, g.user['id'], knife_id, seq)
+    finally:
+        con.close()
+    return (k, p) if (k and p) else (None, None)
+
+
+@bp.get('/<int:knife_id>/photos/<int:seq>/thumb')
+@auth.login_required
+def photo_thumb(knife_id, seq):
+    _, p = _photo_or_404(knife_id, seq)
+    if p is None:
+        return _not_found()
+    try:
+        data = _store().get(db.thumb_key(p['store_key']))
+    except KeyError:
+        return _not_found()
+    return Response(data, mimetype='image/jpeg',
+                    headers={'Cache-Control': 'private, max-age=3600'})
+
+
+@bp.get('/<int:knife_id>/photos/<int:seq>/original')
+@auth.login_required
+def photo_original(knife_id, seq):
+    k, p = _photo_or_404(knife_id, seq)
+    if p is None:
+        return _not_found()
+    try:
+        data = _store().get(p['store_key'])
+    except KeyError:
+        return _not_found()
+    ext = p['store_key'].rsplit('.', 1)[-1]
+    return Response(data, mimetype=photos.MIME.get(ext, 'application/octet-stream'),
+                    headers={'Cache-Control': 'private, max-age=3600',
+                             'Content-Disposition': f'inline; filename="{k["tag"]}-{seq}.{ext}"'})
