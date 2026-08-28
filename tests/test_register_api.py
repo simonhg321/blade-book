@@ -122,3 +122,13 @@ def test_live_knife_photos_delete_and_redecode(client, mailer, decoder):
     assert len(decoder.calls) == 1
     assert client.delete(f'{K}/{kid}').status_code == 200                              # live: delete allowed
     assert client.get(f'{K}/{kid}').status_code == 404
+
+
+def test_non_object_json_bodies_are_400(client, mailer):
+    signed_in(client, mailer)
+    kid = _draft_with_photo(client)
+    client.post(f'{K}/{kid}/save')
+    for path in (f'{K}/{kid}/sale', f'{K}/{kid}/public', f'{K}/bulk', f'{K}/{kid}'):
+        for body in ([1, 2, 3], 'x', 7):
+            r = client.open(path, method='PATCH' if path.endswith(str(kid)) else 'POST', json=body)
+            assert r.status_code == 400, (path, body, r.status_code)

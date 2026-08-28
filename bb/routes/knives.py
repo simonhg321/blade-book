@@ -200,7 +200,9 @@ def save_knife(knife_id):
 @bp.post('/<int:knife_id>/sale')
 @auth.login_required
 def sale_knife(knife_id):
-    body = request.get_json(silent=True) or {}
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({'error': 'body must be a JSON object'}), 400
     status = body.get('sale_status')
     if status not in db.SALE_STATUSES:
         return jsonify({'error': f'sale_status must be one of {list(db.SALE_STATUSES)}'}), 400
@@ -231,7 +233,9 @@ def sale_knife(knife_id):
 @bp.post('/<int:knife_id>/public')
 @auth.login_required
 def public_knife(knife_id):
-    body = request.get_json(silent=True) or {}
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({'error': 'body must be a JSON object'}), 400
     if not isinstance(body.get('is_public'), bool):
         return jsonify({'error': 'is_public must be true or false'}), 400
     con = db.connect()
@@ -247,7 +251,9 @@ def public_knife(knife_id):
 @bp.post('/bulk')
 @auth.login_required
 def bulk_public():
-    body = request.get_json(silent=True) or {}
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({'error': 'body must be a JSON object'}), 400
     ids = body.get('ids')
     if (not isinstance(ids, list) or len(ids) > MAX_BULK
             or not all(isinstance(i, int) and not isinstance(i, bool) for i in ids)
@@ -265,7 +271,7 @@ def bulk_public():
 @auth.login_required
 def decode_knife(knife_id):
     """⚡ PROCESS: the draft's photos + note → one model call → core/ext/
-    confidence written onto the draft. Drafts only; metered per day; the
+    confidence written onto the draft. Any status (re-decode overwrites the card fields); metered per day; the
     record is written even when consistency rules flag it (flags returned)."""
     owner = g.user['id']
     body = request.get_json(silent=True)
@@ -364,8 +370,8 @@ def upload_photo(knife_id, seq):
     # Row first, files second — UNIQUE(knife_id, seq) is the lock, so a 409 never
     # touches the store; a failed write deletes its own row.
     try:
-        # Ownership + draft-status check BEFORE ingest — don't decode up to 20 MB
-        # for a knife you don't own or can no longer edit.
+        # Ownership check BEFORE ingest — don't decode up to 20 MB
+        # for a knife you don't own.
         k = db.get_knife(con, owner, knife_id)
         if k is None:
             return _not_found()
