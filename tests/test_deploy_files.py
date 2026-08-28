@@ -81,7 +81,8 @@ def test_intake_page_wiring():
     html = open(os.path.join(ROOT, 'html', 'me', 'add', 'index.html')).read()
     for needle in ("'/blade-book/api'", "'/auth/me'", "'/knives/'", "/photos/", "/note",
                    "file.accept = 'image/*'", 'id="file" type="file" multiple', '?replace=1',
-                   'ADD PHOTOS TO', 'BOX + KIT + CARD', 'HERO', 'PROCESS'):
+                   'ADD PHOTOS TO', 'BOX + KIT + CARD', 'HERO', 'PROCESS',
+                   "/decode", 'id="card"', "'confidence'", 'no_card', 'SAVE comes in plan 05'):
         assert needle in html, needle
     # no capture= attribute: iOS's own Take Photo / Photo Library sheet (as crk/ uses) is
     # what collectors expect, and it is not gated by the vhost's Permissions-Policy camera=()

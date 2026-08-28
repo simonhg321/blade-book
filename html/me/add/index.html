@@ -37,6 +37,23 @@
   #proc{display:block;width:100%;margin-top:14px;padding:16px 0;font-size:1.1rem;font-weight:800;letter-spacing:.06em;background:#fff;color:var(--muted);border:2px solid var(--line);border-radius:14px}
   #discard{display:block;margin:18px auto 0;background:none;border:none;color:var(--muted);text-decoration:underline;cursor:pointer;font:inherit}
   input[type=file]{display:none}
+  #proc{color:#fff;background:var(--ink);border-color:var(--ink)}
+  #proc:disabled{background:#fff;color:var(--muted);border-color:var(--line)}
+  #nocard{display:flex;align-items:center;gap:8px;justify-content:center;margin:10px 0 0;font-size:.9rem;color:var(--muted)}
+  #card{margin-top:18px;background:#fff;border:2px solid var(--ink);border-radius:14px;padding:14px;display:none}
+  #card.show{display:block}
+  #card h2{font-size:1rem;letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px}
+  #card table{width:100%;border-collapse:collapse;font-size:.92rem}
+  #card td{padding:5px 4px;border-bottom:1px solid var(--line);vertical-align:top}
+  #card td.k{color:var(--muted);width:38%}
+  #card td.v{font-weight:600}
+  .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}
+  .dot.high{background:var(--ok)} .dot.medium{background:#d9a441} .dot.low{background:var(--accent)}
+  #flags{margin-top:10px;color:var(--accent);font-size:.9rem}
+  #flags div::before{content:'⚠ '}
+  #cardtext{white-space:pre-wrap;background:var(--soft);border-radius:8px;padding:10px;font-size:.85rem;margin-top:10px}
+  #reason{font-size:.85rem;color:var(--muted);margin-top:8px}
+  #cardnote{font-size:.8rem;color:var(--muted);margin-top:10px;text-align:center}
 </style>
 <h1>BLADE-<span>BOOK</span> — add a knife <a href="/blade-book/">← home</a></h1>
 
@@ -64,7 +81,16 @@
 <textarea id="note" aria-label="note" placeholder="Note — what you know about it (fed to the decoder as ground truth)&#10;e.g. Large 21, S35VN, bought from a collector 2019, box + card + pouch"></textarea>
 <div id="notestat" aria-live="polite"></div>
 
-<button id="proc" type="button" disabled>⚡ PROCESS — coming next</button>
+<button id="proc" type="button" disabled>⚡ PROCESS</button>
+<label id="nocard"><input id="nocardbox" type="checkbox"> no birth card for this knife</label>
+<section id="card" aria-live="polite">
+  <h2>Birth card</h2>
+  <table><tbody id="rows"></tbody></table>
+  <div id="flags"></div>
+  <div id="cardtext"></div>
+  <div id="reason"></div>
+  <div id="cardnote">Fields are saved on the draft. Editing + SAVE comes in plan 05.</div>
+</section>
 <button id="discard" type="button">🗑 discard this draft</button>
 
 <script>
@@ -112,6 +138,7 @@
       if (!res.ok) { say(res.j.error || 'load failed', true); return; }
       $('note').value = res.j.notes_private || ''; $('notestat').textContent = '';
       photos = res.j.photos || [];
+      renderCard(res.j, null);
       render(k);
     });
   }
@@ -123,6 +150,7 @@
     var b = document.createElement('b'); b.textContent = n + '/3 photos';
     c.appendChild(b); c.appendChild(document.createTextNode(' · draft ' + (idx + 1) + ' of ' + drafts.length));
     $('pick').disabled = n >= 3;
+    $('proc').disabled = n === 0;
     $('pick').firstChild.textContent = n >= 3 ? '✓ 3/3 — tap a photo to retake ' : '📷  ADD PHOTOS TO ';
     var th = $('thumbs'); while (th.firstChild) th.removeChild(th.firstChild);
     SLOTS.forEach(function (s) {
@@ -209,6 +237,57 @@
   }
   $('note').addEventListener('input', function () { $('notestat').className = ''; $('notestat').textContent = 'typing…'; clearTimeout(noteTimer); noteTimer = setTimeout(saveNote, 1200); });
   $('note').addEventListener('blur', function () { clearTimeout(noteTimer); saveNote(); });
+
+  var CARD_ROWS = [['model', 'model'], ['ext.generation', 'generation'], ['ext.size', 'size'],
+    ['blade_shape', 'blade'], ['blade_steel', 'steel'], ['ext.hardness_note', 'hardness'],
+    ['born_on', 'born on'], ['ext.hand', 'hand'], ['ext.crk_sku', 'SKU'],
+    ['ext.handle_treatment', 'handle'], ['ext.inlay_material', 'inlay'], ['ext.damascus_smith', 'damascus'],
+    ['ext.graphic_name', 'graphic'], ['condition', 'condition'], ['has_box', 'box'], ['has_card', 'card'],
+    ['has_pouch', 'pouch'], ['has_lanyard', 'lanyard']];
+
+  function pick(k, path) {
+    var v = k; path.split('.').forEach(function (p) { v = v == null ? v : v[p]; });
+    return v;
+  }
+  function renderCard(k, extra) {
+    var rows = $('rows'); while (rows.firstChild) rows.removeChild(rows.firstChild);
+    var conf = k['confidence'] || {};
+    var any = false;
+    CARD_ROWS.forEach(function (r) {
+      var v = pick(k, r[0]);
+      if (v === null || v === undefined || v === '') return;
+      if (typeof v === 'boolean' || (r[0].indexOf('has_') === 0)) v = v ? 'yes' : 'no';
+      any = true;
+      var field = r[0].replace('ext.', '');
+      var tr = document.createElement('tr');
+      var td1 = document.createElement('td'); td1.className = 'k'; td1.textContent = r[1];
+      var td2 = document.createElement('td'); td2.className = 'v';
+      var dot = document.createElement('span'); dot.className = 'dot ' + (conf[field] || 'low');
+      dot.title = conf[field] || 'unrated';
+      td2.appendChild(dot); td2.appendChild(document.createTextNode(String(v)));
+      tr.appendChild(td1); tr.appendChild(td2); rows.appendChild(tr);
+    });
+    var fl = $('flags'); while (fl.firstChild) fl.removeChild(fl.firstChild);
+    ((extra && extra.flags) || []).forEach(function (f) { var d = document.createElement('div'); d.textContent = f; fl.appendChild(d); });
+    $('cardtext').textContent = k.card_text || '';
+    $('cardtext').style.display = k.card_text ? 'block' : 'none';
+    $('reason').textContent = (extra && extra.reasoning) || k.decode_note || '';
+    $('card').classList.toggle('show', any || !!k.card_text);
+  }
+
+  $('proc').addEventListener('click', function () {
+    var id = current; if (!id) return;
+    $('proc').disabled = true; say('⚡ reading the card… (10–30 s)');
+    api('/knives/' + id + '/decode', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                       body: JSON.stringify({ no_card: $('nocardbox').checked }) })
+      .then(function (res) {
+        if (!res.ok) throw new Error(res.j.error || 'decode failed');
+        say('✓ decoded' + (res.j.decoded.flags.length ? ' — ' + res.j.decoded.flags.length + ' flag(s)' : ''));
+        renderCard(res.j, res.j.decoded);
+      })
+      .catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); })
+      .then(function () { $('proc').disabled = photos.length === 0; });
+  });
 
   $('pick').addEventListener('click', function () { file.value = ''; file.click(); });
   $('prev').addEventListener('click', function () { if (idx > 0) { idx--; show(); } });
