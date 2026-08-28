@@ -78,7 +78,7 @@ def _not_found(_e):
     return jsonify({'error': 'not found'}), 404
 
 
-def create_app(mailer=None):
+def create_app(mailer=None, store=None):
     config.load()
     _setup_logging()
     app = Flask(__name__)
@@ -90,6 +90,7 @@ def create_app(mailer=None):
         log.warning('SESSION_KEY missing from .env — each gunicorn worker will mint its own '
                     'key and sessions will break across workers/restarts')
     from bb import auth, mail
+    from bb import store as store_mod
     app.config.update(
         SECRET_KEY=secret,
         SESSION_COOKIE_NAME='bb_session',
@@ -99,11 +100,13 @@ def create_app(mailer=None):
         SESSION_COOKIE_SECURE=auth.base_url().startswith('https'),
         PERMANENT_SESSION_LIFETIME=timedelta(days=90),
         MAILER=mailer or mail.from_env(),
+        STORE=store or store_mod.from_paths(),
     )
 
-    from bb.routes import auth as auth_routes
+    from bb.routes import auth as auth_routes, knives as knife_routes
     app.register_blueprint(api)
     app.register_blueprint(auth_routes.bp)
+    app.register_blueprint(knife_routes.bp)
     log.info('blade-book app created, version %s, data %s, mailer %s',
              _version(), paths.DATA_DIR, type(app.config['MAILER']).__name__)
     return app

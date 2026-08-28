@@ -45,3 +45,12 @@ def magic_link_from(mailer):
     m = re.search(r'https?://\S+/api/auth/magic\?t=\S+', mailer.sent[-1]['text'])
     assert m, mailer.sent[-1]['text']
     return m.group(0)
+
+
+def signed_in(client, mailer, email='sam@example.com'):
+    """Magic-link a user in on this client; returns the /me payload."""
+    client.post('/blade-book/api/auth/magic', json={'email': email})
+    client.get(magic_link_from(mailer))
+    me = client.get('/blade-book/api/auth/me')
+    assert me.status_code == 200, me.data
+    return me.get_json()
