@@ -87,6 +87,7 @@ def test_decode_failure_is_502_and_logged(client, mailer, app):
     from bb import paths
     line = json.loads(open(paths.ai_log()).read().splitlines()[-1])
     assert line['ok'] is False and 'refused' in line['error']
+    assert isinstance(line['ms'], int) and line['ms'] >= 0             # failure ledger carries real timing
     assert db.decodes_today(db.connect(), 1) == 0                      # failures don't count against the cap
 
 

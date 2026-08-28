@@ -25,14 +25,14 @@ from bb.makers import core
 log = logging.getLogger('blade-book.decode')
 
 MAX_EDGE = 1568          # Anthropic's vision sweet spot; a 4032 px shot costs 4× the tokens
-MAX_TOKENS = 4000
+MAX_TOKENS = 16000       # thinking shares this budget on sonnet-5/opus-5; the card JSON itself is < 1500 tokens
 DEFAULT_MODEL = 'claude-sonnet-5'   # pending scripts/eval_decode.py — set DECODER_MODEL in .env
 PRICES = {  # USD per 1M input / output tokens (Anthropic first-party, 2026-08-28)
     'claude-haiku-4-5': (1.00, 5.00),
     'claude-sonnet-5': (2.00, 10.00),
     'claude-opus-5': (5.00, 25.00),
 }
-SDK_TIMEOUT_S = 90       # gunicorn --timeout is 120; leave room to answer
+SDK_TIMEOUT_S = 50       # gunicorn --timeout is 120; 2 attempts × 50 s + connect fits under it
 SDK_MAX_RETRIES = 1
 
 
@@ -151,6 +151,8 @@ class ClaudeDecoder(Decoder):
         ms = int((time.monotonic() - t0) * 1000)
         if getattr(resp, 'stop_reason', None) == 'refusal':
             raise DecodeError('model refused')
+        if getattr(resp, 'stop_reason', None) == 'max_tokens':
+            raise DecodeError('output truncated (max_tokens)')
         text = next((b.text for b in resp.content if getattr(b, 'type', '') == 'text'), '')
         try:
             data = json.loads(text)

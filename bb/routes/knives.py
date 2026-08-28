@@ -5,6 +5,7 @@ Every route is login_required and every db call carries g.user['id'], so a
 knife you don't own is indistinguishable from one that doesn't exist.
 """
 import logging
+import time
 
 from flask import Blueprint, Response, current_app, g, jsonify, request
 
@@ -150,11 +151,14 @@ def decode_knife(knife_id):
         jpegs = decode.images_for(store, k)
         if not jpegs:
             return jsonify({'error': 'none of the photos are decodable — re-shoot as JPEG/HEIC'}), 400
+        t0 = time.monotonic()
         try:
             d = decoder.decode(jpegs, k.get('notes_private') or '', k['maker'], no_card=no_card)
         except decode.DecodeError as e:
+            ms = int((time.monotonic() - t0) * 1000)
             log.warning('decode failed for %s/%s: %s', g.user['handle'], k['tag'], e)
-            decode.log_call(owner, knife_id, getattr(decoder, 'model', None), False, error=str(e)[:300])
+            decode.log_call(owner, knife_id, getattr(decoder, 'model', None), False,
+                            error=str(e)[:300], latency_ms=ms)
             return jsonify({'error': 'the decoder failed — try again in a minute'}), 502
         decode.log_call(owner, knife_id, d.model, True, decoded=d)
         k2 = db.apply_decode(con, owner, knife_id, d)

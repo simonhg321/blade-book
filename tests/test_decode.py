@@ -117,6 +117,22 @@ def test_claude_decoder_refusal_and_bad_json_raise():
         decode.ClaudeDecoder('m', client=_StubClient('{"model": "x"}')).decode([b'x'], '', 'crk')
 
 
+def test_claude_decoder_max_tokens_raises_truncated():
+    stub = _StubClient('{}', stop_reason='max_tokens')
+    with pytest.raises(decode.DecodeError, match='truncated'):
+        decode.ClaudeDecoder('m', client=stub).decode([b'x'], '', 'crk')
+
+
+def test_claude_decoder_no_images_raises_decode_error():
+    with pytest.raises(decode.DecodeError):
+        decode.ClaudeDecoder('m', client=_StubClient('{}')).decode([], '', 'crk')
+
+
+def test_sdk_timeout_budget_fits_gunicorn_timeout():
+    # 2 attempts (1 retry) × SDK_TIMEOUT_S must stay under gunicorn's --timeout 120
+    assert decode.SDK_TIMEOUT_S * (decode.SDK_MAX_RETRIES + 1) < 120
+
+
 def test_claude_decoder_wraps_sdk_errors():
     class Boom(_StubClient):
         def _create(self, **kw):
