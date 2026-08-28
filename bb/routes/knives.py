@@ -9,7 +9,7 @@ import time
 
 from flask import Blueprint, Response, current_app, g, jsonify, request
 
-from bb import auth, db, decode, paths, photos
+from bb import auth, db, decode, makers, paths, photos
 from bb.makers import core as maker_core
 
 log = logging.getLogger('blade-book.knives')
@@ -134,6 +134,9 @@ def decode_knife(knife_id):
     no_card = bool(body.get('no_card')) if isinstance(body, dict) else False
     decoder = current_app.config['DECODER']
     store = _store()
+    # Stage 1: read-side checks on one short-lived connection — closed before the
+    # model call so the sqlite handle never sits open (idle, WAL-holding) across
+    # what can be up to ~100 s of network time.
     con = db.connect()
     try:
         k = db.get_knife(con, owner, knife_id)
@@ -145,22 +148,34 @@ def decode_knife(knife_id):
             return jsonify({'error': 'add the box + card photo first'}), 400
         if isinstance(decoder, decode.NoDecoder):
             return jsonify({'error': 'decoder not configured'}), 503
+        maker = k.get('maker') or 'crk'
+        if maker not in makers.MAKERS:
+            return jsonify({'error': 'unknown maker'}), 400
         cap = PAID_DECODES_PER_DAY if g.user.get('sub_status') == 'active' else FREE_DECODES_PER_DAY
         if db.decodes_today(con, owner) >= cap:
             return jsonify({'error': f'{cap} decodes today already — try again tomorrow'}), 429
         jpegs = decode.images_for(store, k)
         if not jpegs:
             return jsonify({'error': 'none of the photos are decodable — re-shoot as JPEG/HEIC'}), 400
-        t0 = time.monotonic()
-        try:
-            d = decoder.decode(jpegs, k.get('notes_private') or '', k['maker'], no_card=no_card)
-        except decode.DecodeError as e:
-            ms = int((time.monotonic() - t0) * 1000)
-            log.warning('decode failed for %s/%s: %s', g.user['handle'], k['tag'], e)
-            decode.log_call(owner, knife_id, getattr(decoder, 'model', None), False,
-                            error=str(e)[:300], latency_ms=ms)
-            return jsonify({'error': 'the decoder failed — try again in a minute'}), 502
-        decode.log_call(owner, knife_id, d.model, True, decoded=d)
+        note = k.get('notes_private') or ''
+    finally:
+        con.close()
+
+    # Stage 2: the model call — no connection open.
+    t0 = time.monotonic()
+    try:
+        d = decoder.decode(jpegs, note, maker, no_card=no_card)
+    except decode.DecodeError as e:
+        ms = int((time.monotonic() - t0) * 1000)
+        log.warning('decode failed for %s/%s: %s', g.user['handle'], k['tag'], e)
+        decode.log_call(owner, knife_id, getattr(decoder, 'model', None), False,
+                        error=str(e)[:300], latency_ms=ms)
+        return jsonify({'error': 'the decoder failed — try again in a minute'}), 502
+    decode.log_call(owner, knife_id, d.model, True, decoded=d)
+
+    # Stage 3: a fresh connection to write the result and return the owner view.
+    con = db.connect()
+    try:
         k2 = db.apply_decode(con, owner, knife_id, d)
     finally:
         con.close()

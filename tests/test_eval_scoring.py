@@ -57,10 +57,12 @@ def test_summarize_and_table():
     results = [
         {'tag': 'K01', 'scores': {'model': True, 'born_on': False, 'size': None}, 'cost_usd': 0.02, 'ms': 900},
         {'tag': 'K02', 'scores': {'model': True, 'born_on': True, 'size': True}, 'cost_usd': 0.03, 'ms': 1100},
+        {'tag': 'K03', 'failed': True, 'scores': {}, 'cost_usd': 0, 'ms': 0},
     ]
     s = ev.summarize(results)
-    assert s['n'] == 2 and s['fields']['model'] == (2, 2) and s['fields']['born_on'] == (1, 2) and s['fields']['size'] == (1, 1)
+    assert s['n'] == 3 and s['fields']['model'] == (2, 2) and s['fields']['born_on'] == (1, 2) and s['fields']['size'] == (1, 1)
+    assert s['failed'] == 1
     assert abs(s['mean_acc'] - (1.0 + 0.5 + 1.0) / 3) < 1e-9
     assert abs(s['cost_usd'] - 0.05) < 1e-9 and s['median_ms'] == 1000
     out = ev.format_table({'claude-haiku-4-5': s, 'claude-sonnet-5': s})
-    assert 'claude-haiku-4-5' in out and 'born_on' in out and '50%' in out
+    assert 'claude-haiku-4-5' in out and 'born_on' in out and '50%' in out and 'failed' in out

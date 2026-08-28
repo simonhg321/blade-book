@@ -74,16 +74,18 @@ def score(truth, pred):
 
 
 def summarize(results):
-    fields, total_hit, total_n = {}, 0, 0
+    fields = {}
     for f in SCORED_FIELDS:
         hit = sum(1 for r in results if r['scores'].get(f) is True)
         n = sum(1 for r in results if r['scores'].get(f) is not None)
         fields[f] = (hit, n)
     accs = [h / n for h, n in fields.values() if n]
-    return {'n': len(results), 'fields': fields,
+    failed = sum(1 for r in results if r.get('failed'))
+    ms_values = [r['ms'] for r in results if not r.get('failed')]
+    return {'n': len(results), 'fields': fields, 'failed': failed,
             'mean_acc': sum(accs) / len(accs) if accs else 0.0,
             'cost_usd': round(sum(r.get('cost_usd') or 0 for r in results), 4),
-            'median_ms': statistics.median([r['ms'] for r in results]) if results else 0}
+            'median_ms': statistics.median(ms_values) if ms_values else 0}
 
 
 def format_table(by_model):
@@ -100,6 +102,7 @@ def format_table(by_model):
     lines.append('cost $'.ljust(18) + ''.join(f'{by_model[m]["cost_usd"]:.2f}'.ljust(w) for m in models))
     lines.append('median ms'.ljust(18) + ''.join(f'{by_model[m]["median_ms"]:.0f}'.ljust(w) for m in models))
     lines.append('n'.ljust(18) + ''.join(str(by_model[m]['n']).ljust(w) for m in models))
+    lines.append('failed'.ljust(18) + ''.join(str(by_model[m]['failed']).ljust(w) for m in models))
     return '\n'.join(lines)
 
 
@@ -188,7 +191,8 @@ def main(argv=None):
                 print(f'{model} {tag}: {"ok" if rec["ok"] else "FAIL " + rec.get("error", "")} '
                       f'{rec["ms"]}ms ${rec.get("cost_usd") or 0:.3f} (+{time.time() - t0:.1f}s)', file=sys.stderr)
             if not rec['ok']:
-                results.append({'tag': tag, 'scores': {f: False for f in SCORED_FIELDS}, 'cost_usd': 0, 'ms': 0})
+                results.append({'tag': tag, 'failed': True, 'scores': {}, 'cost_usd': 0, 'ms': 0})
+                misses.setdefault(model, []).append(f'{tag} DECODE FAILED: {rec.get("error", "")}')
                 continue
             pred = {**rec['core'], **rec['ext']}
             s = score(t, pred)

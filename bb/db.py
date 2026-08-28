@@ -507,6 +507,7 @@ def apply_decode(con, owner_id, knife_id, d):
     add_event(con, owner_id, knife_id, 'decoded',
               detail=f'{d.model} in={d.input_tokens} out={d.output_tokens} ms={d.latency_ms} '
                      f'flags={len(d.flags)}')
+    con.commit()   # explicit — atomicity here must not depend on add_event's commit ordering
     return get_knife(con, owner_id, knife_id)
 
 

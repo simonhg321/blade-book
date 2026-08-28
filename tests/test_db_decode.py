@@ -41,7 +41,7 @@ def test_v3_migration_adds_private_columns_to_a_v2_db(env):
     assert {'card_text', 'decode_note'} <= cols
     assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION
     con.close()
-    db.connect().close()  # idempotent — second connect must not fail on duplicate column
+    db.connect().close()  # a second connect() on an already-v3 DB is a no-op (never re-enters _migrate)
 
 
 def test_private_columns_include_decode_fields():

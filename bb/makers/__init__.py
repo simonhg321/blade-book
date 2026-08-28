@@ -4,6 +4,7 @@ maker. `get('crk')` is the only entry today; adding a maker = one module."""
 from bb.makers import crk
 
 _REGISTRY = {'crk': crk}
+MAKERS = tuple(_REGISTRY)   # routes check `maker in MAKERS` before ever calling get()
 
 
 def get(maker):

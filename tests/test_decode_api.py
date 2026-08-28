@@ -91,6 +91,15 @@ def test_decode_failure_is_502_and_logged(client, mailer, app):
     assert db.decodes_today(db.connect(), 1) == 0                      # failures don't count against the cap
 
 
+def test_decode_unknown_maker_is_400(client, mailer, decoder):
+    kid = _draft_with_photo(client, mailer)
+    con = db.connect(); con.execute("UPDATE knives SET maker = 'unknown' WHERE id = ?", (kid,))
+    con.commit(); con.close()
+    r = client.post(f'{K}/{kid}/decode')
+    assert r.status_code == 400 and r.get_json()['error'] == 'unknown maker'
+    assert decoder.calls == []
+
+
 def test_decode_not_configured_is_503(client, mailer, app):
     app.config['DECODER'] = decode.NoDecoder()
     kid = _draft_with_photo(client, mailer)
