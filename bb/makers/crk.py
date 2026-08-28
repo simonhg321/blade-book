@@ -102,7 +102,11 @@ def norm(field, value):
         # month-only cards ("DECEMBER, 2011") are stored day-padded as YYYY-MM-01 in
         # crkinv; the decoder returns YYYY-MM — compare at month precision for those
         s = str(value).strip()
+        if re.fullmatch(r'\d{4}-01-01', s):
+            return s[:4]  # year-only card stored day-padded
         return s[:-3] if re.fullmatch(r'\d{4}-\d{2}-01', s) else s
+    if field == 'inlay_material':
+        return re.sub(r'\s*\(.*?\)', '', s).strip()  # "elforyn (super tusk)" → "elforyn"
     return s
 
 
