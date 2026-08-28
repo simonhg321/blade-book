@@ -66,3 +66,18 @@ def test_summarize_and_table():
     assert abs(s['cost_usd'] - 0.05) < 1e-9 and s['median_ms'] == 1000
     out = ev.format_table({'claude-haiku-4-5': s, 'claude-sonnet-5': s})
     assert 'claude-haiku-4-5' in out and 'born_on' in out and '50%' in out and 'failed' in out
+
+
+def test_run_one_does_not_cache_failures(tmp_path):
+    m = _load()
+
+    class Boom:
+        model = 'claude-sonnet-5'
+
+        def decode(self, jpegs, note, maker):
+            raise decode.DecodeError('TypeError: no key')
+
+    cache = tmp_path / 'cache'; cache.mkdir()
+    rec = m._run_one(Boom(), str(cache), 'K01', [b'x'])
+    assert rec['ok'] is False and 'no key' in rec['error']
+    assert list(cache.iterdir()) == []  # a transient failure must retry next run

@@ -147,7 +147,8 @@ def _run_one(dec, cache_dir, tag, jpegs):
                'card_text': d.card_text, 'input_tokens': d.input_tokens, 'output_tokens': d.output_tokens,
                'ms': d.latency_ms, 'cost_usd': decode.cost_usd(dec.model, d.input_tokens, d.output_tokens)}
     except decode.DecodeError as e:
-        rec = {'ok': False, 'error': str(e), 'ms': 0, 'cost_usd': 0}
+        # not cached: a transient failure (network, auth, 529) must retry on the next run
+        return {'ok': False, 'error': str(e), 'ms': 0, 'cost_usd': 0}
     with open(path, 'w') as f:
         json.dump(rec, f, indent=1)
     return rec
@@ -167,6 +168,8 @@ def main(argv=None):
     os.makedirs(a.cache_dir, exist_ok=True)
     config.load()
     key = config.get('ANTHROPIC_API_KEY') or os.environ.get('ANTHROPIC_API_KEY')
+    if not key and not a.rescore:
+        sys.exit('no ANTHROPIC_API_KEY in /etc/blade-book/.env or the environment (use --rescore to print from cache)')
     truths = _load_truth(a.crk_db, set(t for t in a.tags.split(',') if t) or None)
     if a.limit:
         truths = truths[:a.limit]
