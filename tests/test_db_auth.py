@@ -97,9 +97,9 @@ def test_handle_exists_and_purge(env):
         assert con.execute(f'SELECT count(*) FROM {t}').fetchone()[0] == 0
 
 
-def test_schema_version_is_2(env):
+def test_schema_version_matches_constant(env):
     con = db.connect()
-    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == 2
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION
 
 
 def test_connect_stamps_old_version_up(env):
@@ -108,4 +108,4 @@ def test_connect_stamps_old_version_up(env):
     con.commit()
     con.close()
     con = db.connect()
-    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == 2
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION

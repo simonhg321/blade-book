@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 
 from bb import paths
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 SALE_STATUSES = ('keeping', 'for_trade', 'for_sale', 'consigned', 'sold')
 KNIFE_STATUSES = ('draft', 'live')
@@ -25,7 +25,7 @@ WANT_MODES = ('trade', 'sale', 'either')
 # never leaves the private register — see spec §5 invariant
 PRIVATE_COLUMNS = frozenset({'price_paid', 'acquired_from', 'acquired_date',
                              'location', 'notes_private', 'condition_note',
-                             'confidence'})
+                             'confidence', 'card_text', 'decode_note'})
 
 SCHEMA = f"""
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS knives (
   -- private
   price_paid REAL, acquired_from TEXT, acquired_date TEXT, location TEXT,
   notes_private TEXT, condition_note TEXT, confidence TEXT,
+  card_text TEXT, decode_note TEXT,
   -- public
   notes_public TEXT,
   is_public INTEGER NOT NULL DEFAULT 1,
@@ -178,6 +179,24 @@ def now():
     return datetime.now(timezone.utc).isoformat()
 
 
+# Schema upgrades for databases created by an older SCHEMA. CREATE IF NOT EXISTS
+# handles new tables; new COLUMNS need ALTERs, listed per target version.
+MIGRATIONS = {
+    3: ['ALTER TABLE knives ADD COLUMN card_text TEXT',
+        'ALTER TABLE knives ADD COLUMN decode_note TEXT'],
+}
+
+
+def _migrate(con, have):
+    for v in range(have + 1, SCHEMA_VERSION + 1):
+        for sql in MIGRATIONS.get(v, []):
+            try:
+                con.execute(sql)
+            except sqlite3.OperationalError as e:
+                if 'duplicate column' not in str(e):
+                    raise
+
+
 def connect():
     """Open (and on first use create) the database. WAL + 5 s busy timeout
     so gunicorn workers and the match cron coexist; FK enforcement on so
@@ -193,6 +212,7 @@ def connect():
     if row is None:
         con.execute('INSERT INTO schema_version VALUES (?)', (SCHEMA_VERSION,))
     elif row[0] != SCHEMA_VERSION:
+        _migrate(con, row[0])
         con.execute('UPDATE schema_version SET version = ?', (SCHEMA_VERSION,))
     con.commit()
     return con
@@ -428,6 +448,66 @@ def set_knife_note(con, owner_id, knife_id, text):
         (text, now(), knife_id, owner_id)).rowcount == 1
     con.commit()
     return ok
+
+
+# --- events + decode -----------------------------------------------------------
+
+def add_event(con, owner_id, knife_id, type, detail=None, amount=None, counterparty=None,
+              public_visible=0):
+    cur = con.execute(
+        'INSERT INTO events (knife_id, owner_id, date, type, detail, amount, counterparty, public_visible) '
+        'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        (knife_id, owner_id, now(), type, detail, amount, counterparty, public_visible))
+    con.commit()
+    return cur.lastrowid
+
+
+def list_events(con, owner_id, knife_id):
+    return [dict(r) for r in con.execute(
+        'SELECT * FROM events WHERE knife_id = ? AND owner_id = ? ORDER BY id', (knife_id, owner_id))]
+
+
+def decodes_today(con, owner_id):
+    start = datetime.now(timezone.utc).replace(
+        hour=0, minute=0, second=0, microsecond=0).isoformat()   # same '+00:00' form as now()
+    return con.execute(
+        "SELECT count(*) FROM events WHERE owner_id = ? AND type = 'decoded' AND date >= ?",
+        (owner_id, start)).fetchone()[0]
+
+
+_DECODE_COLUMNS = ('model', 'variant', 'blade_steel', 'blade_shape', 'blade_length_in',
+                   'handle_material', 'lock_type', 'born_on', 'born_on_precision',
+                   'born_on_source', 'condition', 'has_box', 'has_card', 'has_papers',
+                   'has_pouch', 'has_lanyard', 'has_spare_hardware')
+
+
+def apply_decode(con, owner_id, knife_id, d):
+    """Write a decode.Decoded onto the knife (core columns, ext, confidence,
+    card_text, decode_note) and record a `decoded` event. Empty strings become
+    NULL; booleans become 0/1. Status is untouched — decode never publishes."""
+    if get_knife(con, owner_id, knife_id) is None:
+        return None
+    vals = {}
+    for c in _DECODE_COLUMNS:
+        v = d.core.get(c)
+        if c.startswith('has_'):
+            v = 1 if v else 0
+        elif v == '':
+            v = None
+        vals[c] = v
+    note = d.reasoning.strip()
+    if d.flags:
+        note += '\nFLAGS: ' + '; '.join(d.flags)
+    sets = ', '.join(f'{c} = ?' for c in vals)
+    con.execute(
+        f'UPDATE knives SET {sets}, ext = ?, confidence = ?, card_text = ?, decode_note = ?, '
+        'updated = ? WHERE id = ? AND owner_id = ?',
+        (*vals.values(), json.dumps(d.ext), json.dumps(d.confidence), d.card_text or None,
+         note or None, now(), knife_id, owner_id))
+    add_event(con, owner_id, knife_id, 'decoded',
+              detail=f'{d.model} in={d.input_tokens} out={d.output_tokens} ms={d.latency_ms} '
+                     f'flags={len(d.flags)}')
+    return get_knife(con, owner_id, knife_id)
 
 
 def _photo_keys(con, knife_id):
