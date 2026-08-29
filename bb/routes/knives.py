@@ -33,6 +33,12 @@ def _not_found():
     return jsonify({'error': 'not found'}), 404
 
 
+def _norm_cmp(x):
+    """'' and NULL are the same absence for change-detection: an empty core field
+    from validate() must not read as a change against a never-decoded NULL."""
+    return '' if x is None else x
+
+
 def _owner_photo(p, store):
     """the signed-in owner's own view — includes private columns; never use for /@handle"""
     return {'id': p['id'], 'seq': p['seq'], 'sha256': p['sha256'],
@@ -167,7 +173,7 @@ def edit_knife(knife_id):
             return jsonify({'error': str(e)}), 400
         if 'ext' in fields:
             fields['ext'] = {**k['ext'], **fields['ext']}
-        changed = sorted(c for c, v in fields.items() if k.get(c) != v)
+        changed = sorted(c for c, v in fields.items() if _norm_cmp(k.get(c)) != _norm_cmp(v))
         k2 = db.update_knife(con, g.user['id'], knife_id, fields)
         if k2 is None:
             return _not_found()
@@ -224,6 +230,8 @@ def sale_knife(knife_id):
             return jsonify({'error': 'save the knife first'}), 409
         k2 = db.set_sale(con, g.user['id'], knife_id, status, asking_price=asking, seller_note=note,
                          amount=amount, counterparty=counterparty)
+        if k2 is None:
+            return _not_found()
     finally:
         con.close()
     log.info('%s sale_status → %s by @%s', k['tag'], status, g.user['handle'])
@@ -422,6 +430,8 @@ def delete_photo(knife_id, seq):
         if k['status'] == 'live' and len(k['photos']) <= 1:
             return jsonify({'error': LIVE_KEEPS_ONE}), 409
         row = db.delete_photo(con, owner, knife_id, seq)
+        if row is not None and k.get('hero_photo') == seq:
+            db.update_knife(con, owner, knife_id, {'hero_photo': None})
     finally:
         con.close()
     if row is None:

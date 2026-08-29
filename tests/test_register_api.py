@@ -64,6 +64,8 @@ def test_patch_validates_merges_ext_and_logs_edited_on_live(client, mailer):
     assert [e['type'] for e in ev] == ['photographed', 'edited'] and ev[-1]['detail'] == 'notes_public'
     client.patch(f'{K}/{kid}', json={'model': 'Sebenza'})                              # nothing changed → no event
     assert len(db.list_events(con, owner, kid)) == 2
+    client.patch(f'{K}/{kid}', json={'variant': ''})                                   # '' vs NULL: no new event
+    assert len(db.list_events(con, owner, kid)) == 2
 
 
 def test_sale_controls(client, mailer):
@@ -122,6 +124,19 @@ def test_live_knife_photos_delete_and_redecode(client, mailer, decoder):
     assert len(decoder.calls) == 1
     assert client.delete(f'{K}/{kid}').status_code == 200                              # live: delete allowed
     assert client.get(f'{K}/{kid}').status_code == 404
+
+
+def test_delete_photo_clears_dangling_hero_photo(client, mailer):
+    signed_in(client, mailer)
+    kid = _draft_with_photo(client)
+    r = client.post(f'{K}/{kid}/photos/2', data={'photo': (io.BytesIO(_jpeg()), 'b.jpg')},
+                    content_type='multipart/form-data')
+    assert r.status_code == 201
+    r = client.patch(f'{K}/{kid}', json={'hero_photo': 2})
+    assert r.status_code == 200 and r.get_json()['hero_photo'] == 2
+    assert client.delete(f'{K}/{kid}/photos/2').status_code == 200        # delete the hero
+    r = client.get(f'{K}/{kid}')
+    assert r.status_code == 200 and r.get_json()['hero_photo'] is None
 
 
 def test_non_object_json_bodies_are_400(client, mailer):

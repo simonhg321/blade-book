@@ -84,7 +84,7 @@
 (function () {
   var API = '/blade-book/api';
   var $ = function (id) { return document.getElementById(id); };
-  var knives = [], selected = {};
+  var knives = [], selected = {}, didScroll = false;
 
   function say(t, err) { var s = $('status'); s.textContent = t || ''; s.className = err ? 'err' : ''; }
   function api(path, opts) {
@@ -119,7 +119,7 @@
     ['born_on', 'born on', 'born'], ['born_on_precision', 'precision', 'select', ['', 'day', 'month', 'year']],
     ['born_on_source', 'source', 'select', ['', 'card', 'box', 'owner', 'inferred']],
     ['sec', 'kit'],
-    ['condition', 'condition (1 new … 4 used)', 'select', ['', '1', '2', '3', '4']], ['ext.box_type', 'box', 'text'],
+    ['condition', 'condition (1 new … 4 used)', 'select', ['', '1', '2', '3', '4']], ['ext.box_type', 'box type', 'text'],
     ['has_box', 'box', 'bool'], ['has_card', 'card', 'bool'], ['has_papers', 'papers', 'bool'],
     ['has_pouch', 'pouch', 'bool'], ['has_lanyard', 'lanyard', 'bool'], ['has_spare_hardware', 'spare hardware', 'bool'],
     ['sec', 'story (public)'],
@@ -176,8 +176,9 @@
     var ordered = k.photos.slice().sort(function (a, b) { return (a.seq === heroSeq ? -1 : 0) - (b.seq === heroSeq ? -1 : 0) || a.seq - b.seq; });
     ordered.forEach(function (p, i) {
       var img = el('img', i === 0 ? 'hero' : ''); img.alt = k.tag + ' photo ' + p.seq;
-      img.src = API + '/knives/' + k.id + '/photos/' + p.seq + (p.has_thumb ? '/thumb' : '/original');
-      img.addEventListener('click', function () { window.open(API + '/knives/' + k.id + '/photos/' + p.seq + '/original', '_blank'); });
+      var v = '?v=' + (p.sha256 || '').slice(0, 8);
+      img.src = API + '/knives/' + k.id + '/photos/' + p.seq + (p.has_thumb ? '/thumb' : '/original') + v;
+      img.addEventListener('click', function () { window.open(API + '/knives/' + k.id + '/photos/' + p.seq + '/original' + v, '_blank'); });
       box.appendChild(img);
     });
   }
@@ -388,7 +389,9 @@
     return api('/knives/full').then(function (res) {
       if (!res.ok) throw new Error(res.j.error || 'could not load your register');
       knives = res.j.knives || []; render();
-      if (location.hash && document.getElementById(location.hash.slice(1))) { document.getElementById(location.hash.slice(1)).scrollIntoView(); }
+      if (!didScroll && location.hash && document.getElementById(location.hash.slice(1))) {
+        document.getElementById(location.hash.slice(1)).scrollIntoView(); didScroll = true;
+      }
     });
   }
 

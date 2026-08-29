@@ -610,6 +610,10 @@ def _photo_keys(con, knife_id):
 
 
 def delete_draft_knife(con, owner_id, knife_id):
+    """Delete a knife, but ONLY if it's still a draft (no-op on a live knife). The
+    DELETE /knives/<id> route uses delete_knife (any status) instead; the daily sweep
+    uses purge_stale_drafts. Kept for the draft-only contract — only tests call this
+    directly today."""
     row = con.execute("SELECT id FROM knives WHERE id = ? AND owner_id = ? AND status = 'draft'",
                       (knife_id, owner_id)).fetchone()
     if row is None:
