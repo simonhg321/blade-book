@@ -165,6 +165,17 @@ def test_brandmark_assets_and_wiring():
         assert 'bbmark' in html, rel
 
 
+def test_how_page_wiring():
+    html = open(os.path.join(ROOT, 'html', 'how', 'index.html')).read()
+    for needle in ('HOW IT WORKS', 'birth card', 'PROCESS', 'The three shots',
+                   '/blade-book/me/add/', '/blade-book/@simon-collector/', 'bbmark',
+                   'href="/blade-book/vibe.css"'):
+        assert needle in html, needle
+    assert 'innerHTML' not in html and 'fonts.googleapis.com' not in html
+    for rel in ('index.html', 'me/add/index.html'):
+        assert '/blade-book/how/' in open(os.path.join(ROOT, 'html', rel)).read(), rel
+
+
 def test_landing_links_the_register():
     html = open(os.path.join(ROOT, 'html', 'index.html')).read()
     for needle in ('href="/blade-book/vibe.css"', 'href="/blade-book/me/"', "/api/knives/?status=live'", 'id="regcount"'):

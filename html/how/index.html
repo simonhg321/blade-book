@@ -1,0 +1,121 @@
+<!doctype html>
+<!-- Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>blade-book — how it works</title>
+<meta property="og:title" content="How to register a knife on blade-book">
+<meta property="og:description" content="Three photos, one tap, and your knife has a birth-card record. Here's exactly how to shoot them.">
+<link rel="icon" type="image/svg+xml" href="/blade-book/mark.svg">
+<link rel="apple-touch-icon" href="/blade-book/apple-touch-icon.png">
+<link rel="stylesheet" href="/blade-book/vibe.css">
+<style>
+  body{max-width:560px;margin:0 auto;padding:16px 16px 60px}
+  header{text-align:center;margin-bottom:8px}
+  header .bbmark{margin-top:8px}
+  h1{font-family:'Bebas Neue',Impact,sans-serif;font-weight:400;font-size:2.6rem;letter-spacing:.06em;margin:.2rem 0 0}
+  .lede{color:var(--muted);text-align:center;margin:0 0 22px}
+  h2{font-size:.8rem;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin:28px 0 10px;border-bottom:2px solid var(--ink);padding-bottom:6px}
+  .shot{background:#fff;border:2px solid var(--ink);border-radius:14px;overflow:hidden;margin-bottom:14px}
+  .shot svg{display:block;width:100%;background:var(--soft)}
+  .shot .cap{padding:12px 14px}
+  .shot .cap b{display:block;font-size:1.05rem;margin-bottom:4px}
+  .shot .cap b span{color:var(--accent)}
+  .shot .cap p{margin:0;font-size:.92rem;color:var(--muted)}
+  ol.steps{list-style:none;counter-reset:s;padding:0;margin:0;display:grid;gap:10px}
+  ol.steps li{counter-increment:s;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px 12px 54px;position:relative;font-size:.95rem}
+  ol.steps li::before{content:counter(s);position:absolute;left:12px;top:10px;width:30px;height:30px;border-radius:50%;background:var(--ink);color:var(--cream);font-family:'Bebas Neue',Impact,sans-serif;font-size:1.2rem;display:grid;place-items:center}
+  ol.steps li b{letter-spacing:.03em}
+  ol.steps li p{margin:2px 0 0;color:var(--muted);font-size:.88rem}
+  ul.check{list-style:none;padding:0;margin:0;display:grid;gap:6px;font-size:.92rem}
+  ul.check li{background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 12px}
+  ul.check li::before{content:'✓ ';color:var(--ok);font-weight:700}
+  ul.check li.no::before{content:'✕ ';color:var(--accent)}
+  .cta{display:block;text-align:center;padding:1.1rem 0;font-size:1.2rem;font-weight:800;letter-spacing:.06em;background:var(--accent);color:#fff;border-radius:14px;text-decoration:none;margin:26px 0 10px}
+  .example{text-align:center;font-size:.92rem;color:var(--muted)}
+  footer{margin-top:34px;text-align:center;font-size:.78rem;color:var(--muted)}
+  footer img{vertical-align:-4px}
+</style>
+
+<header>
+  <a href="/blade-book/"><img class="bbmark" src="/blade-book/mark.svg" alt="blade-book" width="72"></a>
+  <h1>HOW IT WORKS</h1>
+</header>
+<p class="lede">Three photos, one tap. Your knife gets a birth-card record.</p>
+
+<h2>The three shots</h2>
+
+<div class="shot">
+  <svg viewBox="0 0 400 220" role="img" aria-label="Shot 1: box, kit and birth card laid out together">
+    <!-- flat-lay: box with label, birth card, folded knife, pouch -->
+    <rect x="24" y="30" width="150" height="110" rx="8" fill="#1a1a1a"/>
+    <rect x="38" y="44" width="86" height="26" rx="3" fill="#faf6ee" opacity=".92"/>
+    <rect x="44" y="52" width="56" height="4" rx="2" fill="#1a1a1a"/>
+    <rect x="44" y="60" width="40" height="4" rx="2" fill="#b8452c"/>
+    <rect x="196" y="34" width="122" height="86" rx="6" fill="#fff" stroke="#1a1a1a" stroke-width="3"/>
+    <rect x="208" y="48" width="70" height="7" rx="3.5" fill="#b8452c"/>
+    <rect x="208" y="64" width="96" height="5" rx="2.5" fill="#d8cfba"/>
+    <rect x="208" y="76" width="88" height="5" rx="2.5" fill="#d8cfba"/>
+    <rect x="208" y="88" width="92" height="5" rx="2.5" fill="#d8cfba"/>
+    <rect x="208" y="100" width="60" height="5" rx="2.5" fill="#d8cfba"/>
+    <path d="M40 172 L150 164 Q162 163 162 172 L162 180 Q162 188 150 188 L40 182 Z" fill="#6b665c"/>
+    <circle cx="150" cy="176" r="3.5" fill="#faf6ee"/>
+    <path d="M210 150 L318 150 Q330 150 330 166 L330 176 Q330 192 318 192 L210 192 Z" fill="#a8adb0" opacity=".8"/>
+    <text x="352" y="60" font-family="Impact,sans-serif" font-size="30" fill="#b8452c">1</text>
+  </svg>
+  <div class="cap">
+    <b>Box + kit + <span>birth card</span> — together</b>
+    <p>Everything in one frame: the box (label visible), the birth card face-up and readable, the knife, pouch and papers. The card is the star — this is the photo the decoder reads.</p>
+  </div>
+</div>
+
+<div class="shot">
+  <svg viewBox="0 0 400 220" role="img" aria-label="Shot 2: the knife open">
+    <path d="M60 96 L206 82 L228 96 L206 104 Z" fill="#a8adb0"/>
+    <path d="M62 96 L200 88" stroke="#faf6ee" stroke-width="2.5" stroke-linecap="round" opacity=".8" fill="none"/>
+    <path d="M206 82 Q214 78 224 84 L340 108 Q352 112 350 124 L346 136 Q342 146 330 143 L214 112 Q204 108 206 96 Z" fill="#1a1a1a"/>
+    <circle cx="222" cy="96" r="5" fill="#b8452c"/>
+    <text x="352" y="60" font-family="Impact,sans-serif" font-size="30" fill="#b8452c">2</text>
+  </svg>
+  <div class="cap">
+    <b>The knife, open</b>
+    <p>Blade fully deployed, whole knife in frame, sharp focus. Show the blade grind and any inlay or graphic.</p>
+  </div>
+</div>
+
+<div class="shot">
+  <svg viewBox="0 0 400 220" role="img" aria-label="Shot 3: the knife closed">
+    <path d="M110 100 Q108 88 122 88 L272 96 Q286 98 286 112 L286 118 Q286 132 272 132 L122 128 Q108 128 110 116 Z" fill="#1a1a1a"/>
+    <path d="M122 96 L250 102" stroke="#3a352f" stroke-width="4" stroke-linecap="round" fill="none"/>
+    <circle cx="268" cy="112" r="5" fill="#b8452c"/>
+    <text x="352" y="60" font-family="Impact,sans-serif" font-size="30" fill="#b8452c">3</text>
+  </svg>
+  <div class="cap">
+    <b>The knife, closed</b>
+    <p>Closed, showing the handle face — clip side is best. This is usually your hero shot for the register.</p>
+  </div>
+</div>
+
+<h2>A good card photo</h2>
+<ul class="check">
+  <li>Flat, even light — window light beats lamp light</li>
+  <li>Card fills a good chunk of the frame and every printed line is readable</li>
+  <li>Box label (SKU sticker) visible in the same shot</li>
+  <li class="no">Glare across the card — tilt it until the shine is gone</li>
+  <li class="no">No card? That's fine — say so in the note and the box label carries the date</li>
+</ul>
+
+<h2>The process</h2>
+<ol class="steps">
+  <li><b>Sign in</b><p>Email address → tap the link we send you. No passwords.</p></li>
+  <li><b>ADD A KNIFE</b><p>You get a tag (K01, K02 …). One knife at a time, start to finish.</p></li>
+  <li><b>Add the three photos</b><p>Take them now or pick from your camera roll. Photo 1 is the card shot.</p></li>
+  <li><b>Note anything the card can't say</b><p>Optional: where you got it, "no card", left-handed, a special edition story.</p></li>
+  <li><b>Hit PROCESS ⚡</b><p>~15–30 seconds. It reads the birth card and box label and fills in the record — steel, date, inlay, the lot.</p></li>
+  <li><b>Check the card, then SAVE TO REGISTER</b><p>Not right? Save anyway — every field is editable in your register.</p></li>
+  <li><b>Yours to control</b><p>Each knife has a public toggle, sale status, and a delete. Your private notes and prices never leave your register.</p></li>
+</ol>
+
+<a class="cta" href="/blade-book/me/add/">📷 &nbsp;ADD YOUR FIRST KNIFE</a>
+<p class="example">See a finished page: <a href="/blade-book/@simon-collector/">@simon-collector's register</a></p>
+
+<footer><img src="/blade-book/mark.svg" alt="" width="16"> blade-book — a register for knife collectors</footer>
