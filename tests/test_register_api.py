@@ -155,6 +155,39 @@ def test_non_object_json_bodies_are_400(client, mailer):
             assert r.status_code == 400, (path, body, r.status_code)
 
 
+def test_publish_schedule_hooks(client, mailer, monkeypatch):
+    signed_in(client, mailer)
+    calls = []
+    monkeypatch.setattr('bb.routes.knives.publish.schedule', calls.append)
+
+    draft = client.post(K + '/').get_json()['id']
+    r = client.patch(f'{K}/{draft}', json={'model': 'Sebenza'})
+    assert r.status_code == 200 and calls == []               # draft-only PATCH never schedules
+    _processed(draft)                                          # unblock the next new draft
+
+    kid = _draft_with_photo(client)
+    r = client.post(f'{K}/{kid}/save')
+    assert r.status_code == 200 and len(calls) == 1            # save
+
+    r = client.patch(f'{K}/{kid}', json={'notes_public': 'hello'})
+    assert r.status_code == 200 and len(calls) == 2            # live edit with a change
+
+    r = client.patch(f'{K}/{kid}', json={'notes_public': 'hello'})   # unchanged: no new call
+    assert r.status_code == 200 and len(calls) == 2
+
+    r = client.post(f'{K}/{kid}/sale', json={'sale_status': 'for_sale', 'asking_price': 500})
+    assert r.status_code == 200 and len(calls) == 3            # sale change
+
+    r = client.post(f'{K}/{kid}/public', json={'is_public': False})
+    assert r.status_code == 200 and len(calls) == 4            # public toggle
+
+    r = client.post(f'{K}/bulk', json={'ids': [kid], 'is_public': True})
+    assert r.status_code == 200 and len(calls) == 5            # bulk
+
+    r = client.delete(f'{K}/{kid}')
+    assert r.status_code == 200 and len(calls) == 6            # delete of a live knife
+
+
 def test_new_draft_requires_previous_draft_processed(client, mailer, decoder):
     signed_in(client, mailer)
     kid = client.post(K + '/').get_json()['id']

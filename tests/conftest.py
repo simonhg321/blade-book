@@ -62,6 +62,12 @@ def decoder():
 def app(env, mailer, decoder, monkeypatch):
     monkeypatch.setenv('SESSION_KEY', 'test-session-key-not-secret')
     monkeypatch.setenv('BASE_URL', 'http://localhost')
+    # Route tests hit the schedule() hooks incidentally; without this they'd
+    # spawn a real 30 s threading.Timer per call. Harmless (daemon threads die
+    # with pytest) but noisy and nondeterministic — no-op it here. Tests that
+    # need to OBSERVE schedule() monkeypatch it again locally, which shadows
+    # this (same underlying bb.publish module either way).
+    monkeypatch.setattr('bb.publish.schedule', lambda owner_id: None)
     from app import create_app
     return create_app(mailer=mailer, decoder=decoder)
 

@@ -110,10 +110,11 @@ def create_app(mailer=None, store=None, decoder=None):
         VERSION=_version(),
     )
 
-    from bb.routes import auth as auth_routes, knives as knife_routes
+    from bb.routes import auth as auth_routes, knives as knife_routes, settings as settings_routes
     app.register_blueprint(api)
     app.register_blueprint(auth_routes.bp)
     app.register_blueprint(knife_routes.bp)
+    app.register_blueprint(settings_routes.bp)
     log.info('blade-book app created, version %s, data %s, mailer %s, decoder %s',
              app.config['VERSION'], paths.DATA_DIR, type(app.config['MAILER']).__name__,
              type(app.config['DECODER']).__name__)

@@ -9,7 +9,7 @@ Paths and the port are NOT here — `BLADEBOOK_*_DIR` / `BLADEBOOK_PORT` are rea
 | key | plan | value |
 |---|---|---|
 | `SESSION_KEY` | 01 | 64 hex chars from `openssl rand -hex 32`. Rotating it signs everyone out. |
-| `BASE_URL` | 02 | Public origin, no trailing slash. `https://billboard.instockornot.club` until DNS lands, then `https://blade-book.com`. Magic links and OIDC redirect URIs are built from it, so the OIDC consoles must list `<BASE_URL>/blade-book/api/auth/google/callback` and `/apple/callback`. |
+| `BASE_URL` | 02 | Public origin, no trailing slash. `https://billboard.instockornot.club` until DNS lands, then `https://blade-book.com`. Magic links and OIDC redirect URIs are built from it, so the OIDC consoles must list `<BASE_URL>/blade-book/api/auth/google/callback` and `/apple/callback`. Also feeds the public bundle: `settings.public_url` and every published page's OG tags are built from it (plan 06). |
 | `RESEND_API_KEY` | 02 | From resend.com. **Unset → LogMailer**: the magic link is written to `/var/log/blade-book/app.log` instead of being emailed (how sign-in works before Resend is wired). |
 | `MAIL_FROM` | 02 | Default `blade-book <noreply@blade-book.com>`; the domain must be verified in Resend. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | 02 | Google Cloud console → OAuth client (Web). Both unset → the Google button does not render. |
@@ -18,3 +18,4 @@ Paths and the port are NOT here — `BLADEBOOK_*_DIR` / `BLADEBOOK_PORT` are rea
 | `APPLE_PRIVATE_KEY` | 02 | The `.p8` contents on **one line** with `\n` for newlines. Any of the four Apple keys unset → the Apple button does not render. |
 | `ANTHROPIC_API_KEY` | 04 | console.anthropic.com. **Unset → decode disabled**: `POST …/decode` answers 503 and the app still boots. |
 | `DECODER_MODEL` | 04 | Exact model id, e.g. `claude-sonnet-5` (default), `claude-haiku-4-5`, `claude-opus-5`. Choose from `scripts/eval_decode.py`'s table, not taste. |
+| `BLADEBOOK_PUBLISH_DEBOUNCE_S` | 06 | Optional, default `30` — seconds the public-bundle rebuild waits after the last save before it fires (`bb/publish.py`'s per-process timer, plus the cron sweep's quiet window). Tests set this to a tiny value; production leaves it at the default. |

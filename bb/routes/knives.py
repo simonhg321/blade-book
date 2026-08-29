@@ -9,7 +9,7 @@ import time
 
 from flask import Blueprint, Response, current_app, g, jsonify, request
 
-from bb import auth, db, decode, edit, makers, paths, photos
+from bb import auth, db, decode, edit, makers, paths, photos, publish
 from bb.makers import core as maker_core
 
 log = logging.getLogger('blade-book.knives')
@@ -186,6 +186,8 @@ def edit_knife(knife_id):
         con.close()
     if changed:
         log.info('%s edited by @%s: %s', k['tag'], g.user['handle'], ', '.join(changed))
+    if changed and k['status'] == 'live':
+        publish.schedule(g.user['id'])
     return jsonify(_register_view(k2, _store()))
 
 
@@ -203,6 +205,7 @@ def save_knife(knife_id):
     if err:
         return jsonify({'error': err}), 400
     log.info('%s saved to the register by @%s', k['tag'], g.user['handle'])
+    publish.schedule(g.user['id'])
     return jsonify(_register_view(k, _store()))
 
 
@@ -238,6 +241,7 @@ def sale_knife(knife_id):
     finally:
         con.close()
     log.info('%s sale_status → %s by @%s', k['tag'], status, g.user['handle'])
+    publish.schedule(g.user['id'])
     return jsonify(_register_view(k2, _store()))
 
 
@@ -256,6 +260,7 @@ def public_knife(knife_id):
         con.close()
     if n == 0:
         return _not_found()
+    publish.schedule(g.user['id'])
     return jsonify({'ok': True, 'is_public': 1 if body['is_public'] else 0})
 
 
@@ -275,6 +280,8 @@ def bulk_public():
         n = db.set_public(con, g.user['id'], ids, body['is_public'])
     finally:
         con.close()
+    if n:
+        publish.schedule(g.user['id'])
     return jsonify({'changed': n})
 
 
@@ -334,6 +341,8 @@ def decode_knife(knife_id):
         con.close()
     log.info('decoded %s for @%s via %s (%d flags, %dms)', k['tag'], g.user['handle'], d.model,
              len(d.flags), d.latency_ms)
+    if k['status'] == 'live':
+        publish.schedule(owner)
     out = _owner_knife(k2, store)
     out['decoded'] = {'flags': d.flags, 'reasoning': d.reasoning, 'card_text': d.card_text,
                       'no_card': d.no_card, 'model': d.model,
@@ -355,6 +364,8 @@ def delete_knife(knife_id):
     store = _store()
     removed = _delete_keys(store, keys, k['tag'])
     log.info('%s deleted by @%s (%d files)', k['tag'], g.user['handle'], removed)
+    if k['status'] == 'live':
+        publish.schedule(g.user['id'])
     return jsonify({'ok': True})
 
 
@@ -417,6 +428,8 @@ def upload_photo(knife_id, seq):
         con.close()
     log.info('photo %d/%d stored for @%s (%s, thumb=%s)', knife_id, seq, g.user['handle'],
              ing.ext, bool(ing.thumb))
+    if k['status'] == 'live':
+        publish.schedule(owner)
     return jsonify({'seq': seq, 'sha256': ing.sha256, 'width': ing.width,
                     'height': ing.height, 'has_thumb': bool(ing.thumb)}), 201
 
@@ -442,6 +455,8 @@ def delete_photo(knife_id, seq):
     store = _store()
     _delete_keys(store, [row['store_key'], db.thumb_key(row['store_key'])],
                  f'photo {knife_id}/{seq}')
+    if k['status'] == 'live':
+        publish.schedule(owner)
     return jsonify({'ok': True})
 
 
