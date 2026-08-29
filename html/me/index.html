@@ -26,7 +26,6 @@
   .photos{display:grid;grid-template-columns:2fr 1fr;grid-auto-rows:1fr;gap:6px;margin-bottom:10px}
   .photos img{width:100%;height:100%;object-fit:cover;border-radius:10px;border:1px solid var(--line);display:block;background:var(--soft);cursor:pointer;aspect-ratio:1}
   .photos img.hero{grid-row:span 2}
-  .strip{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 0}
   .private{margin-top:12px;border-top:1px dashed var(--line);padding-top:10px;font-size:.9rem}
   .private h3,.sale h3{font-size:.75rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:0 0 6px}
   .private dl{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;margin:0}
@@ -85,7 +84,7 @@
 (function () {
   var API = '/blade-book/api';
   var $ = function (id) { return document.getElementById(id); };
-  var knives = [], me = null, selected = {};
+  var knives = [], selected = {};
 
   function say(t, err) { var s = $('status'); s.textContent = t || ''; s.className = err ? 'err' : ''; }
   function api(path, opts) {
@@ -212,6 +211,11 @@
     art.querySelector('.counterparty').classList.toggle('hidden', s !== 'sold');
     art.querySelector('.asking').classList.toggle('hidden', s === 'sold' || s === 'keeping');
   }
+  function clearIrrelevant(art) {
+    var s = art.querySelector('.sstatus').value;
+    if (s === 'keeping' || s === 'sold') art.querySelector('.asking').value = '';
+    if (s !== 'sold') { art.querySelector('.amount').value = ''; art.querySelector('.counterparty').value = ''; }
+  }
 
   function buildForm(form, k) {
     clear(form);
@@ -270,11 +274,6 @@
     return body;
   }
 
-  function replaceKnife(k2) {
-    for (var i = 0; i < knives.length; i++) if (knives[i].id === k2.id) { k2.events = k2.events || knives[i].events; knives[i] = k2; }
-    render();
-  }
-
   function removeKnife(k) {
     var typed = prompt('Delete ' + k.tag + ' and its photos for good? Type ' + k.tag + ' to confirm.');
     if (typed !== k.tag) return;
@@ -298,13 +297,13 @@
     var fl = art.querySelector('.flags'); (k.flags || []).forEach(function (f) { fl.appendChild(el('div', null, f)); });
     renderPrivate(art, k);
     renderSale(art, k);
-    art.querySelector('.sstatus').addEventListener('change', function () { syncSale(art); });
+    art.querySelector('.sstatus').addEventListener('change', function () { clearIrrelevant(art); syncSale(art); });
     art.querySelector('.apply').addEventListener('click', function () {
-      var body = { sale_status: art.querySelector('.sstatus').value, seller_note: art.querySelector('.snote').value };
+      var s = art.querySelector('.sstatus').value;
+      var body = { sale_status: s, seller_note: art.querySelector('.snote').value };
       var asking = art.querySelector('.asking').value, amount = art.querySelector('.amount').value, cp = art.querySelector('.counterparty').value;
-      if (asking !== '') body.asking_price = Number(asking);
-      if (amount !== '') body.amount = Number(amount);
-      if (cp) body.counterparty = cp;
+      if ((s === 'for_sale' || s === 'for_trade' || s === 'consigned') && asking !== '') body.asking_price = Number(asking);
+      if (s === 'sold') { if (amount !== '') body.amount = Number(amount); if (cp) body.counterparty = cp; }
       json('POST', '/knives/' + k.id + '/sale', body).then(function (res) {
         if (!res.ok) throw new Error(res.j.error || 'could not update');
         say(k.tag + ' → ' + res.j.sale_status.replace('_', ' ')); return reload();
@@ -394,7 +393,7 @@
   }
 
   api('/auth/me').then(function (res) {
-    me = res.j; $('handle').textContent = '@' + (me.handle || '');
+    $('handle').textContent = '@' + (res.j.handle || '');
     return reload();
   }).catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); });
 })();
