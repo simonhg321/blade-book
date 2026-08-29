@@ -1,4 +1,9 @@
 # Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+import io
+import os
+
+from PIL import Image
+
 from bb import db, publish
 
 
@@ -82,3 +87,65 @@ def test_safe_handle():
     assert publish.SAFE_HANDLE.fullmatch('simon-collector')
     assert not publish.SAFE_HANDLE.fullmatch('../etc')
     assert not publish.SAFE_HANDLE.fullmatch('Simon')
+
+
+class MemStore:
+    def __init__(self, files):
+        self.files = files
+
+    def get(self, key):
+        try:
+            return self.files[key]
+        except KeyError:
+            raise KeyError(key)
+
+
+def _jpeg_with_exif(w=2400, h=1600):
+    img = Image.new('RGB', (w, h), (200, 180, 140))
+    exif = Image.Exif()
+    exif[0x010F] = b'SECRET-CAMERA'      # Make
+    buf = io.BytesIO()
+    img.save(buf, 'JPEG', exif=exif)
+    return buf.getvalue()
+
+
+def _hero_knife(key='1/1/1.jpg', hero=1):
+    return {'tag': 'K07', 'hero_photo': hero,
+            'photos': [{'seq': 1, 'store_key': key},
+                       {'seq': 2, 'store_key': '1/1/2.jpg'}]}
+
+
+def test_export_hero_strips_exif_and_caps_size(tmp_path):
+    store = MemStore({'1/1/1.jpg': _jpeg_with_exif()})
+    name, tname = publish.export_hero(store, _hero_knife(), 'pub', str(tmp_path))
+    assert name == 'K07.jpg' and tname == 'K07_t.jpg'
+    out = Image.open(os.path.join(tmp_path, name))
+    assert max(out.size) <= publish.DISPLAY_EDGE
+    assert not out.getexif()
+    raw = open(os.path.join(tmp_path, name), 'rb').read()
+    assert b'SECRET-CAMERA' not in raw
+    thumb = Image.open(os.path.join(tmp_path, tname))
+    assert max(thumb.size) <= publish.THUMB_EDGE
+
+
+def test_export_hero_watermarks_display_not_thumb(tmp_path):
+    store = MemStore({'1/1/1.jpg': _jpeg_with_exif(1200, 800)})
+    publish.export_hero(store, _hero_knife(), 'pub', str(tmp_path))
+    display = Image.open(os.path.join(tmp_path, 'K07.jpg'))
+    # a flat-colour source stays flat unless the watermark drew on it
+    assert len(display.convert('L').getcolors(maxcolors=100000)) > 20
+
+
+def test_export_hero_falls_back_when_hero_seq_missing(tmp_path):
+    store = MemStore({'1/1/1.jpg': _jpeg_with_exif(800, 600)})
+    k = _hero_knife(hero=9)
+    k['photos'] = [{'seq': 1, 'store_key': '1/1/1.jpg'}]
+    name, _ = publish.export_hero(store, k, 'pub', str(tmp_path))
+    assert name == 'K07.jpg'
+
+
+def test_export_hero_no_photos_or_bad_bytes(tmp_path):
+    assert publish.export_hero(MemStore({}), {'tag': 'K07', 'hero_photo': None,
+                                              'photos': []}, 'pub', str(tmp_path)) == (None, None)
+    store = MemStore({'1/1/1.jpg': b'not an image'})
+    assert publish.export_hero(store, _hero_knife(), 'pub', str(tmp_path)) == (None, None)

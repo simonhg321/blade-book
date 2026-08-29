@@ -6,7 +6,11 @@ PUBLIC_FIELDS below — the whitelist is the security boundary, and
 tests/test_publish_leak.py proves nothing in db.PRIVATE_COLUMNS survives it.
 The DB never sees public traffic; Apache serves the files.
 """
+import io
+import os
 import re
+
+from PIL import Image, ImageDraw, ImageFont, ImageOps, UnidentifiedImageError
 
 SAFE_HANDLE = re.compile(r'[a-z0-9-]{3,24}')
 
@@ -64,3 +68,57 @@ def display_name(row):
     if row.get('size') and row.get('size') not in name:
         return f"{row['size']} {name}"
     return name
+
+
+DISPLAY_EDGE = 1600
+THUMB_EDGE = 320
+
+
+def _watermark(img, handle):
+    """Diagonal '@handle · blade-book' burned into the display image — makes
+    the photo worthless for scam listings without wrecking it (crkinv port)."""
+    text = f'@{handle} · blade-book'
+    w, h = img.size
+    layer = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(layer)
+    size = max(24, w // 24)
+    try:
+        font = ImageFont.truetype(
+            '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', size)
+    except OSError:
+        font = ImageFont.load_default()
+    tw = draw.textlength(text, font=font)
+    step = int(tw) + size * 3
+    for y in range(0, h + step, step):
+        draw.text((w * 0.04, y), text, font=font,
+                  fill=(255, 255, 255, 64),
+                  stroke_width=max(1, size // 16),
+                  stroke_fill=(20, 20, 20, 48))
+    layer = layer.rotate(24, expand=False, center=(w // 2, h // 2))
+    return Image.alpha_composite(img.convert('RGBA'), layer).convert('RGB')
+
+
+def export_hero(store, k, handle, img_dir):
+    """Re-encoded (EXIF/GPS-free), watermarked display + clean thumb for the
+    knife's hero photo. Returns (hero_name, thumb_name) or (None, None)."""
+    photos_ = k.get('photos') or []
+    if not photos_:
+        return None, None
+    by_seq = {p['seq']: p for p in photos_}
+    p = by_seq.get(k.get('hero_photo')) or photos_[0]
+    try:
+        img = Image.open(io.BytesIO(store.get(p['store_key'])))
+        img = ImageOps.exif_transpose(img)
+        img = img.convert('RGB')          # re-encode: all metadata dropped
+    except (OSError, KeyError, UnidentifiedImageError):
+        return None, None
+    os.makedirs(img_dir, exist_ok=True)
+    out, out_t = f"{k['tag']}.jpg", f"{k['tag']}_t.jpg"
+    display = img.copy()
+    display.thumbnail((DISPLAY_EDGE, DISPLAY_EDGE))
+    display = _watermark(display, handle)
+    display.save(os.path.join(img_dir, out), 'JPEG', quality=85, optimize=True)
+    thumb = img.copy()
+    thumb.thumbnail((THUMB_EDGE, THUMB_EDGE))
+    thumb.save(os.path.join(img_dir, out_t), 'JPEG', quality=80, optimize=True)
+    return out, out_t
