@@ -157,6 +157,7 @@
     $('pick').disabled = n >= 3;
     $('proc').disabled = n === 0;
     $('save').disabled = n === 0;
+    $('agenote').textContent = ''; $('agenote').style.display = 'none';
     $('pick').firstChild.textContent = n >= 3 ? '✓ 3/3 — tap a photo to retake ' : '📷  ADD PHOTOS TO ';
     var th = $('thumbs'); while (th.firstChild) th.removeChild(th.firstChild);
     SLOTS.forEach(function (s) {
@@ -283,7 +284,7 @@
 
   $('proc').addEventListener('click', function () {
     var id = current; if (!id) return;
-    $('proc').disabled = true; say('⚡ reading the card… (10–30 s)');
+    $('proc').disabled = true; $('save').disabled = true; say('⚡ reading the card… (10–30 s)');
     api('/knives/' + id + '/decode', { method: 'POST', headers: { 'Content-Type': 'application/json' },
                                        body: JSON.stringify({ no_card: $('nocardbox').checked }) })
       .then(function (res) {
