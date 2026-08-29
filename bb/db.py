@@ -413,6 +413,15 @@ def create_draft_knife(con, owner_id, maker='crk'):
     return get_knife(con, owner_id, cur.lastrowid)
 
 
+def undecoded_draft_tag(con, owner_id):
+    """Tag of the oldest open draft PROCESS has not run on yet (no confidence
+    stored), or None. A new draft is refused while one exists — the flow is
+    photograph -> process -> save, one knife at a time (Simon, 2026-08-29)."""
+    r = con.execute("SELECT tag FROM knives WHERE owner_id = ? AND status = 'draft' "
+                    'AND confidence IS NULL ORDER BY id LIMIT 1', (owner_id,)).fetchone()
+    return r['tag'] if r else None
+
+
 def count_drafts(con, owner_id):
     return con.execute(
         "SELECT count(*) FROM knives WHERE owner_id = ? AND status = 'draft'",

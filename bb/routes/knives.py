@@ -79,6 +79,9 @@ def _delete_keys(store, keys, what):
 def create_draft():
     con = db.connect()
     try:
+        tag = db.undecoded_draft_tag(con, g.user['id'])
+        if tag is not None:
+            return jsonify({'error': f'process (or discard) {tag} before adding another knife'}), 409
         if db.count_drafts(con, g.user['id']) >= MAX_OPEN_DRAFTS:
             return jsonify({'error': f'you have {MAX_OPEN_DRAFTS} open drafts — '
                                       'finish or discard some first'}), 429

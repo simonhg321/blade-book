@@ -13,6 +13,11 @@ def _jpeg():
     b = io.BytesIO(); Image.new('RGB', (40, 40), (200, 30, 30)).save(b, 'JPEG'); return b.getvalue()
 
 
+def _processed(kid):
+    # stamp what PROCESS leaves behind, without spending a decoder call
+    con = db.connect(); con.execute("UPDATE knives SET confidence = '{}' WHERE id = ?", (kid,)); con.commit(); con.close()
+
+
 def _draft_with_photo(client):
     kid = client.post(K + '/').get_json()['id']
     r = client.post(f'{K}/{kid}/photos/1', data={'photo': (io.BytesIO(_jpeg()), 'a.jpg')},
@@ -26,6 +31,7 @@ def test_save_publishes_and_reports_age(client, mailer):
     kid = client.post(K + '/').get_json()['id']
     r = client.post(f'{K}/{kid}/save')
     assert r.status_code == 400 and 'photo' in r.get_json()['error']
+    _processed(kid)
     kid = _draft_with_photo(client)
     client.patch(f'{K}/{kid}', json={'born_on': '2011-12'})
     r = client.post(f'{K}/{kid}/save')
@@ -89,7 +95,7 @@ def test_sale_controls(client, mailer):
 
 def test_public_toggle_bulk_and_full(client, mailer, app):
     signed_in(client, mailer)
-    k1 = _draft_with_photo(client); k2 = _draft_with_photo(client)
+    k1 = _draft_with_photo(client); _processed(k1); k2 = _draft_with_photo(client)
     client.post(f'{K}/{k1}/save')
     r = client.post(f'{K}/{k1}/public', json={'is_public': False})
     assert r.status_code == 200 and r.get_json()['is_public'] == 0
@@ -147,3 +153,17 @@ def test_non_object_json_bodies_are_400(client, mailer):
         for body in ([1, 2, 3], 'x', 7):
             r = client.open(path, method='PATCH' if path.endswith(str(kid)) else 'POST', json=body)
             assert r.status_code == 400, (path, body, r.status_code)
+
+
+def test_new_draft_requires_previous_draft_processed(client, mailer, decoder):
+    signed_in(client, mailer)
+    kid = client.post(K + '/').get_json()['id']
+    r = client.post(K + '/')
+    assert r.status_code == 409 and 'K01' in r.get_json()['error'] and 'process' in r.get_json()['error']
+    client.post(f'{K}/{kid}/photos/1', data={'photo': (io.BytesIO(_jpeg()), 'a.jpg')},
+                content_type='multipart/form-data')
+    assert client.post(f'{K}/{kid}/decode').status_code == 200
+    assert client.post(K + '/').status_code == 201          # processed → next tag opens
+    con = db.connect()
+    assert db.undecoded_draft_tag(con, client.get('/blade-book/api/auth/me').get_json()['id']) == 'K02'
+    con.close()

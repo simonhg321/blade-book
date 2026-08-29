@@ -13,12 +13,19 @@ def test_everything_requires_sign_in(client):
     assert client.delete(K + '/1').status_code == 401
 
 
+def _processed(kid):
+    # stamp what PROCESS leaves behind, without spending a decoder call
+    con = db.connect(); con.execute("UPDATE knives SET confidence = '{}' WHERE id = ?", (kid,)); con.commit(); con.close()
+
+
 def test_create_list_get(client, mailer):
     me = signed_in(client, mailer)
     r = client.post(K + '/')
     assert r.status_code == 201
     k = r.get_json()
     assert k['tag'] == 'K01' and k['status'] == 'draft' and k['photos'] == []
+    assert client.post(K + '/').status_code == 409          # K01 not processed yet
+    _processed(k['id'])
     assert client.post(K + '/').get_json()['tag'] == 'K02'
     lst = client.get(K + '/').get_json()['knives']
     assert [x['tag'] for x in lst] == ['K02', 'K01']
@@ -38,7 +45,9 @@ def test_bad_status_filter_is_400(client, mailer):
 def test_open_draft_cap(client, mailer):
     signed_in(client, mailer)
     for _ in range(20):
-        assert client.post(K + '/').status_code == 201
+        r = client.post(K + '/')
+        assert r.status_code == 201
+        _processed(r.get_json()['id'])
     r = client.post(K + '/')
     assert r.status_code == 429
     assert r.get_json() == {'error': 'you have 20 open drafts — finish or discard some first'}
