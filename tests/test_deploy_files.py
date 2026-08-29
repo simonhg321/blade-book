@@ -25,6 +25,14 @@ def test_apache_conf_proxies_only_the_api_prefix():
     assert 'ProxyPass        /blade-book/api/  http://127.0.0.1:5004/blade-book/api/' in s
     assert 'Alias /blade-book /var/www/html/blade-book' in s
     assert '5003' not in s
+
+
+def test_apache_confs_cache_control():
+    # bundles regenerate ~30 s after a save; stale-cached HTML looks like a bug
+    for conf in ('deploy/apache-blade-book.conf', 'deploy/apache-blade-book.com.conf'):
+        s = _read(conf)
+        assert 'Cache-Control "no-cache"' in s, conf
+        assert 'max-age=300' in s, conf
     for f in ('deploy/apache-blade-book.conf', 'deploy/apache-blade-book.com.conf'):
         conf = _read(f)
         assert r'\.tmp(/|$)' in conf, f     # stranded build tmp dirs never served
