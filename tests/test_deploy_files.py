@@ -72,6 +72,15 @@ def test_install_has_purge_cron():
     assert 'scripts/purge_drafts.py' in sh and 'purge.log' in sh
 
 
+def test_install_has_publish_sweep_cron():
+    sh = open(os.path.join(ROOT, 'scripts', 'install.sh')).read()
+    assert 'scripts/publish_sweep.py' in sh and 'publish.log' in sh
+
+
+def test_runbook_move_lists_publish_sweep():
+    assert 'scripts/publish_sweep.py' in _read('docs/RUNBOOK-move.md')
+
+
 def test_install_ships_the_whole_html_tree():
     sh = open(os.path.join(ROOT, 'scripts', 'install.sh')).read()
     assert 'cp -r "$CODE/html/." /var/www/html/blade-book/' in sh

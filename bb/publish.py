@@ -10,9 +10,11 @@ import hashlib
 import html as html_mod
 import io
 import json
+import logging
 import os
 import re
 import shutil
+import threading
 from datetime import datetime, timezone
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps, UnidentifiedImageError
@@ -360,3 +362,81 @@ def build_user(con, user, store):
         # no-op after a successful os.replace (tmp no longer exists); on any
         # raise above, removes the partial bundle so it never gets served
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+log = logging.getLogger('blade-book.publish')
+
+DEBOUNCE_S = float(os.environ.get('BLADEBOOK_PUBLISH_DEBOUNCE_S', '30'))
+
+_timers = {}
+_timers_lock = threading.Lock()
+
+
+def _store_factory():
+    from bb import store as store_mod
+    return store_mod.from_paths()
+
+
+def _build_one(con, user, store):
+    """Build with compare-and-clear: read the stamp first so a save landing
+    mid-build keeps the owner dirty for the next pass."""
+    stamp = user.get('publish_dirty_at')
+    build_user(con, user, store)
+    if stamp:
+        db.clear_publish_dirty_if(con, user['id'], stamp)
+
+
+def _fire(owner_id):
+    with _timers_lock:
+        _timers.pop(owner_id, None)
+    try:
+        con = db.connect()
+        try:
+            user = db.get_user(con, owner_id)
+            if user is None or user['publish_dirty_at'] is None:
+                return
+            _build_one(con, user, _store_factory())
+        finally:
+            con.close()
+    except Exception:  # noqa: BLE001 — a failed build stays dirty for the sweep
+        log.exception('debounced publish failed for user %s', owner_id)
+
+
+def schedule(owner_id):
+    """Called after any save that changes the public surface: stamp dirty and
+    (re)start this process's 30 s timer. The cron sweep is the backstop for a
+    restart that eats a pending timer."""
+    con = db.connect()
+    try:
+        db.mark_publish_dirty(con, owner_id)
+    finally:
+        con.close()
+    with _timers_lock:
+        t = _timers.pop(owner_id, None)
+        if t:
+            t.cancel()
+        t = threading.Timer(DEBOUNCE_S, _fire, args=(owner_id,))
+        t.daemon = True
+        _timers[owner_id] = t
+        t.start()
+
+
+def run_due(quiet_s=None):
+    """Build every dirty owner whose last save is at least quiet_s old.
+    Returns the number built. One bad user never blocks the rest."""
+    if quiet_s is None:
+        quiet_s = DEBOUNCE_S
+    built = 0
+    con = db.connect()
+    try:
+        users = db.dirty_owners(con, quiet_s=quiet_s)
+        store = _store_factory()
+        for user in users:
+            try:
+                _build_one(con, user, store)
+                built += 1
+            except Exception:  # noqa: BLE001
+                log.exception('publish sweep failed for @%s', user['handle'])
+    finally:
+        con.close()
+    return built
