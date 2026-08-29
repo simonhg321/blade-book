@@ -149,3 +149,8 @@ def test_export_hero_no_photos_or_bad_bytes(tmp_path):
                                               'photos': []}, 'pub', str(tmp_path)) == (None, None)
     store = MemStore({'1/1/1.jpg': b'not an image'})
     assert publish.export_hero(store, _hero_knife(), 'pub', str(tmp_path)) == (None, None)
+
+
+def test_export_hero_missing_store_key(tmp_path):
+    # photo row references a store key the store doesn't actually have
+    assert publish.export_hero(MemStore({}), _hero_knife(), 'pub', str(tmp_path)) == (None, None)

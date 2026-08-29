@@ -6,11 +6,18 @@ PUBLIC_FIELDS below — the whitelist is the security boundary, and
 tests/test_publish_leak.py proves nothing in db.PRIVATE_COLUMNS survives it.
 The DB never sees public traffic; Apache serves the files.
 """
+import hashlib
+import html as html_mod
 import io
+import json
 import os
 import re
+import shutil
+from datetime import datetime, timezone
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps, UnidentifiedImageError
+
+from bb import auth, db, paths
 
 SAFE_HANDLE = re.compile(r'[a-z0-9-]{3,24}')
 
@@ -122,3 +129,222 @@ def export_hero(store, k, handle, img_dir):
     thumb.thumbnail((THUMB_EDGE, THUMB_EDGE))
     thumb.save(os.path.join(img_dir, out_t), 'JPEG', quality=80, optimize=True)
     return out, out_t
+
+
+def bundle_dir(handle):
+    if not SAFE_HANDLE.fullmatch(handle or ''):
+        raise ValueError(f'unsafe handle {handle!r}')
+    return os.path.join(paths.WWW_DIR, f'@{handle}')
+
+
+def _public_base():
+    return auth.base_url() + paths.URL_PREFIX
+
+
+def _gate_snippet(prefix):
+    """Client-side key gate (crkinv port, see billboard/crkinv/export.py).
+    Lightweight on purpose: keeps drive-by scrapers and strangers out while
+    staying a static page. Keys are checked as lowercase sha-256 against
+    keys.json; a good key is remembered in localStorage. NOTE: fixed strings
+    only — never interpolate user data into this snippet."""
+    return '''<style>
+  #gate { position:fixed; inset:0; background:var(--cream, #f6f1e7); z-index:99;
+          display:flex; align-items:center; justify-content:center; padding:20px; }
+  #gate .box { background:#fff; border:2px solid #141210; border-radius:14px;
+               padding:22px 24px; max-width:360px; width:100%; text-align:center;
+               font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
+  #gate h2 { margin:0 0 6px; font-size:1.05rem; color:#b8452c; border:none;
+             text-transform:none; letter-spacing:0; padding:0; }
+  #gate p { color:#666; font-size:.85rem; margin:0 0 12px; }
+  #gate input { width:100%; padding:10px 12px; font-size:1rem; border:2px solid #141210;
+                border-radius:10px; margin-bottom:10px; text-align:center; }
+  #gate button { background:#b8452c; color:#fff; border:none; border-radius:10px;
+                 padding:10px 22px; font-weight:800; font-size:.95rem; cursor:pointer; }
+  #gate .bad { color:#b8452c; font-weight:700; font-size:.85rem; min-height:1.2em; margin-top:8px; }
+</style>
+<script>
+(function () {
+  fetch('%PREFIX%keys.json', { cache: 'no-store' })
+    .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+    .then(function (g) {
+      function hash(s) {
+        return crypto.subtle.digest('SHA-256', new TextEncoder().encode(
+          s.toLowerCase().trim())).then(function (b) {
+            return Array.prototype.map.call(new Uint8Array(b), function (x) {
+              return x.toString(16).padStart(2, '0'); }).join(''); });
+      }
+      function pass(h) { return g.hashes.indexOf(h) >= 0; }
+      hash(localStorage.getItem('bb_key') || '').then(function (h) {
+        if (pass(h)) return;
+        var ov = document.createElement('div'); ov.id = 'gate';
+        ov.innerHTML = '<div class="box"><h2>Key holders only</h2>' +
+          '<p>This register is for friends &amp; fellow collectors. ' +
+          'Enter your key — you only do this once.</p>' +
+          '<input id="gkey" placeholder="your key" autocomplete="off">' +
+          '<button id="ggo">unlock</button><div class="bad" id="gbad"></div></div>';
+        document.body.appendChild(ov);
+        function attempt() {
+          var v = document.getElementById('gkey').value;
+          hash(v).then(function (h2) {
+            if (pass(h2)) { localStorage.setItem('bb_key', v); ov.remove(); }
+            else { document.getElementById('gbad').textContent = 'not a current key'; }
+          });
+        }
+        document.getElementById('ggo').addEventListener('click', attempt);
+        document.getElementById('gkey').addEventListener('keydown',
+          function (e) { if (e.key === 'Enter') attempt(); });
+      });
+    }).catch(function () {});
+})();
+</script>'''.replace('%PREFIX%', prefix)
+
+
+_STYLE = '''
+  body { background:var(--cream,#f6f1e7); color:var(--ink,#141210); margin:0;
+         font-family:'DM Sans',-apple-system,sans-serif; }
+  main { max-width:720px; margin:0 auto; padding:20px 16px 60px; line-height:1.5; }
+  h1 { font-family:'Bebas Neue',Impact,sans-serif; font-weight:400;
+       letter-spacing:.06em; font-size:2.6rem; margin:.2rem 0; }
+  .tag { color:var(--accent,#b8452c); font-weight:800; letter-spacing:.08em; }
+  img.hero { width:100%; border-radius:14px; border:2px solid var(--ink,#141210); margin:10px 0; }
+  table { border-collapse:collapse; width:100%; margin:14px 0; }
+  th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line,#e2d9c8);
+           vertical-align:top; }
+  th { width:150px; font-size:.72rem; letter-spacing:.08em; text-transform:uppercase; color:#555; }
+  .sale { display:inline-block; background:var(--accent,#b8452c); color:#fff; font-weight:800;
+          border-radius:10px; padding:6px 14px; margin:8px 0; }
+  .card { background:#fff; border:1px solid var(--line,#e2d9c8); border-radius:14px;
+          padding:14px; margin:12px 0; }
+  .card img { width:100%; border-radius:10px; }
+  a { color:var(--accent,#b8452c); font-weight:700; text-decoration:none; }
+  footer { margin-top:26px; font-size:.75rem; color:#888; }
+'''
+
+
+def _head(title, desc, og_image, noindex):
+    e = html_mod.escape
+    robots = '<meta name="robots" content="noindex, nofollow">\n' if noindex else ''
+    og_img = f'<meta property="og:image" content="{e(og_image)}">\n' if og_image else ''
+    return (f'<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
+            f'<meta name="viewport" content="width=device-width, initial-scale=1">\n{robots}'
+            f'<title>{e(title)}</title>\n'
+            f'<meta property="og:title" content="{e(title)}">\n'
+            f'<meta property="og:description" content="{e(desc)}">\n'
+            f'{og_img}<meta property="og:type" content="website">\n'
+            f'<link rel="stylesheet" href="/blade-book/vibe.css">\n'
+            f'<style>{_STYLE}</style>\n</head>\n<body>\n<main>\n')
+
+
+def _knife_page(row, handle, gated):
+    e = html_mod.escape
+    name = display_name(row)
+    title_bits = [name] + ([row['special_edition']] if row.get('special_edition') else [])
+    title = ' · '.join(title_bits) + f' — @{handle}'
+    desc_bits = [b for b in (
+        row.get('blade_steel'),
+        ' '.join(x for x in (row.get('damascus_smith'), row.get('damascus_pattern')) if x) or None,
+        row.get('inlay_material'),
+        f"born {row['born']}" if row.get('born') else None) if b]
+    desc = '' if gated else (' · '.join(desc_bits) or 'From a private register on blade-book.')
+    og_image = (f"{_public_base()}/@{handle}/img/{row['img']}" if row.get('img') and not gated else '')
+    out = _head(title, desc, og_image, noindex=gated)
+    out += f'<p class="tag">{e(row["tag"])}</p>\n<h1>{e(name)}</h1>\n'
+    if row.get('img'):
+        out += f'<img class="hero" src="../img/{e(row["img"])}" alt="{e(name)}">\n'
+    if row.get('for_sale'):
+        price = f" · ${row['asking_price']:g}" if row.get('asking_price') else ''
+        out += f'<p class="sale">FOR SALE{price}</p>\n'
+        if row.get('seller_note'):
+            out += f'<p>{e(row["seller_note"])}</p>\n'
+    elif row.get('for_trade'):
+        out += '<p class="sale">FOR TRADE</p>\n'
+    specs = []
+
+    def spec(label, value):
+        if value:
+            specs.append(f'<tr><th>{e(label)}</th><td>{e(str(value))}</td></tr>')
+
+    spec('Born on', row.get('born'))
+    spec('Blade', row.get('blade_shape'))
+    spec('Steel', row.get('blade_steel'))
+    spec('Damascus', ' '.join(x for x in (row.get('damascus_smith'),
+                                          row.get('damascus_pattern')) if x))
+    spec('Treatment', row.get('handle_treatment'))
+    spec('Inlay', row.get('inlay_material'))
+    spec('Graphic / edition', row.get('graphic_name') or row.get('special_edition'))
+    spec('Variant', row.get('variant'))
+    out += f'<table>{"".join(specs)}</table>\n'
+    if row.get('notes_public'):
+        out += f'<div class="card">{e(row["notes_public"])}</div>\n'
+    out += (f'<p><a href="../">← @{e(handle)}’s register</a></p>\n'
+            '<footer>Recorded on <a href="/blade-book/">blade-book</a> — '
+            'a register for knife collectors.</footer>\n</main>\n')
+    out += _gate_snippet('../') if gated else ''
+    return out + '</body>\n</html>\n'
+
+
+def _index_html(rows, user, gated):
+    e = html_mod.escape
+    handle = user['handle']
+    n = len(rows)
+    title = f'@{handle} — blade-book register'
+    desc = '' if gated else f'{n} knife{"s" if n != 1 else ""} in a collector’s public register.'
+    out = _head(title, desc, '', noindex=gated)
+    out += (f'<p class="tag">BLADE-BOOK REGISTER</p>\n<h1>@{e(handle)}</h1>\n'
+            f'<p>{n} knife{"s" if n != 1 else ""}</p>\n')
+    for row in rows:
+        name = display_name(row)
+        badge = ''
+        if row.get('for_sale'):
+            price = f" · ${row['asking_price']:g}" if row.get('asking_price') else ''
+            badge = f'<p class="sale">FOR SALE{price}</p>'
+        elif row.get('for_trade'):
+            badge = '<p class="sale">FOR TRADE</p>'
+        img = (f'<img src="img/{e(row["img_t"])}" alt="{e(name)}" loading="lazy">'
+               if row.get('img_t') else '')
+        born = f' — born {e(row["born"])}' if row.get('born') else ''
+        out += (f'<div class="card"><a href="{e(row["tag"])}/">{img}'
+                f'<p><span class="tag">{e(row["tag"])}</span> {e(name)}{born}</p></a>{badge}</div>\n')
+    out += ('<footer>Kept on <a href="/blade-book/">blade-book</a> — '
+            'a register for knife collectors.</footer>\n</main>\n')
+    out += _gate_snippet('') if gated else ''
+    return out + '</body>\n</html>\n'
+
+
+def build_user(con, user, store):
+    """Regenerate one collector's public bundle. Returns the knife count, or
+    -1 when the page was removed (profile_private). Build lands in a temp dir
+    first; the swap is delete-then-rename, so a half-built bundle never serves."""
+    handle = user['handle']
+    dest = bundle_dir(handle)               # validates the handle
+    if user.get('profile_private'):
+        shutil.rmtree(dest, ignore_errors=True)
+        return -1
+    tmp = dest + '.tmp'
+    shutil.rmtree(tmp, ignore_errors=True)
+    img_dir = os.path.join(tmp, 'img')
+    os.makedirs(img_dir, exist_ok=True)
+    rows = []
+    for k in db.public_knives(con, user['id']):
+        row = public_row(k, user)
+        hero, thumb = export_hero(store, k, handle, img_dir)
+        row['img'], row['img_t'] = hero, thumb
+        rows.append(row)
+    key = (user.get('public_key') or '').strip()
+    gated = bool(key)
+    if gated:
+        with open(os.path.join(tmp, 'keys.json'), 'w') as f:
+            json.dump({'hashes': [hashlib.sha256(key.lower().encode()).hexdigest()]}, f)
+    for row in rows:
+        page_dir = os.path.join(tmp, row['tag'])
+        os.makedirs(page_dir)
+        with open(os.path.join(page_dir, 'index.html'), 'w') as f:
+            f.write(_knife_page(row, handle, gated))
+    with open(os.path.join(tmp, 'index.html'), 'w') as f:
+        f.write(_index_html(rows, user, gated))
+    with open(os.path.join(tmp, 'knives.json'), 'w') as f:
+        json.dump({'generated': datetime.now(timezone.utc).isoformat(),
+                   'handle': handle, 'count': len(rows), 'knives': rows}, f, indent=1)
+    shutil.rmtree(dest, ignore_errors=True)
+    os.replace(tmp, dest)
+    return len(rows)
