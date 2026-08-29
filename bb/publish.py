@@ -81,7 +81,7 @@ def display_name(row):
 
 
 DISPLAY_EDGE = 1600
-THUMB_EDGE = 320
+THUMB_EDGE = 800
 
 
 def _watermark(img, handle):
@@ -326,8 +326,13 @@ def _index_html(rows, user, gated):
             badge = f'<p class="sale">FOR SALE{price}</p>'
         elif row.get('for_trade'):
             badge = '<p class="sale">FOR TRADE</p>'
-        img = (f'<img src="img/{e(row["img_t"])}" alt="{e(name)}" loading="lazy">'
-               if row.get('img_t') else '')
+        img = ''
+        if row.get('img_t'):
+            srcset = f'img/{e(row["img_t"])} {THUMB_EDGE}w'
+            if row.get('img'):
+                srcset += f', img/{e(row["img"])} {DISPLAY_EDGE}w'
+            img = (f'<img src="img/{e(row["img_t"])}" srcset="{srcset}" '
+                   f'sizes="(max-width: 600px) 92vw, 528px" alt="{e(name)}" loading="lazy">')
         born = f' — born {e(row["born"])}' if row.get('born') else ''
         out += (f'<div class="card"><a href="{e(row["tag"])}/">{img}'
                 f'<p><span class="tag">{e(row["tag"])}</span> {e(name)}{born}</p></a>{badge}</div>\n')

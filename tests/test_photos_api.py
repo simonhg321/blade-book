@@ -44,7 +44,7 @@ def test_thumb_and_original_endpoints(client, mailer):
     _up(client, kid, 2, data, name='shot.JPG')
     t = client.get(f'{K}/{kid}/photos/2/thumb')
     assert t.status_code == 200 and t.mimetype == 'image/jpeg'
-    assert max(Image.open(io.BytesIO(t.data)).size) == 400
+    assert max(Image.open(io.BytesIO(t.data)).size) == photos.THUMB_EDGE
     assert 'private' in t.headers.get('Cache-Control', '')
     o = client.get(f'{K}/{kid}/photos/2/original')
     assert o.status_code == 200 and o.mimetype == 'image/jpeg' and o.data == data

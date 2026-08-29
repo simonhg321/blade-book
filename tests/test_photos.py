@@ -40,7 +40,7 @@ def test_ingest_jpeg_gives_sha_dims_and_thumb():
     assert r.sha256 == hashlib.sha256(data).hexdigest()
     assert (r.width, r.height) == (1200, 900)
     t = Image.open(io.BytesIO(r.thumb))
-    assert t.format == 'JPEG' and max(t.size) == 400
+    assert t.format == 'JPEG' and max(t.size) == photos.THUMB_EDGE
 
 
 def test_ingest_thumb_respects_exif_orientation():
@@ -94,4 +94,4 @@ def test_large_jpeg_decodes_via_draft_mode():
     r = photos.ingest(data, 'big.jpg')
     assert (r.width, r.height) == (8000, 6000)  # original dims, captured before draft()
     t = Image.open(io.BytesIO(r.thumb))
-    assert t.format == 'JPEG' and max(t.size) == 400
+    assert t.format == 'JPEG' and max(t.size) == photos.THUMB_EDGE

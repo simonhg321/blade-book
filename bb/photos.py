@@ -19,7 +19,7 @@ MAX_PHOTO_BYTES = 20 * 1024 * 1024
 MAX_PIXELS = 80_000_000  # JPEG/MPO only — decoded cheaply via draft mode, so a bigger
                           # cap is safe; above any phone (48 MP) or DSLR (61 MP)
 MAX_PIXELS_NON_JPEG = 30_000_000  # everything else is fully decoded — keep the cap tight
-THUMB_EDGE = 400
+THUMB_EDGE = 800
 _CHEAP_FORMATS = ('JPEG', 'MPO')  # Pillow can decode these at reduced scale via draft()
 # NOTE: 'MPO' is deliberately absent here — Pillow never registers a separate 'MPO'
 # opener (Image.OPEN has no 'MPO' key; passing it to formats= raises KeyError). MPO
