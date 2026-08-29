@@ -3,6 +3,8 @@ import hashlib
 import json
 import os
 
+import pytest
+
 from bb import db, paths, publish, store as store_mod
 
 from tests.test_publish import _jpeg_with_exif  # reuse the EXIF fixture
@@ -66,16 +68,39 @@ def test_key_gate_publishes_hashes_only(con, tmp_path):
     assert 'keys.json' in idx and 'Ozzy' not in idx
     page = open(os.path.join(d, k['tag'], 'index.html')).read()
     assert 'noindex' in page
+    # gated: chat-preview unfurls must not leak the model/edition via <head>
+    head = page.split('</head>', 1)[0]
+    assert 'Sebenza' not in head
+
+
+def test_build_failure_leaves_no_stranded_tmp(con, tmp_path, monkeypatch):
+    user, st, _ = _setup(con, tmp_path)
+
+    def boom(*a, **kw):
+        raise RuntimeError('simulated build failure')
+
+    monkeypatch.setattr(publish, 'export_hero', boom)
+    with pytest.raises(RuntimeError):
+        publish.build_user(con, user, st)
+    d = publish.bundle_dir('bundle-guy')
+    assert not os.path.exists(d)
+    assert not os.path.exists(d + '.tmp')
 
 
 def test_profile_private_removes_bundle(con, tmp_path):
     user, st, _ = _setup(con, tmp_path)
     publish.build_user(con, user, st)
     assert os.path.isdir(publish.bundle_dir('bundle-guy'))
+    d = publish.bundle_dir('bundle-guy')
+    tmp = d + '.tmp'                        # a stranded tmp from a prior crashed build
+    os.makedirs(tmp, exist_ok=True)
+    with open(os.path.join(tmp, 'index.html'), 'w') as f:
+        f.write('stale partial build')
     con.execute('UPDATE users SET profile_private = 1 WHERE id = ?', (user['id'],))
     con.commit()
     assert publish.build_user(con, db.get_user(con, user['id']), st) == -1
     assert not os.path.exists(publish.bundle_dir('bundle-guy'))
+    assert not os.path.exists(tmp)
 
 
 def test_bad_handle_refused(con, tmp_path):

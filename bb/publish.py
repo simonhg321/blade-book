@@ -238,8 +238,13 @@ def _head(title, desc, og_image, noindex):
 def _knife_page(row, handle, gated):
     e = html_mod.escape
     name = display_name(row)
-    title_bits = [name] + ([row['special_edition']] if row.get('special_edition') else [])
-    title = ' · '.join(title_bits) + f' — @{handle}'
+    if gated:
+        # chat-preview link unfurls are the accidental-leak channel the key
+        # gate exists for — keep the model/edition out of <title>/og:title.
+        title = f'{row["tag"]} — blade-book'
+    else:
+        title_bits = [name] + ([row['special_edition']] if row.get('special_edition') else [])
+        title = ' · '.join(title_bits) + f' — @{handle}'
     desc_bits = [b for b in (
         row.get('blade_steel'),
         ' '.join(x for x in (row.get('damascus_smith'), row.get('damascus_pattern')) if x) or None,
@@ -314,37 +319,44 @@ def _index_html(rows, user, gated):
 def build_user(con, user, store):
     """Regenerate one collector's public bundle. Returns the knife count, or
     -1 when the page was removed (profile_private). Build lands in a temp dir
-    first; the swap is delete-then-rename, so a half-built bundle never serves."""
+    first; the swap is delete-then-rename, and the tmp dir is removed on
+    failure, so a half-built bundle never serves."""
     handle = user['handle']
     dest = bundle_dir(handle)               # validates the handle
+    tmp = dest + '.tmp'
     if user.get('profile_private'):
         shutil.rmtree(dest, ignore_errors=True)
+        shutil.rmtree(tmp, ignore_errors=True)
         return -1
-    tmp = dest + '.tmp'
     shutil.rmtree(tmp, ignore_errors=True)
-    img_dir = os.path.join(tmp, 'img')
-    os.makedirs(img_dir, exist_ok=True)
-    rows = []
-    for k in db.public_knives(con, user['id']):
-        row = public_row(k, user)
-        hero, thumb = export_hero(store, k, handle, img_dir)
-        row['img'], row['img_t'] = hero, thumb
-        rows.append(row)
-    key = (user.get('public_key') or '').strip()
-    gated = bool(key)
-    if gated:
-        with open(os.path.join(tmp, 'keys.json'), 'w') as f:
-            json.dump({'hashes': [hashlib.sha256(key.lower().encode()).hexdigest()]}, f)
-    for row in rows:
-        page_dir = os.path.join(tmp, row['tag'])
-        os.makedirs(page_dir)
-        with open(os.path.join(page_dir, 'index.html'), 'w') as f:
-            f.write(_knife_page(row, handle, gated))
-    with open(os.path.join(tmp, 'index.html'), 'w') as f:
-        f.write(_index_html(rows, user, gated))
-    with open(os.path.join(tmp, 'knives.json'), 'w') as f:
-        json.dump({'generated': datetime.now(timezone.utc).isoformat(),
-                   'handle': handle, 'count': len(rows), 'knives': rows}, f, indent=1)
-    shutil.rmtree(dest, ignore_errors=True)
-    os.replace(tmp, dest)
-    return len(rows)
+    try:
+        img_dir = os.path.join(tmp, 'img')
+        os.makedirs(img_dir, exist_ok=True)
+        rows = []
+        for k in db.public_knives(con, user['id']):
+            row = public_row(k, user)
+            hero, thumb = export_hero(store, k, handle, img_dir)
+            row['img'], row['img_t'] = hero, thumb
+            rows.append(row)
+        key = (user.get('public_key') or '').strip()
+        gated = bool(key)
+        if gated:
+            with open(os.path.join(tmp, 'keys.json'), 'w') as f:
+                json.dump({'hashes': [hashlib.sha256(key.lower().encode()).hexdigest()]}, f)
+        for row in rows:
+            page_dir = os.path.join(tmp, row['tag'])
+            os.makedirs(page_dir)
+            with open(os.path.join(page_dir, 'index.html'), 'w') as f:
+                f.write(_knife_page(row, handle, gated))
+        with open(os.path.join(tmp, 'index.html'), 'w') as f:
+            f.write(_index_html(rows, user, gated))
+        with open(os.path.join(tmp, 'knives.json'), 'w') as f:
+            json.dump({'generated': datetime.now(timezone.utc).isoformat(),
+                       'handle': handle, 'count': len(rows), 'knives': rows}, f, indent=1)
+        shutil.rmtree(dest, ignore_errors=True)
+        os.replace(tmp, dest)
+        return len(rows)
+    finally:
+        # no-op after a successful os.replace (tmp no longer exists); on any
+        # raise above, removes the partial bundle so it never gets served
+        shutil.rmtree(tmp, ignore_errors=True)
