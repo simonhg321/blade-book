@@ -23,4 +23,8 @@ supervisorctl reread && supervisorctl update && supervisorctl restart blade_book
   echo '30 3 * * * bash /home/shg/blade-book/scripts/backup.sh >> /var/log/blade-book/backup.log 2>&1'; \
   echo '15 4 * * * cd /home/shg/blade-book && python3 scripts/purge_drafts.py >> /var/log/blade-book/purge.log 2>&1'; \
   echo '*/5 * * * * /usr/bin/python3 /home/shg/blade-book/scripts/publish_sweep.py >> /var/log/blade-book/publish.log 2>&1' ) | crontab -u shg -
+# one-time first-publish: this script runs as root (sudo), so drop privileges
+# explicitly — a bundle built as root can never be rebuilt by the app (which
+# runs as shg) again, permanently breaking that user's publish.
+sudo -u shg /usr/bin/python3 "$CODE/scripts/publish_sweep.py" --all
 sleep 1; curl -s http://127.0.0.1:5004/blade-book/api/healthz; echo

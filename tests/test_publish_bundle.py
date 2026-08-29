@@ -2,6 +2,8 @@
 import hashlib
 import json
 import os
+import threading
+import time
 
 import pytest
 
@@ -85,6 +87,51 @@ def test_build_failure_leaves_no_stranded_tmp(con, tmp_path, monkeypatch):
     d = publish.bundle_dir('bundle-guy')
     assert not os.path.exists(d)
     assert not os.path.exists(d + '.tmp')
+
+
+def test_concurrent_builds_are_serialized(con, tmp_path, monkeypatch):
+    """Two overlapping build_user() calls for the same handle (two gunicorn
+    workers' debounce timers, or a timer racing the cron sweep) must never
+    interleave — the flock in build_user (bb/publish.py) serializes them.
+    Without it this is the reviewer's repro: a bundle can land with missing
+    img/ files while both builders think they finished cleanly."""
+    user, st, k = _setup(con, tmp_path)
+    real_export = publish.export_hero
+
+    def slow_export(store, kk, handle, img_dir):
+        time.sleep(0.15)
+        return real_export(store, kk, handle, img_dir)
+
+    monkeypatch.setattr(publish, 'export_hero', slow_export)
+
+    results = []
+
+    def run():
+        c = db.connect()
+        try:
+            u = db.get_user(c, user['id'])
+            results.append(publish.build_user(c, u, st))
+        finally:
+            c.close()
+
+    t1 = threading.Thread(target=run)
+    t2 = threading.Thread(target=run)
+    t1.start()
+    t2.start()
+    t1.join()
+    t2.join()
+
+    assert results == [1, 1]
+    d = publish.bundle_dir('bundle-guy')
+    assert os.path.exists(os.path.join(d, 'index.html'))
+    data = json.load(open(os.path.join(d, 'knives.json')))
+    assert data['count'] == 1
+    for row in data['knives']:
+        for img_field in ('img', 'img_t'):
+            if row.get(img_field):
+                assert os.path.exists(os.path.join(d, 'img', row[img_field])), \
+                    f'{img_field} referenced by knives.json missing on disk: {row}'
+    assert os.path.exists(os.path.join(d, k['tag'], 'index.html'))
 
 
 def test_profile_private_removes_bundle(con, tmp_path):

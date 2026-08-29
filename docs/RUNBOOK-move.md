@@ -12,7 +12,11 @@ supervisor program; nothing imports from billboard.
    `rsync -a /var/www/html/blade-book/ new:/var/www/html/blade-book/`
 4. On new: `sudo bash /home/shg/blade-book/scripts/install.sh` — but with the
    Apache include placed in a `blade-book.com` vhost instead of the billboard
-   ones (certbot for TLS).
+   ones (certbot for TLS). install.sh already runs the one-time
+   `publish_sweep.py --all` as shg (via `sudo -u shg`) — but after any manual
+   restore, always run `python3 scripts/publish_sweep.py --all` as shg
+   yourself too — never as root: a root-owned bundle can never be rebuilt by
+   the app again, permanently breaking that user's publish.
 5. `curl http://127.0.0.1:5004/blade-book/api/healthz` → ok.
 6. DNS: `blade-book.com` → new box. Leave the stark `/blade-book/` alias as a
    redirect for 30 days, then remove the include + supervisor conf on stark.

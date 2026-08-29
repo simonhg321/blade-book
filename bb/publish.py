@@ -6,6 +6,7 @@ PUBLIC_FIELDS below — the whitelist is the security boundary, and
 tests/test_publish_leak.py proves nothing in db.PRIVATE_COLUMNS survives it.
 The DB never sees public traffic; Apache serves the files.
 """
+import fcntl
 import hashlib
 import html as html_mod
 import io
@@ -318,50 +319,67 @@ def _index_html(rows, user, gated):
     return out + '</body>\n</html>\n'
 
 
+def _lock_path(handle):
+    lock_dir = os.path.join(paths.DATA_DIR, 'publish-locks')
+    os.makedirs(lock_dir, exist_ok=True)
+    return os.path.join(lock_dir, f'{handle}.lock')
+
+
 def build_user(con, user, store):
     """Regenerate one collector's public bundle. Returns the knife count, or
     -1 when the page was removed (profile_private). Build lands in a temp dir
     first; the swap is delete-then-rename, and the tmp dir is removed on
-    failure, so a half-built bundle never serves."""
+    failure, so a half-built bundle never serves. Builds for one user are
+    serialized end-to-end via an flock in DATA_DIR/publish-locks (never
+    WWW_DIR — Apache must never be able to serve the lock file) — two gunicorn
+    workers' debounce timers and the cron sweep can all try to build the same
+    handle at once, and without this lock their overlapping tmp/rmtree/replace
+    calls interleave into a corrupt or incomplete bundle."""
     handle = user['handle']
     dest = bundle_dir(handle)               # validates the handle
     tmp = dest + '.tmp'
-    if user.get('profile_private'):
-        shutil.rmtree(dest, ignore_errors=True)
-        shutil.rmtree(tmp, ignore_errors=True)
-        return -1
-    shutil.rmtree(tmp, ignore_errors=True)
+    lockf = open(_lock_path(handle), 'w')
     try:
-        img_dir = os.path.join(tmp, 'img')
-        os.makedirs(img_dir, exist_ok=True)
-        rows = []
-        for k in db.public_knives(con, user['id']):
-            row = public_row(k, user)
-            hero, thumb = export_hero(store, k, handle, img_dir)
-            row['img'], row['img_t'] = hero, thumb
-            rows.append(row)
-        key = (user.get('public_key') or '').strip()
-        gated = bool(key)
-        if gated:
-            with open(os.path.join(tmp, 'keys.json'), 'w') as f:
-                json.dump({'hashes': [hashlib.sha256(key.lower().encode()).hexdigest()]}, f)
-        for row in rows:
-            page_dir = os.path.join(tmp, row['tag'])
-            os.makedirs(page_dir)
-            with open(os.path.join(page_dir, 'index.html'), 'w') as f:
-                f.write(_knife_page(row, handle, gated))
-        with open(os.path.join(tmp, 'index.html'), 'w') as f:
-            f.write(_index_html(rows, user, gated))
-        with open(os.path.join(tmp, 'knives.json'), 'w') as f:
-            json.dump({'generated': datetime.now(timezone.utc).isoformat(),
-                       'handle': handle, 'count': len(rows), 'knives': rows}, f, indent=1)
-        shutil.rmtree(dest, ignore_errors=True)
-        os.replace(tmp, dest)
-        return len(rows)
-    finally:
-        # no-op after a successful os.replace (tmp no longer exists); on any
-        # raise above, removes the partial bundle so it never gets served
+        fcntl.flock(lockf, fcntl.LOCK_EX)
+        if user.get('profile_private'):
+            shutil.rmtree(dest, ignore_errors=True)
+            shutil.rmtree(tmp, ignore_errors=True)
+            return -1
         shutil.rmtree(tmp, ignore_errors=True)
+        try:
+            img_dir = os.path.join(tmp, 'img')
+            os.makedirs(img_dir, exist_ok=True)
+            rows = []
+            for k in db.public_knives(con, user['id']):
+                row = public_row(k, user)
+                hero, thumb = export_hero(store, k, handle, img_dir)
+                row['img'], row['img_t'] = hero, thumb
+                rows.append(row)
+            key = (user.get('public_key') or '').strip()
+            gated = bool(key)
+            if gated:
+                with open(os.path.join(tmp, 'keys.json'), 'w') as f:
+                    json.dump({'hashes': [hashlib.sha256(key.lower().encode()).hexdigest()]}, f)
+            for row in rows:
+                page_dir = os.path.join(tmp, row['tag'])
+                os.makedirs(page_dir)
+                with open(os.path.join(page_dir, 'index.html'), 'w') as f:
+                    f.write(_knife_page(row, handle, gated))
+            with open(os.path.join(tmp, 'index.html'), 'w') as f:
+                f.write(_index_html(rows, user, gated))
+            with open(os.path.join(tmp, 'knives.json'), 'w') as f:
+                json.dump({'generated': datetime.now(timezone.utc).isoformat(),
+                           'handle': handle, 'count': len(rows), 'knives': rows}, f, indent=1)
+            shutil.rmtree(dest, ignore_errors=True)
+            os.replace(tmp, dest)
+            return len(rows)
+        finally:
+            # no-op after a successful os.replace (tmp no longer exists); on any
+            # raise above, removes the partial bundle so it never gets served
+            shutil.rmtree(tmp, ignore_errors=True)
+    finally:
+        fcntl.flock(lockf, fcntl.LOCK_UN)
+        lockf.close()
 
 
 log = logging.getLogger('blade-book.publish')

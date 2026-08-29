@@ -75,6 +75,10 @@ def test_install_has_purge_cron():
 def test_install_has_publish_sweep_cron():
     sh = open(os.path.join(ROOT, 'scripts', 'install.sh')).read()
     assert 'scripts/publish_sweep.py' in sh and 'publish.log' in sh
+    # first-publish for pre-existing users, run as shg (never root — a
+    # root-owned bundle can never be rebuilt by the app again)
+    assert 'publish_sweep.py" --all' in sh
+    assert 'sudo -u shg' in sh
 
 
 def test_runbook_move_lists_publish_sweep():
