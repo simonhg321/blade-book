@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 
 from bb import paths
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 SALE_STATUSES = ('keeping', 'for_trade', 'for_sale', 'consigned', 'sold')
 KNIFE_STATUSES = ('draft', 'live')
@@ -47,6 +47,8 @@ CREATE TABLE IF NOT EXISTS users (
   share_email_on_intro INTEGER NOT NULL DEFAULT 1,
   hide_born_day INTEGER NOT NULL DEFAULT 0,
   profile_private INTEGER NOT NULL DEFAULT 0,
+  public_key TEXT,
+  publish_dirty_at TEXT,
   session_secret TEXT NOT NULL DEFAULT '',
   last_tag_no INTEGER NOT NULL DEFAULT 0
 );
@@ -184,6 +186,8 @@ def now():
 MIGRATIONS = {
     3: ['ALTER TABLE knives ADD COLUMN card_text TEXT',
         'ALTER TABLE knives ADD COLUMN decode_note TEXT'],
+    4: ['ALTER TABLE users ADD COLUMN public_key TEXT',
+        'ALTER TABLE users ADD COLUMN publish_dirty_at TEXT'],
 }
 
 
@@ -532,6 +536,61 @@ def set_public(con, owner_id, knife_ids, is_public):
                     [1 if is_public else 0, now(), owner_id, *ids]).rowcount
     con.commit()
     return n
+
+
+SETTINGS_COLUMNS = frozenset({'hide_born_day', 'profile_private', 'public_key'})
+
+
+def set_user_settings(con, user_id, fields):
+    """Owner-facing account settings. Whitelisted columns only; returns the
+    fresh user row, or None for an unknown user. Values arrive validated by
+    the settings route."""
+    bad = set(fields) - SETTINGS_COLUMNS
+    if bad:
+        raise ValueError(f'not a setting: {sorted(bad)}')
+    if fields:
+        sets = ', '.join(f'{c} = ?' for c in fields)
+        con.execute(f'UPDATE users SET {sets} WHERE id = ?', (*fields.values(), user_id))
+        con.commit()
+    return get_user(con, user_id)
+
+
+# --- publish dirty flag (debounced rebuild of the public bundle) --------------
+
+def mark_publish_dirty(con, owner_id):
+    """Stamp 'this owner's public page needs a rebuild'. Every save re-stamps,
+    which is what makes the sweep's quiet window a debounce."""
+    con.execute('UPDATE users SET publish_dirty_at = ? WHERE id = ?', (now(), owner_id))
+    con.commit()
+
+
+def clear_publish_dirty_if(con, owner_id, stamp):
+    """Compare-and-clear: only clears if the stamp is the one the build read,
+    so a save that lands mid-build keeps the owner dirty. Returns whether cleared."""
+    ok = con.execute('UPDATE users SET publish_dirty_at = NULL '
+                     'WHERE id = ? AND publish_dirty_at = ?', (owner_id, stamp)).rowcount == 1
+    con.commit()
+    return ok
+
+
+def dirty_owners(con, quiet_s=30):
+    """Users whose page is dirty AND whose last save is at least quiet_s old."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(seconds=quiet_s)).isoformat()
+    return [_user_row(r) for r in con.execute(
+        'SELECT * FROM users WHERE publish_dirty_at IS NOT NULL AND publish_dirty_at <= ?',
+        (cutoff,))]
+
+
+def public_knives(con, owner_id):
+    """The knives that belong on the owner's PUBLIC page: live, is_public, and
+    not sold/consigned (pieces that left the collection or sit with a dealer
+    leave the public surface — crkinv rule). Oldest first (register order)."""
+    out = []
+    for r in con.execute(
+            "SELECT * FROM knives WHERE owner_id = ? AND status = 'live' AND is_public = 1 "
+            "AND sale_status NOT IN ('sold', 'consigned') ORDER BY id", (owner_id,)):
+        out.append(_knife_row(con, r))
+    return out
 
 
 def full_register(con, owner_id):

@@ -21,6 +21,14 @@ def env(tmp_path, monkeypatch):
 
 
 @pytest.fixture
+def con(env):
+    from bb import db
+    c = db.connect()
+    yield c
+    c.close()
+
+
+@pytest.fixture
 def mailer():
     from bb import mail
     return mail.FakeMailer()
