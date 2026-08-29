@@ -221,7 +221,23 @@ _STYLE = '''
   .card img { width:100%; border-radius:10px; }
   a { color:var(--accent,#b8452c); font-weight:700; text-decoration:none; }
   footer { margin-top:26px; font-size:.75rem; color:#888; }
+  footer .bbmark { vertical-align:-4px; margin-right:2px; }
 '''
+
+
+def _mark_svg(px):
+    """The blade-book mark (a register with a blade as its bookmark), inlined so
+    the bundle needs no extra request. Fixed literal colors, no data — safe to
+    interpolate into any page."""
+    return (f'<svg class="bbmark" viewBox="24 14 200 200" width="{int(px)}" aria-hidden="true">'
+            '<rect x="40" y="64" width="160" height="136" rx="12" fill="#1a1a1a"/>'
+            '<g fill="#faf6ee" opacity=".92">'
+            '<rect x="62" y="146" width="72" height="7" rx="3.5"/>'
+            '<rect x="62" y="163" width="56" height="7" rx="3.5"/>'
+            '<rect x="62" y="180" width="64" height="7" rx="3.5"/></g>'
+            '<path d="M143 30 L169 30 L169 142 L156 178 L143 150 Z" fill="#b8452c"/>'
+            '<path d="M156 172 L150 52" stroke="#a8adb0" stroke-width="2.5" '
+            'stroke-linecap="round" opacity=".65" fill="none"/></svg>')
 
 
 def _head(title, desc, og_image, noindex):
@@ -234,6 +250,8 @@ def _head(title, desc, og_image, noindex):
             f'<meta property="og:title" content="{e(title)}">\n'
             f'<meta property="og:description" content="{e(desc)}">\n'
             f'{og_img}<meta property="og:type" content="website">\n'
+            f'<link rel="icon" type="image/svg+xml" href="/blade-book/mark.svg">\n'
+            f'<link rel="apple-touch-icon" href="/blade-book/apple-touch-icon.png">\n'
             f'<link rel="stylesheet" href="/blade-book/vibe.css">\n'
             f'<style>{_STYLE}</style>\n</head>\n<body>\n<main>\n')
 
@@ -285,7 +303,7 @@ def _knife_page(row, handle, gated):
     if row.get('notes_public'):
         out += f'<div class="card">{e(row["notes_public"])}</div>\n'
     out += (f'<p><a href="../">← @{e(handle)}’s register</a></p>\n'
-            '<footer>Recorded on <a href="/blade-book/">blade-book</a> — '
+            f'<footer>{_mark_svg(16)} Recorded on <a href="/blade-book/">blade-book</a> — '
             'a register for knife collectors.</footer>\n</main>\n')
     out += _gate_snippet('../') if gated else ''
     return out + '</body>\n</html>\n'
@@ -298,7 +316,7 @@ def _index_html(rows, user, gated):
     title = f'@{handle} — blade-book register'
     desc = '' if gated else f'{n} knife{"s" if n != 1 else ""} in a collector’s public register.'
     out = _head(title, desc, '', noindex=gated)
-    out += (f'<p class="tag">BLADE-BOOK REGISTER</p>\n<h1>@{e(handle)}</h1>\n'
+    out += (f'{_mark_svg(46)}\n<p class="tag">BLADE-BOOK REGISTER</p>\n<h1>@{e(handle)}</h1>\n'
             f'<p>{n} knife{"s" if n != 1 else ""}</p>\n')
     for row in rows:
         name = display_name(row)

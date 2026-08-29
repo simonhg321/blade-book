@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="24 14 200 200">
+  <!-- blade-book mark: a register with a blade kept as its bookmark -->
+  <rect x="40" y="64" width="160" height="136" rx="12" fill="#1a1a1a"/>
+  <g fill="#faf6ee" opacity=".92">
+    <rect x="62" y="146" width="72" height="7" rx="3.5"/>
+    <rect x="62" y="163" width="56" height="7" rx="3.5"/>
+    <rect x="62" y="180" width="64" height="7" rx="3.5"/>
+  </g>
+  <path d="M143 30 L169 30 L169 142 L156 178 L143 150 Z" fill="#b8452c"/>
+  <path d="M156 172 L150 52" stroke="#a8adb0" stroke-width="2.5" stroke-linecap="round" opacity=".65" fill="none"/>
+</svg>

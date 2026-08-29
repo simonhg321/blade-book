@@ -152,6 +152,19 @@ def test_vibe_fonts_are_self_hosted():
                 assert 'fonts.googleapis.com' not in body and 'fonts.gstatic.com' not in body, f
 
 
+def test_brandmark_assets_and_wiring():
+    svg = open(os.path.join(ROOT, 'html', 'mark.svg')).read()
+    for needle in ('<svg', '#1a1a1a', '#b8452c', 'M143 30'):
+        assert needle in svg, needle
+    png = open(os.path.join(ROOT, 'html', 'apple-touch-icon.png'), 'rb').read()
+    assert png[:4] == b'\x89PNG' and len(png) > 1000
+    for rel in ('index.html', 'me/index.html', 'me/add/index.html'):
+        html = open(os.path.join(ROOT, 'html', rel)).read()
+        assert '/blade-book/mark.svg' in html, rel
+        assert '/blade-book/apple-touch-icon.png' in html, rel
+        assert 'bbmark' in html, rel
+
+
 def test_landing_links_the_register():
     html = open(os.path.join(ROOT, 'html', 'index.html')).read()
     for needle in ('href="/blade-book/vibe.css"', 'href="/blade-book/me/"', "/api/knives/?status=live'", 'id="regcount"'):
