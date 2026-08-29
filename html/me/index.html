@@ -45,6 +45,13 @@
   .danger{margin-top:12px;text-align:center}
   .empty{text-align:center;color:var(--muted);padding:40px 0}
   .empty a{display:inline-block;margin-top:12px}
+  #pubsec{margin-bottom:10px}
+  #pubsec summary{cursor:pointer;font-weight:700;padding:6px 0}
+  #pubsec p{margin:8px 0}
+  #pubsec label{display:block;margin:8px 0;font-size:.95rem;color:var(--ink)}
+  #pubsec input{margin-right:6px}
+  #pubsec button{margin-top:6px;margin-right:6px}
+  #pubsec .muted{margin-top:10px}
 </style>
 
 <header>
@@ -58,6 +65,17 @@
   <button id="bulkpriv" class="btn alt" type="button">make private</button>
   <button id="bulkclear" class="btn link" type="button">clear</button></div>
 <div id="status" aria-live="polite"></div>
+<details id="pubsec" class="card">
+  <summary>YOUR PUBLIC PAGE</summary>
+  <p><a id="publink" target="_blank" rel="noopener"></a></p>
+  <label><input type="checkbox" id="hideday"> hide birth <em>day</em> (show month + year only)</label>
+  <label><input type="checkbox" id="privprof"> hide the whole page</label>
+  <label>page key (optional — visitors need it once):
+    <input id="pagekey" placeholder="no key — page is open" autocomplete="off"></label>
+  <button id="savekey" class="btn" type="button">set key</button>
+  <button id="clearkey" class="btn" type="button" hidden>remove key</button>
+  <p class="muted">Changes appear on your public page about 30 seconds after your last save.</p>
+</details>
 <div id="drafts"></div>
 <div id="cards"></div>
 
@@ -395,8 +413,54 @@
     });
   }
 
+  function loadSettings() {
+    return api('/settings').then(function (res) {
+      if (!res.ok) { say('✗ could not load settings', true); return; }
+      var s = res.j;
+      $('publink').href = s.public_url;
+      $('publink').textContent = s.public_url;
+      $('hideday').checked = !!s.hide_born_day;
+      $('privprof').checked = !!s.profile_private;
+      $('clearkey').hidden = !s.has_key;
+      if (s.has_key) $('pagekey').placeholder = 'a key is set — enter a new one to change it';
+      else $('pagekey').placeholder = 'no key — page is open';
+    }).catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); });
+  }
+
+  $('hideday').addEventListener('change', function (ev) {
+    json('PATCH', '/settings', { hide_born_day: ev.target.checked }).then(function (res) {
+      if (!res.ok) { say('✗ ' + (res.j.error || 'could not update'), true); return loadSettings(); }
+      loadSettings();
+    }).catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); loadSettings(); });
+  });
+
+  $('privprof').addEventListener('change', function (ev) {
+    json('PATCH', '/settings', { profile_private: ev.target.checked }).then(function (res) {
+      if (!res.ok) { say('✗ ' + (res.j.error || 'could not update'), true); return loadSettings(); }
+      loadSettings();
+    }).catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); loadSettings(); });
+  });
+
+  $('savekey').addEventListener('click', function () {
+    var key = $('pagekey').value.trim();
+    if (!key) return;
+    json('PATCH', '/settings', { public_key: key }).then(function (res) {
+      if (!res.ok) { say('✗ ' + (res.j.error || 'could not update'), true); return loadSettings(); }
+      $('pagekey').value = '';
+      loadSettings();
+    }).catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); loadSettings(); });
+  });
+
+  $('clearkey').addEventListener('click', function () {
+    json('PATCH', '/settings', { public_key: '' }).then(function (res) {
+      if (!res.ok) { say('✗ ' + (res.j.error || 'could not update'), true); return loadSettings(); }
+      loadSettings();
+    }).catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); loadSettings(); });
+  });
+
   api('/auth/me').then(function (res) {
     $('handle').textContent = '@' + (res.j.handle || '');
+    loadSettings();
     return reload();
   }).catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); });
 })();

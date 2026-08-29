@@ -164,3 +164,17 @@ def test_register_page_wiring():
         assert needle in html, needle
     assert 'innerHTML' not in html
     assert 'fonts.googleapis.com' not in html
+
+
+def test_register_page_has_public_section():
+    html = open(os.path.join(ROOT, 'html', 'me', 'index.html')).read()
+    for needle in ("'/settings'", 'id="pubsec"', 'id="publink"', 'id="hideday"',
+                   'id="privprof"', 'id="pagekey"', 'has_key', 'public_url',
+                   'YOUR PUBLIC PAGE'):
+        assert needle in html, needle
+    assert 'innerHTML' not in html
+
+
+def test_landing_links_public_page():
+    html = open(os.path.join(ROOT, 'html', 'index.html')).read()
+    assert 'id="publink"' in html and "'/blade-book/@'" in html

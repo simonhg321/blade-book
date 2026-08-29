@@ -61,6 +61,7 @@
     <div class="who">signed in as <strong id="handle"></strong></div>
     <a class="big" href="/blade-book/me/add/">📷 &nbsp;ADD A KNIFE</a>
     <a class="big alt" href="/blade-book/me/">📖 &nbsp;MY REGISTER</a>
+    <a class="big alt" id="publink" target="_blank" rel="noopener" hidden>🌐 &nbsp;MY PUBLIC PAGE</a>
     <div id="regcount" aria-live="polite"></div>
     <div id="drafts" aria-live="polite"></div>
     <button id="signout" type="button">sign out</button>
@@ -82,6 +83,8 @@
   if (me.ok) {
     const u = await me.json();
     $('handle').textContent = '@' + u.handle;
+    $('publink').href = '/blade-book/@' + u.handle + '/';
+    $('publink').hidden = false;
     $('signed-out').classList.add('hidden');
     $('signed-in').classList.remove('hidden');
     fetch('/blade-book/api/knives/?status=draft', {credentials: 'same-origin'})
