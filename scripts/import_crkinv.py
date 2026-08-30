@@ -139,7 +139,8 @@ def main():
         fields['ext'] = ext
         fields['notes_private'] = notes_priv or None
         db.update_knife(con, user['id'], k['id'], fields)
-        con.execute("UPDATE knives SET confidence = '{}' WHERE id = ?", (k['id'],))
+        # arrive PRIVATE — Simon reviews and flips public from /me (2026-08-30)
+        con.execute("UPDATE knives SET confidence = '{}', is_public = 0 WHERE id = ?", (k['id'],))
         con.commit()
         for seq, path in enumerate(files, start=1):
             with open(path, 'rb') as f:
