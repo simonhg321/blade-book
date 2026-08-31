@@ -197,6 +197,7 @@ def test_register_page_wiring():
                    'id="q"', 'id="cards"', 'id="bulkbar"', 'id="tpl"', 'class="bb-display"',
                    "location.href = '/blade-book/'", 'prompt(', 'FIELDS = [', 'sale_status', 'is_public',
                    'window.scrollTo(0, y)',  # re-render must not send the reader back to the top
+                   '<details class="more">', 'openMap',  # compact cards: details collapsed, state survives re-render
                    'hero_photo', 'notes_public', 'notes_private', 'price_paid', 'events'):
         assert needle in html, needle
     assert 'innerHTML' not in html

@@ -25,6 +25,9 @@
   .knife .tag{font-size:2rem;line-height:1}
   .knife .title{font-weight:700;font-size:1.05rem;flex:1}
   .knife .top input[type=checkbox]{width:20px;height:20px}
+  details.more{margin-top:6px}
+  details.more>summary{cursor:pointer;font-size:.75rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);padding:6px 0;user-select:none;-webkit-user-select:none}
+  details.more[open]>summary{color:var(--ink)}
   .photos{display:grid;grid-template-columns:2fr 1fr;grid-auto-rows:1fr;gap:6px;margin-bottom:10px}
   .photos img{width:100%;height:100%;object-fit:cover;border-radius:10px;border:1px solid var(--line);display:block;background:var(--soft);cursor:pointer;aspect-ratio:1}
   .photos img.hero{grid-row:span 2}
@@ -85,18 +88,20 @@
   <article class="knife card">
     <div class="top"><input type="checkbox" class="sel" title="select"><span class="tag bb-display"></span><span class="title"></span><span class="badges"></span></div>
     <div class="photos"></div>
-    <table><tbody class="rows"></tbody></table>
-    <div class="flags"></div>
-    <div class="private"><h3>private</h3><dl class="priv"></dl><ul class="events"></ul></div>
-    <div class="sale"><h3>sale</h3>
-      <select class="sstatus"><option value="keeping">keeping</option><option value="for_trade">for trade</option><option value="for_sale">for sale</option><option value="consigned">consigned</option><option value="sold">sold</option></select>
-      <div class="row"><input class="asking" type="number" min="0" step="1" placeholder="asking $"><input class="amount hidden" type="number" min="0" step="1" placeholder="sold for $"></div>
-      <input class="snote" maxlength="500" placeholder="seller note (public on the board)">
-      <input class="counterparty hidden" maxlength="200" placeholder="sold / traded to (private)">
-      <button class="btn alt apply" type="button">apply</button></div>
     <div class="toggles"><label><input type="checkbox" class="pub"> public on my page</label></div>
-    <div class="actions"><button class="btn alt edit" type="button">✎ edit</button><button class="btn alt redecode" type="button">⚡ re-read the card</button></div>
-    <form class="form hidden"></form>
+    <details class="more"><summary>details · sale · edit</summary>
+      <table><tbody class="rows"></tbody></table>
+      <div class="flags"></div>
+      <div class="private"><h3>private</h3><dl class="priv"></dl><ul class="events"></ul></div>
+      <div class="sale"><h3>sale</h3>
+        <select class="sstatus"><option value="keeping">keeping</option><option value="for_trade">for trade</option><option value="for_sale">for sale</option><option value="consigned">consigned</option><option value="sold">sold</option></select>
+        <div class="row"><input class="asking" type="number" min="0" step="1" placeholder="asking $"><input class="amount hidden" type="number" min="0" step="1" placeholder="sold for $"></div>
+        <input class="snote" maxlength="500" placeholder="seller note (public on the board)">
+        <input class="counterparty hidden" maxlength="200" placeholder="sold / traded to (private)">
+        <button class="btn alt apply" type="button">apply</button></div>
+      <div class="actions"><button class="btn alt edit" type="button">✎ edit</button><button class="btn alt redecode" type="button">⚡ re-read the card</button></div>
+      <form class="form hidden"></form>
+    </details>
   </article>
 </template>
 
@@ -105,6 +110,7 @@
   var API = '/blade-book/api';
   var $ = function (id) { return document.getElementById(id); };
   var knives = [], selected = {}, didScroll = false;
+  var openMap = {};   // per-knife details expander state — survives re-renders
 
   function say(t, err) { var s = $('status'); s.textContent = t || ''; s.className = err ? 'err' : ''; }
   function api(path, opts) {
@@ -318,6 +324,10 @@
     var fl = art.querySelector('.flags'); (k.flags || []).forEach(function (f) { fl.appendChild(el('div', null, f)); });
     renderPrivate(art, k);
     renderSale(art, k);
+    var more = art.querySelector('details.more');
+    if (location.hash.slice(1) === k.tag && !didScroll) openMap[k.id] = true;  // deep link lands expanded
+    more.open = !!openMap[k.id];
+    more.addEventListener('toggle', function () { openMap[k.id] = more.open; });
     art.querySelector('.sstatus').addEventListener('change', function () { clearIrrelevant(art); syncSale(art); });
     art.querySelector('.apply').addEventListener('click', function () {
       var s = art.querySelector('.sstatus').value;
