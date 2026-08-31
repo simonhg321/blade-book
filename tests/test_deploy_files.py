@@ -175,7 +175,7 @@ def test_brandmark_assets_and_wiring():
 
 def test_how_page_wiring():
     html = open(os.path.join(ROOT, 'html', 'how', 'index.html')).read()
-    for needle in ('HOW IT WORKS', 'birth card', 'PROCESS', 'The three shots',
+    for needle in ('HOW IT WORKS', 'birth card', 'PROCESS', 'The one shot',
                    '/blade-book/me/add/', '/blade-book/@simon-collector/', 'bbmark',
                    '/blade-book/how/example.jpg',  # real flat-lay example (watermarked, EXIF-free)
                    'href="/blade-book/vibe.css"'):
