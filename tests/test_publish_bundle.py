@@ -42,6 +42,7 @@ def test_build_user_writes_bundle(con, tmp_path):
     assert 'Large Sebenza 31' in idx and '@bundle-guy' in idx
     assert 'img/' in idx   # hero via img/
     assert 'bbmark' in idx  # the brandmark is inlined on the index
+    assert '/blade-book/how/' in idx  # visitor hook: keep a register like this
     data = json.load(open(os.path.join(d, 'knives.json')))
     assert data['count'] == 1 and data['knives'][0]['tag'] == k['tag']
     page = open(os.path.join(d, k['tag'], 'index.html')).read()

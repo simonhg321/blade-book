@@ -222,6 +222,8 @@ _STYLE = '''
   a { color:var(--accent,#b8452c); font-weight:700; text-decoration:none; }
   footer { margin-top:26px; font-size:.75rem; color:#888; }
   footer .bbmark { vertical-align:-4px; margin-right:2px; }
+  a.cta { display:inline-block; background:var(--accent,#b8452c); color:#fff; font-weight:800;
+          border-radius:12px; padding:10px 16px; text-decoration:none; margin:8px 0 4px; }
 '''
 
 
@@ -303,6 +305,7 @@ def _knife_page(row, handle, gated):
     if row.get('notes_public'):
         out += f'<div class="card">{e(row["notes_public"])}</div>\n'
     out += (f'<p><a href="../">← @{e(handle)}’s register</a></p>\n'
+            '<p><a class="cta" href="/blade-book/how/">Keep a register like this — how it works →</a></p>\n'
             f'<footer>{_mark_svg(16)} Recorded on <a href="/blade-book/">blade-book</a> — '
             'a register for knife collectors. <a href="/blade-book/how/">How it works →</a></footer>\n</main>\n')
     out += _gate_snippet('../') if gated else ''
@@ -317,7 +320,8 @@ def _index_html(rows, user, gated):
     desc = '' if gated else f'{n} knife{"s" if n != 1 else ""} in a collector’s public register.'
     out = _head(title, desc, '', noindex=gated)
     out += (f'{_mark_svg(46)}\n<p class="tag">BLADE-BOOK REGISTER</p>\n<h1>@{e(handle)}</h1>\n'
-            f'<p>{n} knife{"s" if n != 1 else ""}</p>\n')
+            f'<p>{n} knife{"s" if n != 1 else ""}</p>\n'
+            '<p><a class="cta" href="/blade-book/how/">Keep a register like this — how it works →</a></p>\n')
     for row in rows:
         name = display_name(row)
         badge = ''
