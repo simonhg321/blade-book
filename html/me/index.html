@@ -366,6 +366,7 @@
   function matches(k, q) { return !q || JSON.stringify(k).toLowerCase().indexOf(q) !== -1; }
 
   function render() {
+    var y = window.scrollY;  // rebuilding #cards collapses the page for a tick; put the reader back
     var q = $('q').value.trim().toLowerCase();
     var live = knives.filter(function (k) { return k.status === 'live'; });
     var drafts = knives.filter(function (k) { return k.status === 'draft'; });
@@ -382,6 +383,7 @@
     else if (!shown.length) c.appendChild(el('div', 'empty', 'nothing matches “' + q + '”'));
     shown.forEach(function (k) { c.appendChild(renderOne(k)); });
     syncBulk();
+    window.scrollTo(0, y);
   }
 
   function syncBulk() {
