@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 
 from bb import paths
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 SALE_STATUSES = ('keeping', 'for_trade', 'for_sale', 'consigned', 'sold')
 KNIFE_STATUSES = ('draft', 'live')
@@ -174,6 +174,19 @@ CREATE TABLE IF NOT EXISTS oauth_states (
   created TEXT NOT NULL,
   expires TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS search_cards (
+  knife_id INTEGER PRIMARY KEY,
+  owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  handle TEXT NOT NULL,
+  model TEXT, generation TEXT, size TEXT,
+  born_year INTEGER,
+  damascus_smith TEXT, damascus_pattern TEXT, special_edition TEXT,
+  for_sale INTEGER NOT NULL DEFAULT 0,
+  card TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_search_cards_owner ON search_cards(owner_id);
+CREATE VIRTUAL TABLE IF NOT EXISTS search_fts USING fts5(text);
 """
 
 

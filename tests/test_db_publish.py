@@ -29,7 +29,7 @@ def test_migration_from_v3_adds_columns(tmp_path, monkeypatch):
     # so instead assert MIGRATIONS[4] statements exist and are idempotent via _migrate
     assert any('public_key' in s for s in db.MIGRATIONS[4])
     assert any('publish_dirty_at' in s for s in db.MIGRATIONS[4])
-    assert db.SCHEMA_VERSION == 4
+    assert db.SCHEMA_VERSION == 5
 
 
 def test_set_user_settings_whitelist(con):
