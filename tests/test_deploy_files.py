@@ -93,6 +93,12 @@ def test_runbook_move_lists_publish_sweep():
     assert 'scripts/publish_sweep.py' in _read('docs/RUNBOOK-move.md')
 
 
+def test_runbook_move_covers_the_search_index():
+    s = _read('docs/RUNBOOK-move.md')
+    assert 'search_cards' in s and 'search_fts' in s
+    assert 'derived data' in s
+
+
 def test_install_ships_the_whole_html_tree():
     sh = open(os.path.join(ROOT, 'scripts', 'install.sh')).read()
     assert 'cp -r "$CODE/html/." /var/www/html/blade-book/' in sh

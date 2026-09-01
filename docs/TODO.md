@@ -15,3 +15,4 @@ Small items that don't warrant a plan. Bigger work lives in the plan roadmap
   on `/blade-book/me/add/` (sudo; unverified).
 - [ ] /me: photo re-order / replace from the register (today: only via /me/add before save, or re-upload by slot through the API).
 - [ ] account deletion (plan 10/11) MUST remove /var/www/html/blade-book/@handle, its .tmp, and its DATA_DIR publish lock — otherwise a deleted user's public page serves forever (final review, plan 06).
+- [ ] search: paid-filter UI unlock rides plan 10 (ManualBilling scripts/sub.py)
