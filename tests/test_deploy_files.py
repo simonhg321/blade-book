@@ -217,3 +217,15 @@ def test_register_page_has_public_section():
 def test_landing_links_public_page():
     html = open(os.path.join(ROOT, 'html', 'index.html')).read()
     assert 'id="publink"' in html and "'/blade-book/@'" in html
+
+
+def test_search_page_wiring():
+    html = open(os.path.join(ROOT, 'html', 'search', 'index.html')).read()
+    for needle in ('SEARCH THE REGISTERS', "'/blade-book/api/search", 'id="q"',
+                   'id="results"', 'id="aggs"', 'id="filters"', 'early-access',
+                   'bbmark', '/blade-book/mark.svg', 'href="/blade-book/vibe.css"',
+                   'debounce', '402'):
+        assert needle in html, needle
+    assert 'innerHTML' not in html and 'fonts.googleapis.com' not in html
+    for rel in ('index.html', 'how/index.html'):
+        assert '/blade-book/search/' in open(os.path.join(ROOT, 'html', rel)).read(), rel

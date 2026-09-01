@@ -1,0 +1,183 @@
+<!doctype html>
+<!-- Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>blade-book — search the registers</title>
+<meta property="og:title" content="Search the registers — blade-book">
+<meta property="og:description" content="Every public knife on blade-book, searchable — model, steel, damascus smith, edition and more.">
+<link rel="icon" type="image/svg+xml" href="/blade-book/mark.svg">
+<link rel="apple-touch-icon" href="/blade-book/apple-touch-icon.png">
+<link rel="stylesheet" href="/blade-book/vibe.css">
+<style>
+  body{max-width:640px;margin:0 auto;padding:16px 16px 60px}
+  header{text-align:center;margin-bottom:8px}
+  header .bbmark{margin-top:8px}
+  h1{font-family:'Bebas Neue',Impact,sans-serif;font-weight:400;font-size:2.6rem;letter-spacing:.06em;margin:.2rem 0 0}
+  .lede{color:var(--muted);text-align:center;margin:0 0 18px}
+  #q{width:100%;font:inherit;padding:.8rem 1rem;border:2px solid var(--ink);border-radius:10px;background:#fff;margin-bottom:10px}
+  #aggs{color:var(--muted);font-size:.88rem;text-align:center;margin:0 0 12px;min-height:1.3em}
+  #aggs b{color:var(--ink)}
+  details#filters{background:#fff;border:1px solid var(--line);border-radius:12px;padding:6px 12px;margin-bottom:14px}
+  details#filters summary{cursor:pointer;font-weight:700;letter-spacing:.1em;font-size:.8rem;text-transform:uppercase;padding:8px 0;color:var(--muted)}
+  details#filters[open] summary{color:var(--ink)}
+  .frow{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:6px 0 12px}
+  .frow label{display:grid;gap:3px;font-size:.78rem;color:var(--muted)}
+  .frow input{font:inherit;padding:.5rem .6rem;border:1px solid var(--line);border-radius:8px;background:#fff;width:100%}
+  .frow .full{grid-column:1 / -1}
+  #status{text-align:center;color:var(--muted);min-height:1.3em;margin:4px 0 12px;font-size:.9rem}
+  #status.err{color:var(--accent);font-weight:700}
+  #results{display:grid;gap:12px}
+  .knife{display:block;background:#fff;border:2px solid var(--ink);border-radius:14px;overflow:hidden;text-decoration:none;color:var(--ink)}
+  .knife img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;background:var(--soft)}
+  .knife .body{padding:10px 12px}
+  .knife .name{font-weight:700;font-size:1rem}
+  .knife .sub{color:var(--muted);font-size:.85rem;margin-top:2px}
+  .knife .sale{display:inline-block;margin-top:6px;font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:.15rem .5rem;border-radius:999px;background:var(--accent);color:#fff}
+  .empty{text-align:center;color:var(--muted);padding:30px 0}
+  .cta{display:block;text-align:center;padding:1.1rem 0;font-size:1.2rem;font-weight:800;letter-spacing:.06em;background:var(--accent);color:#fff;border-radius:14px;text-decoration:none;margin:26px 0 10px}
+  footer{margin-top:34px;text-align:center;font-size:.78rem;color:var(--muted)}
+  footer img{vertical-align:-4px}
+</style>
+
+<header>
+  <a href="/blade-book/"><img class="bbmark" src="/blade-book/mark.svg" alt="blade-book" width="72"></a>
+  <h1>SEARCH THE REGISTERS</h1>
+</header>
+<p class="lede">Every public knife on blade-book.</p>
+
+<input id="q" type="search" placeholder="model, steel, damascus smith, edition…" autocomplete="off">
+
+<details id="filters">
+  <summary>FILTERS</summary>
+  <div class="frow">
+    <label>year from<input id="year_from" type="number" min="0" max="9999" inputmode="numeric"></label>
+    <label>year to<input id="year_to" type="number" min="0" max="9999" inputmode="numeric"></label>
+    <label>damascus smith<input id="smith" type="text" maxlength="60"></label>
+    <label>damascus pattern<input id="pattern" type="text" maxlength="60"></label>
+    <label>special edition<input id="edition" type="text" maxlength="60"></label>
+    <label>who has ≥ N<input id="who_min" type="number" min="1" max="1000" inputmode="numeric"></label>
+  </div>
+</details>
+
+<div id="aggs"></div>
+<div id="status" aria-live="polite"></div>
+<div id="results"></div>
+
+<template id="tpl">
+  <a class="knife">
+    <img hidden>
+    <div class="body">
+      <div class="name"></div>
+      <div class="sub"></div>
+      <div class="sale hidden"></div>
+    </div>
+  </a>
+</template>
+
+<a class="cta" href="/blade-book/me/add/">📷 &nbsp;REGISTER YOUR OWN KNIVES</a>
+
+<footer><img src="/blade-book/mark.svg" alt="" width="16"> blade-book — a register for knife collectors · <a href="/blade-book/how/">how it works →</a></footer>
+
+<script>
+(function () {
+  var API = '/blade-book/api/search';
+  var $ = function (id) { return document.getElementById(id); };
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function clear(n) { while (n.firstChild) n.removeChild(n.firstChild); }
+  function say(t, err) { var s = $('status'); s.textContent = t || ''; s.className = err ? 'err' : ''; }
+
+  // 300 ms debounce — the search box and every filter field share this so
+  // fast typing doesn't fire a request per keystroke.
+  function debounce(fn, ms) {
+    var t;
+    return function () {
+      var args = arguments, ctx = this;
+      clearTimeout(t);
+      t = setTimeout(function () { fn.apply(ctx, args); }, ms);
+    };
+  }
+
+  var FILTER_IDS = ['year_from', 'year_to', 'smith', 'pattern', 'edition', 'who_min'];
+
+  function buildParams() {
+    var p = new URLSearchParams();
+    var q = $('q').value.trim();
+    if (q) p.set('q', q);
+    FILTER_IDS.forEach(function (id) {
+      var v = $(id).value.trim();
+      if (v) p.set(id, v);
+    });
+    return p;
+  }
+
+  function renderAggs(aggregates, count) {
+    clear($('aggs'));
+    var parts = [count + ' knife' + (count === 1 ? '' : 's')];
+    var models = (aggregates && aggregates.models) || {};
+    Object.keys(models).slice(0, 5).forEach(function (name) {
+      parts.push(name + ' ' + models[name]);
+    });
+    $('aggs').textContent = parts.join(' · ');
+  }
+
+  function renderCard(k) {
+    var art = $('tpl').content.firstElementChild.cloneNode(true);
+    art.href = '/blade-book/@' + k.handle + '/' + k.tag + '/';
+    var img = art.querySelector('img');
+    if (k.img_t) {
+      img.src = '/blade-book/@' + k.handle + '/img/' + k.img_t;
+      img.alt = k.name || k.tag;
+      img.hidden = false;
+    }
+    art.querySelector('.name').textContent = k.name || k.tag;
+    var subBits = [];
+    if (k.born) subBits.push('born ' + k.born);
+    subBits.push('@' + k.handle);
+    art.querySelector('.sub').textContent = subBits.join(' · ');
+    var sale = art.querySelector('.sale');
+    if (k.for_sale) {
+      var t = 'FOR SALE';
+      if (k.asking_price) t += ' · $' + k.asking_price;
+      sale.textContent = t;
+      sale.classList.remove('hidden');
+    }
+    return art;
+  }
+
+  function renderResults(knives) {
+    var r = $('results'); clear(r);
+    if (!knives.length) { r.appendChild(el('div', 'empty', 'nothing matches')); return; }
+    knives.forEach(function (k) { r.appendChild(renderCard(k)); });
+  }
+
+  function runSearch() {
+    var params = buildParams();
+    say('searching…');
+    fetch(API + '?' + params.toString(), { credentials: 'same-origin' }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (j) { return { status: r.status, j: j }; });
+    }).then(function (res) {
+      if (res.status === 402) {
+        say('');
+        clear($('aggs'));
+        clear($('results'));
+        $('results').appendChild(el('div', 'empty',
+          res.j.error || "filters are early-access — email us and we'll turn them on"));
+        return;
+      }
+      if (res.status !== 200) {
+        say(res.j.error || 'search failed', true);
+        return;
+      }
+      say('');
+      renderAggs(res.j.aggregates, res.j.count);
+      renderResults(res.j.knives || []);
+    }).catch(function () { say('could not reach the server', true); });
+  }
+
+  var debounced = debounce(runSearch, 300);
+  $('q').addEventListener('input', debounced);
+  FILTER_IDS.forEach(function (id) { $(id).addEventListener('input', debounced); });
+
+  runSearch();
+})();
+</script>

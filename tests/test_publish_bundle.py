@@ -43,11 +43,13 @@ def test_build_user_writes_bundle(con, tmp_path):
     assert 'img/' in idx   # hero via img/
     assert 'bbmark' in idx  # the brandmark is inlined on the index
     assert '/blade-book/how/' in idx  # visitor hook: keep a register like this
+    assert '/blade-book/search/' in idx  # visitor hook: search all registers
     data = json.load(open(os.path.join(d, 'knives.json')))
     assert data['count'] == 1 and data['knives'][0]['tag'] == k['tag']
     page = open(os.path.join(d, k['tag'], 'index.html')).read()
     assert 'og:title' in page and 'og:image' in page
     assert 'bbmark' in page  # brandmark in the permalink footer
+    assert '/blade-book/search/' in page  # visitor hook: search all registers
     assert f"/blade-book/@bundle-guy/img/{k['tag']}.jpg" in page
     assert not os.path.exists(os.path.join(d, 'keys.json'))
     assert 'noindex' not in page
