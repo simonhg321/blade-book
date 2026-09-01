@@ -57,7 +57,8 @@ def reindex_user(con, user, rows):
     handle = user['handle']
     for i, row in enumerate(rows):
         kid = user['id'] * 1_000_000 + i + 1
-        y = int(row['born_on'][:4]) if row.get('born_on') else None
+        m = re.match(r'^(\d{4})', row.get('born_on') or '')
+        y = int(m.group(1)) if m else None
         con.execute(
             'INSERT INTO search_cards (knife_id, owner_id, handle, model, generation,'
             ' size, born_year, damascus_smith, damascus_pattern, special_edition,'
@@ -109,7 +110,7 @@ def run_query(con, q, filters=None, who_min=None, limit=50):
     w = ('WHERE ' + ' AND '.join(where)) if where else ''
     count = con.execute(f'SELECT count(*) FROM search_cards {w}', args).fetchone()[0]
     knives = [json.loads(r[0]) for r in con.execute(
-        f'SELECT card FROM search_cards {w} ORDER BY knife_id DESC LIMIT ?',
+        f'SELECT card FROM search_cards {w} ORDER BY born_year DESC NULLS LAST, knife_id DESC LIMIT ?',
         args + [limit])]
     # Ordered [name, count] pairs, NOT dicts — Flask 3.1's default JSON
     # provider sorts dict keys (sort_keys=True), which silently alphabetized

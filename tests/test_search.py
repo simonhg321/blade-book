@@ -152,3 +152,37 @@ def test_query_who_min(con):
     search.reindex_user(con, b, _rows(con, b))
     r = search.run_query(con, 'sebenza', who_min=2)
     assert r['owners'] == [{'handle': 'idx-guy', 'n': 2}]
+
+
+def test_born_on_non_numeric_format_does_not_crash(con):
+    u = _mk_user(con)
+    k = _mk_knife(con, u['id'])
+    # Simulate decoder-emitted 'c. 2008' format
+    con.execute("UPDATE knives SET born_on = ? WHERE id = ?", ('c. 2008', k['id']))
+    con.commit()
+    rows = _rows(con, u)
+    # Should not raise ValueError
+    n = search.reindex_user(con, u, rows)
+    assert n == 1
+    # Knife still indexed but born_year is None (can't extract leading digits)
+    row = con.execute('SELECT born_year, card FROM search_cards').fetchone()
+    assert row['born_year'] is None
+    card = json.loads(row['card'])
+    assert card['tag'] == 'K01'
+
+
+def test_query_results_ordered_by_born_year_descending(con):
+    a = _mk_user(con)
+    b = _mk_user(con, email='b@example.com', handle='b-guy')
+    # Create knives with different birth years across both owners
+    _mk_knife(con, a['id'], born='2008-03-14')  # K01 owner a, born 2008
+    _mk_knife(con, b['id'], born='2021-01-01')  # K01 owner b, born 2021
+    _mk_knife(con, a['id'], born='2019-06-05')  # K02 owner a, born 2019
+    search.reindex_user(con, a, _rows(con, a))
+    search.reindex_user(con, b, _rows(con, b))
+    r = search.run_query(con, '')
+    # Results should be ordered by born_year DESC, so 2021, 2019, 2008
+    assert len(r['knives']) == 3
+    assert r['knives'][0]['born'] == 'January 1, 2021'     # First (most recent)
+    assert r['knives'][1]['born'] == 'June 5, 2019'        # Second
+    assert r['knives'][2]['born'] == 'March 14, 2008'      # Third (oldest)
