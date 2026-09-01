@@ -93,7 +93,7 @@ def run_query(con, q, filters=None, who_min=None, limit=50):
             'SELECT rowid FROM search_fts WHERE search_fts MATCH ?', (match,))]
         if not ids:
             return {'count': 0, 'knives': [],
-                    'aggregates': {'models': {}, 'years': {}, 'sizes': {}},
+                    'aggregates': {'models': [], 'years': [], 'sizes': []},
                     **({'owners': []} if who_min else {})}
         ph = ','.join('?' * len(ids))
         where.append(f'knife_id IN ({ph})')
@@ -111,11 +111,15 @@ def run_query(con, q, filters=None, who_min=None, limit=50):
     knives = [json.loads(r[0]) for r in con.execute(
         f'SELECT card FROM search_cards {w} ORDER BY knife_id DESC LIMIT ?',
         args + [limit])]
+    # Ordered [name, count] pairs, NOT dicts — Flask 3.1's default JSON
+    # provider sorts dict keys (sort_keys=True), which silently alphabetized
+    # these and threw away the ORDER BY count(*) DESC below. Lists preserve
+    # the SQL ordering all the way to the browser.
     aggs = {}
     for name, col in (('models', 'model'), ('years', 'born_year'), ('sizes', 'size')):
-        aggs[name] = {str(r[0]): r[1] for r in con.execute(
+        aggs[name] = [[str(r[0]), r[1]] for r in con.execute(
             f"SELECT {col}, count(*) FROM search_cards {w} "
-            f"GROUP BY {col} ORDER BY count(*) DESC", args) if r[0] not in (None, '')}
+            f"GROUP BY {col} ORDER BY count(*) DESC", args) if r[0] not in (None, '')]
     out = {'count': count, 'knives': knives, 'aggregates': aggs}
     if who_min:
         out['owners'] = [{'handle': r[0], 'n': r[1]} for r in con.execute(

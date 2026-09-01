@@ -25,7 +25,7 @@ def test_free_text_search_anonymous(client, con):
     assert r.status_code == 200
     j = r.get_json()
     assert j['count'] == 1 and j['knives'][0]['name'] == 'Large Sebenza 21'
-    assert j['aggregates']['models'] == {'Sebenza': 1}
+    assert j['aggregates']['models'] == [['Sebenza', 1]]
 
 
 def test_empty_q_returns_everything(client, con):

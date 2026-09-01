@@ -100,11 +100,13 @@ def test_query_free_text_and_aggregates(con):
     search.reindex_user(con, u, _rows(con, u))
     r = search.run_query(con, 'sebenza')
     assert r['count'] == 1 and r['knives'][0]['model'] == 'Sebenza'
-    assert r['aggregates']['models'] == {'Sebenza': 1}
+    assert r['aggregates']['models'] == [['Sebenza', 1]]
     r = search.run_query(con, '')
     assert r['count'] == 2
-    assert r['aggregates']['models'] == {'Inkosi': 1, 'Sebenza': 1}
-    assert r['aggregates']['years'] == {'2008': 1, '2019': 1}
+    # counts tie at 1 for both models — SQL doesn't guarantee a tiebreak
+    # order, so compare as a set of pairs rather than an exact list.
+    assert {tuple(p) for p in r['aggregates']['models']} == {('Inkosi', 1), ('Sebenza', 1)}
+    assert {tuple(p) for p in r['aggregates']['years']} == {('2008', 1), ('2019', 1)}
     assert 'owners' not in r
 
 

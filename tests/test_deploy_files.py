@@ -222,9 +222,9 @@ def test_landing_links_public_page():
 def test_search_page_wiring():
     html = open(os.path.join(ROOT, 'html', 'search', 'index.html')).read()
     for needle in ('SEARCH THE REGISTERS', "'/blade-book/api/search", 'id="q"',
-                   'id="results"', 'id="aggs"', 'id="filters"', 'early-access',
-                   'bbmark', '/blade-book/mark.svg', 'href="/blade-book/vibe.css"',
-                   'debounce', '402'):
+                   'id="results"', 'id="aggs"', 'id="filters"', 'id="owners"',
+                   'early-access', 'bbmark', '/blade-book/mark.svg',
+                   'href="/blade-book/vibe.css"', 'debounce', '402'):
         assert needle in html, needle
     assert 'innerHTML' not in html and 'fonts.googleapis.com' not in html
     for rel in ('index.html', 'how/index.html'):

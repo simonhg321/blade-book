@@ -17,6 +17,8 @@
   #q{width:100%;font:inherit;padding:.8rem 1rem;border:2px solid var(--ink);border-radius:10px;background:#fff;margin-bottom:10px}
   #aggs{color:var(--muted);font-size:.88rem;text-align:center;margin:0 0 12px;min-height:1.3em}
   #aggs b{color:var(--ink)}
+  #owners{text-align:center;font-size:.85rem;color:var(--muted);margin:0 0 12px}
+  #owners a{color:var(--accent);font-weight:700;text-decoration:none;margin:0 4px}
   details#filters{background:#fff;border:1px solid var(--line);border-radius:12px;padding:6px 12px;margin-bottom:14px}
   details#filters summary{cursor:pointer;font-weight:700;letter-spacing:.1em;font-size:.8rem;text-transform:uppercase;padding:8px 0;color:var(--muted)}
   details#filters[open] summary{color:var(--ink)}
@@ -60,6 +62,7 @@
 </details>
 
 <div id="aggs"></div>
+<div id="owners"></div>
 <div id="status" aria-live="polite"></div>
 <div id="results"></div>
 
@@ -113,11 +116,29 @@
   function renderAggs(aggregates, count) {
     clear($('aggs'));
     var parts = [count + ' knife' + (count === 1 ? '' : 's')];
-    var models = (aggregates && aggregates.models) || {};
-    Object.keys(models).slice(0, 5).forEach(function (name) {
-      parts.push(name + ' ' + models[name]);
+    // aggregates.models is an ORDERED list of [name, n] pairs straight from
+    // the SQL ORDER BY count(*) DESC — never a dict (Flask 3.1's default
+    // JSON provider sorts dict keys alphabetically, which would silently
+    // undo the ordering).
+    var models = (aggregates && aggregates.models) || [];
+    models.slice(0, 5).forEach(function (pair) {
+      parts.push(pair[0] + ' ' + pair[1]);
     });
     $('aggs').textContent = parts.join(' · ');
+  }
+
+  function renderOwners(owners) {
+    var box = $('owners'); clear(box);
+    if (!owners) return;   // who_min not set — leave the section empty
+    if (!owners.length) { box.appendChild(el('span', null, 'no collectors match')); return; }
+    box.appendChild(document.createTextNode('collectors: '));
+    owners.forEach(function (o, i) {
+      var a = el('a');
+      a.href = '/blade-book/@' + o.handle + '/';
+      a.textContent = '@' + o.handle + ' (' + o.n + ')';
+      box.appendChild(a);
+      if (i < owners.length - 1) box.appendChild(document.createTextNode(' '));
+    });
   }
 
   function renderCard(k) {
@@ -150,15 +171,24 @@
     knives.forEach(function (k) { r.appendChild(renderCard(k)); });
   }
 
+  // Generation counter: fast typing can fire several requests whose
+  // responses land out of order (a slow early request resolving after a
+  // faster later one). Each call stamps its own number; when its response
+  // comes back it only touches the DOM if it's still the latest request.
+  var seq = 0;
+
   function runSearch() {
+    var my = ++seq;
     var params = buildParams();
     say('searching…');
     fetch(API + '?' + params.toString(), { credentials: 'same-origin' }).then(function (r) {
       return r.json().catch(function () { return {}; }).then(function (j) { return { status: r.status, j: j }; });
     }).then(function (res) {
+      if (my !== seq) return;   // a newer search has already started
       if (res.status === 402) {
         say('');
         clear($('aggs'));
+        clear($('owners'));
         clear($('results'));
         $('results').appendChild(el('div', 'empty',
           res.j.error || "filters are early-access — email us and we'll turn them on"));
@@ -170,8 +200,9 @@
       }
       say('');
       renderAggs(res.j.aggregates, res.j.count);
+      renderOwners(res.j.owners);
       renderResults(res.j.knives || []);
-    }).catch(function () { say('could not reach the server', true); });
+    }).catch(function () { if (my === seq) say('could not reach the server', true); });
   }
 
   var debounced = debounce(runSearch, 300);
