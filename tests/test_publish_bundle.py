@@ -161,3 +161,34 @@ def test_bad_handle_refused(con, tmp_path):
         raise AssertionError('must refuse a path-unsafe handle')
     except ValueError:
         pass
+
+
+def test_build_user_reindexes_search(con, tmp_path):
+    from bb import search
+    user, st, k = _setup(con, tmp_path)
+    publish.build_user(con, user, st)
+    assert con.execute('SELECT count(*) FROM search_cards').fetchone()[0] == 1
+    r = search.run_query(con, 'sebenza')
+    assert r['count'] == 1 and r['knives'][0]['handle'] == 'bundle-guy'
+    assert r['knives'][0]['img_t'] == f"{k['tag']}_t.jpg"
+    db.set_public(con, user['id'], [k['id']], False)
+    publish.build_user(con, db.get_user(con, user['id']), st)
+    assert con.execute('SELECT count(*) FROM search_cards').fetchone()[0] == 0
+
+
+def test_gated_user_never_in_search(con, tmp_path):
+    user, st, _ = _setup(con, tmp_path)
+    publish.build_user(con, user, st)
+    con.execute("UPDATE users SET public_key = 'k' WHERE id = ?", (user['id'],))
+    con.commit()
+    publish.build_user(con, db.get_user(con, user['id']), st)
+    assert con.execute('SELECT count(*) FROM search_cards').fetchone()[0] == 0
+
+
+def test_private_user_deindexed(con, tmp_path):
+    user, st, _ = _setup(con, tmp_path)
+    publish.build_user(con, user, st)
+    con.execute('UPDATE users SET profile_private = 1 WHERE id = ?', (user['id'],))
+    con.commit()
+    assert publish.build_user(con, db.get_user(con, user['id']), st) == -1
+    assert con.execute('SELECT count(*) FROM search_cards').fetchone()[0] == 0

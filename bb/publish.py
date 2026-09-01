@@ -362,6 +362,9 @@ def build_user(con, user, store):
     workers' debounce timers and the cron sweep can all try to build the same
     handle at once, and without this lock their overlapping tmp/rmtree/replace
     calls interleave into a corrupt or incomplete bundle."""
+    # Import inside build_user to avoid circular dependency (search imports publish)
+    from bb import search
+
     handle = user['handle']
     dest = bundle_dir(handle)               # validates the handle
     tmp = dest + '.tmp'
@@ -369,6 +372,7 @@ def build_user(con, user, store):
     try:
         fcntl.flock(lockf, fcntl.LOCK_EX)
         if user.get('profile_private'):
+            search.deindex_user(con, user['id'])
             shutil.rmtree(dest, ignore_errors=True)
             shutil.rmtree(tmp, ignore_errors=True)
             return -1
@@ -399,6 +403,7 @@ def build_user(con, user, store):
                            'handle': handle, 'count': len(rows), 'knives': rows}, f, indent=1)
             shutil.rmtree(dest, ignore_errors=True)
             os.replace(tmp, dest)
+            search.reindex_user(con, user, rows)
             return len(rows)
         finally:
             # no-op after a successful os.replace (tmp no longer exists); on any
