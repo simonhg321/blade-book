@@ -58,6 +58,9 @@ def test_bad_year_is_400_when_entitled(client, con, mailer):
     _entitle(con, 'adm@example.com', is_admin=1)
     assert client.get(S + '?year_from=x').status_code == 400
     assert client.get(S + '?who_min=x').status_code == 400
+    # Regression: huge but parseable numbers overflow SQLite — must be 400, not 500
+    assert client.get(S + '?year_from=999999999999999999999999999999').status_code == 400
+    assert client.get(S + '?who_min=999999999999999999999999999999').status_code == 400
 
 
 def test_q_length_capped_and_hostile_safe(client, con):

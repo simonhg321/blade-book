@@ -28,12 +28,18 @@ def search_route():
         try:
             for p in ('year_from', 'year_to'):
                 if request.args.get(p):
-                    filters[p] = int(request.args[p])
+                    val = int(request.args[p])
+                    if val < 0 or val > 9999:
+                        return jsonify({'error': 'bad filter value'}), 400
+                    filters[p] = val
             for p in ('smith', 'pattern', 'edition'):
                 if request.args.get(p):
                     filters[p] = request.args[p][:60]
             if request.args.get('who_min'):
-                who_min = max(1, int(request.args['who_min']))
+                val = int(request.args['who_min'])
+                if val < 1 or val > 1000:
+                    return jsonify({'error': 'bad filter value'}), 400
+                who_min = val
         except ValueError:
             return jsonify({'error': 'bad filter value'}), 400
         return jsonify(search.run_query(con, request.args.get('q', ''),
