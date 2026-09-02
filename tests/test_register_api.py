@@ -26,6 +26,14 @@ def _draft_with_photo(client):
     return kid
 
 
+def _age_knife(kid, days=8):
+    """Backdate a knife's `created` so its owner is board-eligible (plan 09:
+    listing for_sale needs a live knife ≥ 7 days old on the account)."""
+    from datetime import datetime, timedelta, timezone
+    ts = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    con = db.connect(); con.execute('UPDATE knives SET created = ? WHERE id = ?', (ts, kid)); con.commit(); con.close()
+
+
 def test_save_publishes_and_reports_age(client, mailer):
     signed_in(client, mailer)
     kid = client.post(K + '/').get_json()['id']
@@ -80,6 +88,9 @@ def test_sale_controls(client, mailer):
     r = client.post(f'{K}/{kid}/sale', json={'sale_status': 'for_sale', 'asking_price': 500})
     assert r.status_code == 409                                                        # draft
     client.post(f'{K}/{kid}/save')
+    r = client.post(f'{K}/{kid}/sale', json={'sale_status': 'for_sale', 'asking_price': 500})
+    assert r.status_code == 409 and 'board' in r.get_json()['error']                # fresh account: not eligible
+    _age_knife(kid)
     r = client.post(f'{K}/{kid}/sale', json={'sale_status': 'for_sale'})
     assert r.status_code == 400 and 'asking' in r.get_json()['error']
     r = client.post(f'{K}/{kid}/sale', json={'sale_status': 'for_sale', 'asking_price': 500, 'seller_note': 'mint'})
@@ -175,6 +186,7 @@ def test_publish_schedule_hooks(client, mailer, monkeypatch):
     r = client.patch(f'{K}/{kid}', json={'notes_public': 'hello'})   # unchanged: no new call
     assert r.status_code == 200 and len(calls) == 2
 
+    _age_knife(kid)
     r = client.post(f'{K}/{kid}/sale', json={'sale_status': 'for_sale', 'asking_price': 500})
     assert r.status_code == 200 and len(calls) == 3            # sale change
 
@@ -200,3 +212,16 @@ def test_new_draft_requires_previous_draft_processed(client, mailer, decoder):
     con = db.connect()
     assert db.undecoded_draft_tag(con, client.get('/blade-book/api/auth/me').get_json()['id']) == 'K02'
     con.close()
+
+
+def test_for_sale_gate_admin_bypass_and_listed_at(client, mailer):
+    me = signed_in(client, mailer)
+    kid = _draft_with_photo(client); _processed(kid)
+    assert client.post(f'{K}/{kid}/save').status_code == 200
+    assert client.post(f'{K}/{kid}/sale', json={'sale_status': 'for_sale', 'asking_price': 9}).status_code == 409
+    assert client.post(f'{K}/{kid}/sale', json={'sale_status': 'for_trade'}).status_code == 200   # trade is never gated
+    con = db.connect(); con.execute('UPDATE users SET is_admin = 1 WHERE id = ?', (me['id'],)); con.commit(); con.close()
+    r = client.post(f'{K}/{kid}/sale', json={'sale_status': 'for_sale', 'asking_price': 9})
+    assert r.status_code == 200 and r.get_json()['listed_at']
+    r = client.post(f'{K}/{kid}/sale', json={'sale_status': 'keeping'})
+    assert r.status_code == 200 and r.get_json()['listed_at'] is None

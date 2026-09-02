@@ -234,6 +234,10 @@ def sale_knife(knife_id):
             return _not_found()
         if k['status'] != 'live':
             return jsonify({'error': 'save the knife first'}), 409
+        if status == 'for_sale':
+            ok, why = db.board_eligible(con, g.user)
+            if not ok:
+                return jsonify({'error': why}), 409
         k2 = db.set_sale(con, g.user['id'], knife_id, status, asking_price=asking, seller_note=note,
                          amount=amount, counterparty=counterparty)
         if k2 is None:
