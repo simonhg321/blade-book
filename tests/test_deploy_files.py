@@ -1,6 +1,8 @@
 # Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
 import os
 import re
+import shlex
+import subprocess
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -100,6 +102,38 @@ def test_install_has_match_cron():
 
 def test_runbook_move_lists_match_cron():
     assert 'match_cron' in _read('docs/RUNBOOK-move.md')
+
+
+def _cron_dedupe_chain_and_lines():
+    """Pull the real `grep -v '...' | grep -v '...' | ...` de-dupe chain and
+    the four `echo '...'` cron lines straight out of install.sh, so this test
+    exercises the actual patterns shipped in the script rather than a
+    hand-copied approximation of them."""
+    sh = _read('scripts/install.sh')
+    m = re.search(r"crontab -u shg -l 2>/dev/null((?: \| grep -v '[^']*')+)", sh)
+    assert m, 'could not find the crontab de-dupe grep chain in install.sh'
+    lines = re.findall(r"echo '([^']*)'", sh)
+    assert len(lines) == 4, 'expected exactly 4 cron lines (backup/purge/publish/match)'
+    return m.group(1), lines
+
+
+def test_install_cron_dedupe_actually_filters_every_added_line():
+    """Regression for a reviewer-caught bug: a grep -v pattern that never
+    appears as a substring of its own cron line (e.g. the old
+    'blade-book/scripts/purge_drafts.py' pattern against a
+    `cd /home/shg/blade-book && python3 scripts/purge_drafts.py ...` line,
+    which has no 'blade-book/scripts/' substring) makes install.sh append a
+    duplicate crontab entry on every rerun. Feed a fake crontab containing
+    exactly the four lines install.sh adds through the REAL grep chain
+    extracted from the script; every line must come out filtered — the
+    property being pinned is: for every cron line install.sh adds, its own
+    grep -v pattern matches that line."""
+    chain, lines = _cron_dedupe_chain_and_lines()
+    fake_crontab = '\n'.join(lines) + '\n'
+    cmd = f"printf '%s' {shlex.quote(fake_crontab)} | cat{chain}"
+    r = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    assert r.returncode == 1, r.stdout   # grep exits 1 when it filters everything to nothing
+    assert r.stdout == '', f'a cron line survived the de-dupe chain: {r.stdout!r}'
 
 
 def test_runbook_move_covers_the_search_index():

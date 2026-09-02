@@ -19,7 +19,7 @@ mkdir -p /var/www/html/blade-book && cp -r "$CODE/html/." /var/www/html/blade-bo
 apache2ctl configtest
 systemctl reload apache2
 supervisorctl reread && supervisorctl update && supervisorctl restart blade_book || supervisorctl start blade_book
-( crontab -u shg -l 2>/dev/null | grep -v 'blade-book/scripts/backup.sh' | grep -v 'blade-book/scripts/purge_drafts.py' | grep -v 'blade-book/scripts/publish_sweep.py' | grep -v 'blade-book/scripts/match_cron.py'; \
+( crontab -u shg -l 2>/dev/null | grep -v 'blade-book/scripts/backup.sh' | grep -v 'scripts/purge_drafts.py' | grep -v 'blade-book/scripts/publish_sweep.py' | grep -v 'scripts/match_cron.py'; \
   echo '30 3 * * * bash /home/shg/blade-book/scripts/backup.sh >> /var/log/blade-book/backup.log 2>&1'; \
   echo '15 4 * * * cd /home/shg/blade-book && python3 scripts/purge_drafts.py >> /var/log/blade-book/purge.log 2>&1'; \
   echo '*/5 * * * * /usr/bin/python3 /home/shg/blade-book/scripts/publish_sweep.py >> /var/log/blade-book/publish.log 2>&1'; \
