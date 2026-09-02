@@ -9,6 +9,28 @@ def _sale_knife(con, uid, price=450, **kw):
     return _mk_knife(con, uid, sale_status='for_sale', asking_price=price, **kw)
 
 
+def test_intro_honors_owner_hide_born_day(con):
+    wanter = _u(con)
+    owner = _u(con, email='o@example.com', handle='o-guy', hide_born_day=1)
+    _sale_knife(con, owner['id'], born='2008-03-14')
+    db.create_want(con, wanter['id'], {'model': 'Sebenza'})
+    m = FakeMailer()
+    assert match.run(con, m) == 2
+    for msg in m.sent:
+        assert 'March 2008' in msg['text']
+        assert '14' not in msg['text']
+
+
+def test_keyword_does_not_span_field_boundary():
+    k = {'maker': 'crk', 'model': 'Sebenza', 'blade_shape': '', 'blade_steel': '',
+         'born_on': '2008-03-14', 'sale_status': 'for_sale', 'asking_price': 500,
+         'ext': {'generation': '21', 'size': 'Large', 'special_edition': 'Silver Rose'},
+         'notes_public': 'Ladder damascus'}
+    base = {f: None for f in db.WANT_FIELDS} | {'mode': 'sale', 'maker': 'crk'}
+    assert not match.knife_matches(dict(base, keyword='rose ladder'), k)
+    assert match.knife_matches(dict(base, keyword='silver rose'), k)
+
+
 def test_knife_matches_exact_enums_and_wildcards():
     want = {'model': 'Sebenza', 'generation': '31', 'size': None, 'blade_shape': None,
             'blade_steel': None, 'keyword': None, 'born_from': None, 'born_to': None,

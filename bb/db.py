@@ -649,7 +649,8 @@ def all_public_knives(con):
     out = []
     for r in con.execute(
             "SELECT k.*, u.handle AS owner_handle, u.email AS owner_email, "
-            "u.share_email_on_intro AS owner_share_email "
+            "u.share_email_on_intro AS owner_share_email, "
+            "u.hide_born_day AS owner_hide_born_day "
             "FROM knives k JOIN users u ON u.id = k.owner_id "
             "WHERE k.status = 'live' AND k.is_public = 1 "
             "AND k.sale_status NOT IN ('sold', 'consigned') "

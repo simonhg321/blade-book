@@ -55,15 +55,16 @@ def knife_matches(want, k):
         return False
     kw = (want.get('keyword') or '').strip().lower()
     if kw:
-        hay = ' '.join(str(ext.get(f) or '') if f != 'notes_public' else str(k.get(f) or '')
-                       for f in KEYWORD_FIELDS).lower()
-        if not re.search(r'\b' + re.escape(kw) + r'\b', hay):
+        pattern = r'\b' + re.escape(kw) + r'\b'
+        fields = (str(ext.get(f) or '') if f != 'notes_public' else str(k.get(f) or '')
+                  for f in KEYWORD_FIELDS)
+        if not any(re.search(pattern, field.lower()) for field in fields):
             return False
     return True
 
 
 def _card_text(k):
-    row = publish.public_row(k, {'hide_born_day': 0})
+    row = publish.public_row(k, {'hide_born_day': k.get('owner_hide_born_day', 0)})
     name = publish.display_name(row)
     bits = [f"{k['tag']} — {name}", row.get('born') or '']
     if row.get('for_sale') and row.get('asking_price'):
