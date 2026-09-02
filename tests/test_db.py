@@ -19,7 +19,7 @@ def test_connect_creates_schema_with_wal():
 
 def test_every_table_but_users_has_owner_id():
     con = db.connect()
-    for t in ('knives', 'photos', 'events', 'wants', 'intros', 'reports'):
+    for t in ('knives', 'photos', 'events', 'wants', 'reports'):
         cols = {r[1] for r in con.execute(f'PRAGMA table_info({t})')}
         assert 'owner_id' in cols, t
     con.close()

@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 
 from bb import paths
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 SALE_STATUSES = ('keeping', 'for_trade', 'for_sale', 'consigned', 'sold')
 KNIFE_STATUSES = ('draft', 'live')
@@ -21,6 +21,9 @@ SUB_STATUSES = ('free', 'active', 'lapsed')
 EVENT_TYPES = ('photographed', 'decoded', 'edited', 'for_trade', 'for_sale',
                'traded', 'sold', 'consigned', 'withdrawn')
 WANT_MODES = ('trade', 'sale', 'either')
+WANT_FIELDS = ('maker', 'model', 'generation', 'size', 'blade_shape', 'blade_steel',
+               'keyword', 'born_from', 'born_to', 'mode', 'max_price')
+MAX_ACTIVE_WANTS = 20
 
 # never leaves the private register — see spec §5 invariant
 PRIVATE_COLUMNS = frozenset({'price_paid', 'acquired_from', 'acquired_date',
@@ -110,27 +113,28 @@ CREATE TABLE IF NOT EXISTS events (
 CREATE INDEX IF NOT EXISTS events_knife ON events(knife_id);
 
 CREATE TABLE IF NOT EXISTS wants (
-  id INTEGER PRIMARY KEY,
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
   owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   maker TEXT NOT NULL DEFAULT 'crk',
   model TEXT, generation TEXT, size TEXT, blade_shape TEXT, blade_steel TEXT,
-  keyword TEXT, born_from TEXT, born_to TEXT,
-  mode TEXT NOT NULL DEFAULT 'either' CHECK (mode IN {WANT_MODES}),
-  max_price REAL,
+  keyword TEXT,
+  born_from INTEGER, born_to INTEGER,
+  mode TEXT NOT NULL DEFAULT 'either' CHECK (mode IN ('trade','sale','either')),
+  max_price INTEGER,
   active INTEGER NOT NULL DEFAULT 1,
   created TEXT NOT NULL
 );
-
+CREATE INDEX IF NOT EXISTS idx_wants_owner ON wants(owner_id);
 CREATE TABLE IF NOT EXISTS intros (
-  id INTEGER PRIMARY KEY,
-  want_id INTEGER REFERENCES wants(id) ON DELETE SET NULL,
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  want_id INTEGER REFERENCES wants(id) ON DELETE CASCADE,
   knife_id INTEGER NOT NULL REFERENCES knives(id) ON DELETE CASCADE,
-  owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   from_user INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   to_user INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  kind TEXT NOT NULL CHECK (kind IN ('match', 'board')),
-  sent_at TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'match' CHECK (kind IN ('match','board')),
+  sent_at TEXT,
   resend_msg_id TEXT,
+  created TEXT NOT NULL,
   UNIQUE (want_id, knife_id)
 );
 
@@ -551,7 +555,7 @@ def set_public(con, owner_id, knife_ids, is_public):
     return n
 
 
-SETTINGS_COLUMNS = frozenset({'hide_born_day', 'profile_private', 'public_key'})
+SETTINGS_COLUMNS = frozenset({'hide_born_day', 'profile_private', 'public_key', 'share_email_on_intro'})
 
 
 def set_user_settings(con, user_id, fields):
@@ -566,6 +570,114 @@ def set_user_settings(con, user_id, fields):
         con.execute(f'UPDATE users SET {sets} WHERE id = ?', (*fields.values(), user_id))
         con.commit()
     return get_user(con, user_id)
+
+
+# --- wants + intros (user wishlists + knife matches) ---------------------------
+
+def create_want(con, owner_id, fields):
+    """Create a want record. Validates: unknown keys, bad mode, non-int born_from/born_to/max_price,
+    and active-wants cap. Strings stripped; empty → NULL. Returns the fresh want dict."""
+    bad_keys = set(fields) - set(WANT_FIELDS)
+    if bad_keys:
+        raise ValueError('bad field')
+    if 'mode' in fields and fields['mode'] not in WANT_MODES:
+        raise ValueError('bad mode')
+    for field in ('born_from', 'born_to', 'max_price'):
+        if field in fields and fields[field] is not None:
+            try:
+                int(fields[field])
+            except (ValueError, TypeError):
+                raise ValueError('bad field')
+    count = con.execute('SELECT count(*) FROM wants WHERE owner_id = ? AND active = 1',
+                        (owner_id,)).fetchone()[0]
+    if count >= MAX_ACTIVE_WANTS:
+        raise ValueError('too many wants')
+    vals = {}
+    for k in fields:
+        v = fields[k]
+        if isinstance(v, str):
+            v = v.strip() or None
+        vals[k] = v
+    cols = ', '.join(vals.keys())
+    marks = ', '.join('?' * len(vals))
+    con.execute(
+        f'INSERT INTO wants (owner_id, created, {cols}) VALUES (?, ?, {marks})',
+        (owner_id, now(), *vals.values()))
+    con.commit()
+    want_id = con.execute('SELECT last_insert_rowid()').fetchone()[0]
+    return dict(con.execute('SELECT * FROM wants WHERE id = ?', (want_id,)).fetchone())
+
+
+def list_wants(con, owner_id):
+    """List wants for an owner, newest first."""
+    return [dict(r) for r in con.execute(
+        'SELECT * FROM wants WHERE owner_id = ? ORDER BY id DESC', (owner_id,))]
+
+
+def set_want_active(con, owner_id, want_id, active):
+    """Toggle a want's active flag. Scoped to owner. Returns whether it succeeded."""
+    n = con.execute('UPDATE wants SET active = ? WHERE id = ? AND owner_id = ?',
+                    (1 if active else 0, want_id, owner_id)).rowcount
+    con.commit()
+    return n == 1
+
+
+def delete_want(con, owner_id, want_id):
+    """Delete a want. Scoped to owner. Returns whether it succeeded."""
+    n = con.execute('DELETE FROM wants WHERE id = ? AND owner_id = ?',
+                    (want_id, owner_id)).rowcount
+    con.commit()
+    return n == 1
+
+
+def active_wants(con):
+    """All active wants across all users (for the cron matcher). Each dict includes owner_id."""
+    return [dict(r) for r in con.execute('SELECT * FROM wants WHERE active = 1')]
+
+
+def all_public_knives(con):
+    """Every knife matchable by wants, across all owners: live, public,
+    not sold/consigned, owner not private and not key-gated (a gated
+    register is link+key only — never matched, plan 06/07 precedent)."""
+    out = []
+    for r in con.execute(
+            "SELECT k.*, u.handle AS owner_handle, u.email AS owner_email, "
+            "u.share_email_on_intro AS owner_share_email "
+            "FROM knives k JOIN users u ON u.id = k.owner_id "
+            "WHERE k.status = 'live' AND k.is_public = 1 "
+            "AND k.sale_status NOT IN ('sold', 'consigned') "
+            "AND u.profile_private = 0 "
+            "AND (u.public_key IS NULL OR trim(u.public_key) = '') "
+            "ORDER BY k.id"):
+        d = _knife_row(con, r)
+        out.append(d)
+    return out
+
+
+def claim_intro(con, want_id, knife_id, from_user, to_user, kind='match'):
+    """Claim an intro (match) between a want and knife. INSERT OR IGNORE on UNIQUE;
+    returns intro_id or None on conflict. Commits."""
+    cur = con.execute(
+        'INSERT OR IGNORE INTO intros (want_id, knife_id, from_user, to_user, kind, created) '
+        'VALUES (?, ?, ?, ?, ?, ?)',
+        (want_id, knife_id, from_user, to_user, kind, now()))
+    con.commit()
+    if cur.rowcount == 0:
+        return None
+    return con.execute('SELECT id FROM intros WHERE want_id = ? AND knife_id = ?',
+                       (want_id, knife_id)).fetchone()[0]
+
+
+def mark_intro_sent(con, intro_id, msg_id):
+    """Mark an intro as sent, with its resend_msg_id."""
+    con.execute('UPDATE intros SET sent_at = ?, resend_msg_id = ? WHERE id = ?',
+                (now(), msg_id, intro_id))
+    con.commit()
+
+
+def unsent_intros(con):
+    """All intros with sent_at NULL (unsent claims)."""
+    return [dict(r) for r in con.execute('SELECT * FROM intros WHERE sent_at IS NULL')]
 
 
 # --- publish dirty flag (debounced rebuild of the public bundle) --------------
