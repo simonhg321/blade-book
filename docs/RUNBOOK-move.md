@@ -31,3 +31,8 @@ supervisor program; nothing imports from billboard.
 8. The search index (`search_cards`/`search_fts`) is derived data, not a
    thing to restore/rsync — after any restore, repair/backfill it the same
    way as the bundles: `python3 scripts/publish_sweep.py --all` as shg.
+   Moderation state lives in the DB, not on disk: `reports` (open = resolved_at NULL) and
+   `knives.hidden_at/hidden_by/hidden_note`. A hidden knife is excluded from the board, the
+   owner's bundle, the search index and wants matching by the same column, so after a move a
+   `publish_sweep.py --all` regenerates bundles with hidden knives already absent. Admin queue:
+   /blade-book/admin/ (is_admin=1 in users — flip with sqlite3 until plan 10's scripts/sub.py).

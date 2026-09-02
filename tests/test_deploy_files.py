@@ -328,3 +328,8 @@ def test_admin_page_wiring():
 def test_register_page_shows_hidden_badge():
     html = open(os.path.join(ROOT, 'html', 'me', 'index.html')).read()
     assert 'hidden_at' in html and 'under review' in html
+
+
+def test_runbook_move_mentions_reports_and_hidden():
+    s = _read('docs/RUNBOOK-move.md')
+    assert 'reports' in s and 'hidden_at' in s
