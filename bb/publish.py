@@ -221,6 +221,9 @@ _STYLE = '''
   .card img { width:100%; border-radius:10px; }
   a { color:var(--accent,#b8452c); font-weight:700; text-decoration:none; }
   footer { margin-top:26px; font-size:.75rem; color:#888; }
+  .signin { position:absolute; top:14px; right:16px; font-size:.78rem;
+            letter-spacing:.08em; text-transform:uppercase; }
+  main { position:relative; }
   footer .bbmark { vertical-align:-4px; margin-right:2px; }
   a.cta { display:inline-block; background:var(--accent,#b8452c); color:#fff; font-weight:800;
           border-radius:12px; padding:10px 16px; text-decoration:none; margin:8px 0 4px; }
@@ -319,10 +322,11 @@ def _index_html(rows, user, gated):
     handle = user['handle']
     n = len(rows)
     title = f'@{handle} — blade-book register'
-    desc = '' if gated else f'{n} knife{"s" if n != 1 else ""} in a collector’s public register.'
+    desc = '' if gated else f'{n} {"knives" if n != 1 else "knife"} in a collector’s public register.'
     out = _head(title, desc, '', noindex=gated)
-    out += (f'{_mark_svg(46)}\n<p class="tag">BLADE-BOOK REGISTER</p>\n<h1>@{e(handle)}</h1>\n'
-            f'<p>{n} knife{"s" if n != 1 else ""}</p>\n'
+    out += ('<p class="signin"><a href="/blade-book/me/">sign in</a></p>\n'
+            f'{_mark_svg(46)}\n<p class="tag">BLADE-BOOK REGISTER</p>\n<h1>@{e(handle)}</h1>\n'
+            f'<p>{n} {"knives" if n != 1 else "knife"}</p>\n'
             '<p><a class="cta" href="/blade-book/how/">Keep a register like this — how it works →</a></p>\n')
     for row in rows:
         name = display_name(row)
