@@ -15,7 +15,7 @@ DEFAULT_FROM = 'blade-book <noreply@blade-book.com>'
 
 
 class Mailer:
-    def send(self, to, subject, text, html=None):  # -> message id
+    def send(self, to, subject, text, html=None, reply_to=None):  # -> message id
         raise NotImplementedError
 
 
@@ -23,13 +23,14 @@ class FakeMailer(Mailer):
     def __init__(self):
         self.sent = []
 
-    def send(self, to, subject, text, html=None):
-        self.sent.append({'to': to, 'subject': subject, 'text': text, 'html': html})
+    def send(self, to, subject, text, html=None, reply_to=None):
+        self.sent.append({'to': to, 'subject': subject, 'text': text, 'html': html,
+                          'reply_to': reply_to})
         return f'fake-{len(self.sent)}'
 
 
 class LogMailer(Mailer):
-    def send(self, to, subject, text, html=None):
+    def send(self, to, subject, text, html=None, reply_to=None):
         log.info('MAIL (not sent — no RESEND_API_KEY) to=%s subject=%r\n%s',
                  to, subject, text)
         return 'log'
@@ -42,10 +43,12 @@ class ResendMailer(Mailer):
         self._resend = resend
         self.sender = sender
 
-    def send(self, to, subject, text, html=None):
+    def send(self, to, subject, text, html=None, reply_to=None):
         params = {'from': self.sender, 'to': [to], 'subject': subject, 'text': text}
         if html:
             params['html'] = html
+        if reply_to:
+            params['reply_to'] = [reply_to]
         r = self._resend.Emails.send(params)
         mid = r.get('id') if isinstance(r, dict) else getattr(r, 'id', None)
         log.info('MAIL sent to=%s subject=%r id=%s', to, subject, mid)

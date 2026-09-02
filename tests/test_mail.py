@@ -9,7 +9,7 @@ def test_fake_mailer_records_sends():
     mid = m.send('sam@example.com', 'hi', 'text body', '<p>html</p>')
     assert mid == 'fake-1'
     assert m.sent == [{'to': 'sam@example.com', 'subject': 'hi',
-                       'text': 'text body', 'html': '<p>html</p>'}]
+                       'text': 'text body', 'html': '<p>html</p>', 'reply_to': None}]
 
 
 def test_log_mailer_logs_the_body(caplog):
