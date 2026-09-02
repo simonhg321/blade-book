@@ -1052,3 +1052,47 @@ def purge_stale_drafts(con, days=7):
         out.append(k)
     con.commit()
     return out
+
+
+MAX_OPEN_REPORTS_PER_REPORTER = 10
+AUTO_HIDE_REPORTS = 3
+
+
+def create_report(con, knife_id, owner_id, reporter_id, reason):
+    """Record a report. None if this reporter already has an OPEN report on
+    the knife (partial UNIQUE idx_reports_open). ValueError at the reporter's
+    open-report cap (spam guard)."""
+    n = con.execute('SELECT count(*) FROM reports WHERE reporter_id = ? AND resolved_at IS NULL',
+                    (reporter_id,)).fetchone()[0]
+    if n >= MAX_OPEN_REPORTS_PER_REPORTER:
+        raise ValueError('too many open reports')
+    cur = con.execute('INSERT OR IGNORE INTO reports (knife_id, owner_id, reporter_id, reason, created) '
+                      'VALUES (?, ?, ?, ?, ?)', (knife_id, owner_id, reporter_id, reason, now()))
+    con.commit()
+    return cur.lastrowid if cur.rowcount == 1 else None
+
+
+def counting_open_reports(con, knife_id):
+    """Open reports that count toward auto-hide: one per reporter who owns
+    at least one LIVE knife (ruling: skin in the game — three fresh
+    sock-puppet accounts must not be able to hide anyone)."""
+    return con.execute(
+        'SELECT count(*) FROM reports r WHERE r.knife_id = ? AND r.resolved_at IS NULL '
+        "AND EXISTS (SELECT 1 FROM knives k WHERE k.owner_id = r.reporter_id AND k.status = 'live')",
+        (knife_id,)).fetchone()[0]
+
+
+def open_reports(con):
+    return [dict(r) for r in con.execute(
+        'SELECT r.id, r.knife_id, r.reason, r.created, k.tag, k.hidden_at, k.hidden_by, '
+        'o.handle AS owner_handle, p.handle AS reporter_handle '
+        'FROM reports r JOIN knives k ON k.id = r.knife_id '
+        'JOIN users o ON o.id = k.owner_id JOIN users p ON p.id = r.reporter_id '
+        'WHERE r.resolved_at IS NULL ORDER BY r.id DESC')]
+
+
+def resolve_reports(con, knife_id, resolution):
+    n = con.execute('UPDATE reports SET resolved_at = ?, resolution = ? '
+                    'WHERE knife_id = ? AND resolved_at IS NULL', (now(), resolution, knife_id)).rowcount
+    con.commit()
+    return n

@@ -104,3 +104,40 @@ def contact_seller(knife_id):
         con.close()
     log.info('board contact: @%s → @%s %s', g.user['handle'], k['owner_handle'], k['tag'])
     return jsonify({'ok': True})
+
+
+@bp.post('/<int:knife_id>/report')
+@auth.login_required
+def report_knife(knife_id):
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({'error': 'body must be a JSON object'}), 400
+    try:
+        reason = edit._text(body.get('reason'), board.MAX_REASON, 'reason')
+    except edit.EditError as e:
+        return jsonify({'error': str(e)}), 400
+    if len(reason) < board.MIN_REASON:
+        return jsonify({'error': 'say why (a few words)'}), 400
+    con = db.connect()
+    try:
+        k = db.get_knife_any(con, knife_id)
+        if k is None or k['status'] != 'live' or not k['is_public']:
+            return jsonify({'error': 'not found'}), 404
+        if k['owner_id'] == g.user['id']:
+            return jsonify({'error': "that's your own knife"}), 400
+        try:
+            rid = db.create_report(con, knife_id, k['owner_id'], g.user['id'], reason)
+        except ValueError as e:
+            return jsonify({'error': str(e)}), 409
+        if rid is None:
+            return jsonify({'error': 'you already reported this knife'}), 409
+        hidden = bool(k['hidden_at'])
+        if not hidden and db.counting_open_reports(con, knife_id) >= db.AUTO_HIDE_REPORTS:
+            db.hide_knife(con, knife_id, 'reports', f'auto-hidden: {db.AUTO_HIDE_REPORTS} open reports')
+            hidden = True
+            log.warning('%s (@%s) auto-hidden after %d reports', k['tag'], k['owner_id'], db.AUTO_HIDE_REPORTS)
+            publish.schedule(k['owner_id'])
+    finally:
+        con.close()
+    log.info('report on knife %d by @%s: %s', knife_id, g.user['handle'], reason[:80])
+    return jsonify({'ok': True, 'hidden': hidden})
