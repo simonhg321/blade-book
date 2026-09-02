@@ -228,3 +228,11 @@ def test_index_stats_omit_missing_born_and_sale():
     html = publish._index_html(rows, USER, gated=False)
     assert 'class="feat"' not in html          # no photo → no featured card
     assert 'for sale' not in html and 'born</span>' not in html and '>3</b> knives' in html
+
+
+def test_index_has_og_image_from_hero_when_not_gated():
+    html = publish._index_html(_rows(), USER, gated=False)
+    assert '<meta property="og:image" content="' in html
+    assert '/@simon-collector/img/K01.jpg">' in html.split('property="og:image"')[1][:120]
+    assert 'property="og:image"' not in publish._index_html(_rows(), USER, gated=True)
+    assert 'property="og:image"' not in publish._index_html(_rows(with_img=False), USER, gated=False)

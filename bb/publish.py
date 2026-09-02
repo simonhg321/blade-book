@@ -495,7 +495,10 @@ def _index_html(rows, user, gated):
     title = f'@{handle} — blade-book register'
     desc = '' if gated else f'{count} in a collector’s public register.'
     hero_row = next((r for r in rows if r.get('img')), None)
-    out = _head(title, desc, '', noindex=gated, extra_style=_INDEX_STYLE)
+    # OG card for a shared register link = the hero photo (watermarked display
+    # image, already public); never on a gated register.
+    og_image = (f"{_public_base()}/@{handle}/img/{hero_row['img']}" if hero_row and not gated else '')
+    out = _head(title, desc, og_image, noindex=gated, extra_style=_INDEX_STYLE)
     if hero_row:
         out += (f'<div class="hero-bg" style="background-image:url(img/{e(hero_row["img"])})"></div>\n'
                 '<header class="hero">\n')
