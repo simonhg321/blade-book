@@ -55,8 +55,7 @@
     if (action === 'delete' && !confirm('DELETE ' + tag + ' and its photos for good?')) return;
     post(ADMIN + '/knives/' + knifeId + '/' + action, { note: note.trim() }).then(function (res) {
       if (!res.ok) { say('✗ ' + (res.j.error || 'failed'), true); return; }
-      say('✓ ' + action + ' ' + tag);
-      load();
+      load('✓ ' + action + ' ' + tag);
     }).catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); });
   }
 
@@ -95,11 +94,11 @@
     });
   }
 
-  function load() {
+  function load(keep) {
     say('loading…');
     req(ADMIN + '/reports').then(function (res) {
       if (!res.ok) { say(res.j.error || 'failed', true); return; }
-      say('');
+      say(keep || '');
       render(res.j.reports || []);
     }).catch(function (e) { if (e.message !== 'sign in') say('could not reach the server', true); });
   }
@@ -107,6 +106,6 @@
   req(API + '/auth/me').then(function (res) {
     if (!res.ok || !res.j.is_admin) { location.href = '/blade-book/'; return; }
     load();
-  }).catch(function () {});
+  }).catch(function () { say('could not reach the server', true); });
 })();
 </script>

@@ -92,7 +92,7 @@
   var BOARD = '/blade-book/api/board';
   var LIMIT = 24;
   var $ = function (id) { return document.getElementById(id); };
-  var me = null, offset = 0, total = 0, current = null;
+  var me = null, offset = 0, total = 0, current = null, loading = false;
 
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function clear(n) { while (n.firstChild) n.removeChild(n.firstChild); }
@@ -137,8 +137,13 @@
   }
 
   function load() {
+    if (loading) return;
+    loading = true;
+    $('more').disabled = true;
     say('loading…');
     req(BOARD + '?limit=' + LIMIT + '&offset=' + offset).then(function (res) {
+      loading = false;
+      $('more').disabled = false;
       if (res.status !== 200) { say(res.j.error || 'could not load the board', true); return; }
       say('');
       total = res.j.count;
@@ -148,7 +153,7 @@
       (res.j.knives || []).forEach(function (k) { box.appendChild(renderCard(k)); });
       offset += (res.j.knives || []).length;
       $('more').hidden = offset >= total;
-    }).catch(function () { say('could not reach the server', true); });
+    }).catch(function () { loading = false; $('more').disabled = false; say('could not reach the server', true); });
   }
 
   function openContact(k) {
