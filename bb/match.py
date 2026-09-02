@@ -93,13 +93,16 @@ def _fmt_price(p):
     return f"${int(p)}" if p.is_integer() else f"${p}"
 
 
-def _card_text(k, with_tag=True):
+def card_text(k, with_tag=True):
     row = publish.public_row(k, {'hide_born_day': k.get('owner_hide_born_day', 0)})
     name = publish.display_name(row)
     bits = [f"{k['tag']} — {name}" if with_tag else name, row.get('born') or '']
     if row.get('for_sale') and row.get('asking_price'):
         bits.append(f"asking {_fmt_price(row['asking_price'])}")
     return ' · '.join(b for b in bits if b)
+
+
+_card_text = card_text   # kept for tests/test_match.py
 
 
 def _emails_for(intro_row, want, k):
@@ -110,7 +113,7 @@ def _emails_for(intro_row, want, k):
         'to': want['_wanter_email'],
         'subject': f"blade-book: a match for your want — {k['tag']}",
         'text': (f"A knife matching your want is on @{k['owner_handle']}'s register:\n\n"
-                 f"{_card_text(k)}\n{url}\n\n"
+                 f"{card_text(k)}\n{url}\n\n"
                  + ("Reply to this email to reach the owner.\n" if share else
                     "The owner hasn't shared a contact address. Watch their register — "
                     "and if you both turn on email sharing in blade-book, future intros "
@@ -121,7 +124,7 @@ def _emails_for(intro_row, want, k):
         'to': k['owner_email'],
         'subject': f"blade-book: someone wants your {k['tag']}",
         'text': (f"@{want['_wanter_handle']} has a want matching your {k['tag']} "
-                 f"({_card_text(k, with_tag=False)}).\n{url}\n\n"
+                 f"({card_text(k, with_tag=False)}).\n{url}\n\n"
                  + ("Reply to this email to reach them.\n" if share else
                     "The wanter hasn't shared a contact address. If you both turn on "
                     "email sharing in blade-book, future intros will connect you "

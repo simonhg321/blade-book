@@ -717,6 +717,62 @@ def all_public_knives(con):
     return out
 
 
+BOARD_MIN_KNIFE_AGE_DAYS = 7
+
+# Spec §9: "Posting to the board requires verified_at and ≥1 live knife older
+# than 7 days on the account." Admins bypass (Simon tests on fresh accounts).
+_BOARD_OWNER_OK = ("(u.is_admin = 1 OR (u.verified_at IS NOT NULL AND EXISTS ("
+                   "SELECT 1 FROM knives k2 WHERE k2.owner_id = u.id AND k2.status = 'live' "
+                   "AND k2.created <= ?)))")
+_BOARD_WHERE = ("k.status = 'live' AND k.is_public = 1 AND k.sale_status = 'for_sale' "
+                "AND k.hidden_at IS NULL "
+                "AND u.profile_private = 0 AND (u.public_key IS NULL OR trim(u.public_key) = '') "
+                "AND " + _BOARD_OWNER_OK)
+_BOARD_SELECT = ("SELECT k.*, u.handle AS owner_handle, u.email AS owner_email, "
+                 "u.share_email_on_intro AS owner_share_email, "
+                 "u.hide_born_day AS owner_hide_born_day "
+                 "FROM knives k JOIN users u ON u.id = k.owner_id WHERE " + _BOARD_WHERE)
+
+
+def _board_cutoff():
+    return (datetime.now(timezone.utc) - timedelta(days=BOARD_MIN_KNIFE_AGE_DAYS)).isoformat()
+
+
+def board_eligible(con, user):
+    """(ok, reason). Who may LIST on the board — enforced in the sale route
+    (409 with `reason`) and, belt-and-braces, inside _BOARD_WHERE."""
+    if user.get('is_admin'):
+        return True, None
+    if not user.get('verified_at'):
+        return False, 'verify your email before listing on the board'
+    row = con.execute("SELECT 1 FROM knives WHERE owner_id = ? AND status = 'live' AND created <= ? LIMIT 1",
+                      (user['id'], _board_cutoff())).fetchone()
+    if row is None:
+        return False, (f'the board opens once a knife has been live in your register for '
+                       f'{BOARD_MIN_KNIFE_AGE_DAYS} days')
+    return True, None
+
+
+def board_knives(con, limit=24, offset=0):
+    """(total, rows) — every knife on the For Sale board, newest listing first.
+    Rows carry owner_* fields for the contact email; bb/board.card() strips
+    them before anything reaches the browser."""
+    cutoff = _board_cutoff()
+    total = con.execute('SELECT count(*) FROM knives k JOIN users u ON u.id = k.owner_id WHERE '
+                        + _BOARD_WHERE, (cutoff,)).fetchone()[0]
+    rows = [_knife_row(con, r) for r in con.execute(
+        _BOARD_SELECT + ' ORDER BY coalesce(k.listed_at, k.updated) DESC, k.id DESC LIMIT ? OFFSET ?',
+        (cutoff, int(limit), int(offset)))]
+    return total, rows
+
+
+def board_knife(con, knife_id):
+    """One board knife by id, or None when it is not on the board for ANY
+    reason (not for sale, hidden, ineligible/private/gated owner, no such id)."""
+    return _knife_row(con, con.execute(_BOARD_SELECT + ' AND k.id = ?',
+                                       (_board_cutoff(), knife_id)).fetchone())
+
+
 def claim_intro(con, want_id, knife_id, from_user, to_user, kind='match', message=None):
     """Claim an intro between a want and knife. For kind='match', dedupes on
     (from_user, knife_id) regardless of want_id — this is what actually
