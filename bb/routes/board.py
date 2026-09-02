@@ -81,14 +81,24 @@ def contact_seller(knife_id):
         if intro_id is None:      # cannot happen with a NULL want_id, but never send unclaimed
             return jsonify({'error': 'could not claim the intro'}), 500
         mailer = current_app.config['MAILER']
-        mid = 'sent'
+        to_seller, to_buyer = board.contact_emails(g.user, k, message)
+        # The seller leg IS the intro — it must land, or the claim (and the
+        # buyer's quota) is rolled back so they can simply retry. The buyer's
+        # own copy is a courtesy: once the seller has been notified, a failed
+        # copy must NOT delete the claim (the intro already happened) or let
+        # a retry re-mail the seller for free — mark it 'partial' and keep it.
         try:
-            for kwargs in board.contact_emails(g.user, k, message):
-                mid = mailer.send(**kwargs)
+            mailer.send(**to_seller)
         except Exception as e:  # noqa: BLE001 — surfaced in the log, claim rolled back, buyer retries
-            log.error('board contact %s → %s send failed: %r', g.user['handle'], k['tag'], e)
+            log.error('board contact %s → %s seller send failed: %r', g.user['handle'], k['tag'], e)
             db.delete_intro(con, intro_id)
             return jsonify({'error': 'could not send — try again'}), 502
+        try:
+            mid = mailer.send(**to_buyer)
+        except Exception as e:  # noqa: BLE001 — seller already notified; keep the claim, tell the buyer
+            log.error('board contact %s → %s buyer copy failed: %r', g.user['handle'], k['tag'], e)
+            db.mark_intro_sent(con, intro_id, 'partial')
+            return jsonify({'ok': True, 'copy': False})
         db.mark_intro_sent(con, intro_id, mid)
     finally:
         con.close()

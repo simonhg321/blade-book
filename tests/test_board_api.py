@@ -131,3 +131,25 @@ def test_board_json_never_carries_owner_email(client, con):
     _listing(con)
     body = client.get(B).data.decode()
     assert 's@example.com' not in body and 'owner_email' not in body and 'session_secret' not in body
+
+
+def test_contact_partial_send_keeps_claim_and_quota(client, mailer, con, monkeypatch):
+    """Seller leg landed, buyer copy failed: the intro happened, so the claim
+    stays (sent_at set, 'partial') and counts toward the buyer's quota."""
+    s, k = _listing(con)
+    signed_in(client, mailer, email='buyer@example.com')
+    real = mailer.send
+    calls = []
+
+    def flaky(**kw):
+        calls.append(kw['to'])
+        if kw['to'] == 'buyer@example.com':
+            raise RuntimeError('buyer bounce')
+        return real(**kw)
+    monkeypatch.setattr(mailer, 'send', flaky)
+    r = client.post(f"{B}/{k['id']}/contact", json={'message': 'hi'})
+    assert r.status_code == 200 and r.get_json() == {'ok': True, 'copy': False}
+    assert calls == ['s@example.com', 'buyer@example.com']          # seller first, then the copy
+    rows = [dict(x) for x in con.execute("SELECT * FROM intros WHERE kind = 'board'")]
+    assert len(rows) == 1 and rows[0]['sent_at'] and rows[0]['resend_msg_id'] == 'partial'
+    assert db.board_contacts_since(con, rows[0]['from_user'], '2000-01-01T00:00:00+00:00', to_user=s['id']) == 1
