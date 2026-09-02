@@ -153,3 +153,16 @@ def test_contact_partial_send_keeps_claim_and_quota(client, mailer, con, monkeyp
     rows = [dict(x) for x in con.execute("SELECT * FROM intros WHERE kind = 'board'")]
     assert len(rows) == 1 and rows[0]['sent_at'] and rows[0]['resend_msg_id'] == 'partial'
     assert db.board_contacts_since(con, rows[0]['from_user'], '2000-01-01T00:00:00+00:00', to_user=s['id']) == 1
+
+
+def test_contact_no_reply_to_when_only_buyer_shares_off(client, mailer, con):
+    """share is an AND: seller shares, buyer does not → no reply_to either way."""
+    s, k = _listing(con)                                   # seller shares (default 1)
+    me = signed_in(client, mailer, email='quiet@example.com')
+    con.execute('UPDATE users SET share_email_on_intro = 0 WHERE id = ?', (me['id'],)); con.commit()
+    mailer.sent.clear()
+    assert client.post(f"{B}/{k['id']}/contact", json={}).status_code == 200
+    assert len(mailer.sent) == 2
+    for m in mailer.sent:
+        assert m['reply_to'] is None
+        assert 'quiet@example.com' not in m['text'] and 's@example.com' not in m['text']

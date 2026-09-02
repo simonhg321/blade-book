@@ -23,3 +23,12 @@ Small items that don't warrant a plan. Bigger work lives in the plan roadmap
   only visible via sqlite3 until then (`SELECT * FROM reports WHERE resolved_at IS NOT NULL`).
 - [ ] rulings to revisit with real traffic: 10 board intros/day/buyer; 10 open reports/reporter;
   auto-hide counts only reporters who own a live knife.
+- [ ] moderation loop (final review, plan 09): (a) auto-hide has no terminal state after an admin
+  restore — the same 3 accounts can re-report and re-hide; skip the auto-hide branch when a
+  resolved report on the knife has resolution LIKE 'restored:%'. (b) sockpuppet cost to hide is
+  3 accounts × any live knife; consider requiring board-eligibility (verified + 7-day live knife)
+  to COUNT toward auto-hide, symmetric with listing.
+- [ ] db.connect() downgrades the schema stamp when an OLDER worker opens a NEWER DB
+  (`row[0] != SCHEMA_VERSION` → migrate-nothing → UPDATE to the old number). Harmless today
+  (next cron re-runs the idempotent migration) but: always merge → restart in the same minute,
+  and change the check to `<` so old workers read-as-is.

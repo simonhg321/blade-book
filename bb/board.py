@@ -47,7 +47,8 @@ def contact_emails(buyer, k, message):
     url = _permalink(k)
     share = bool(buyer.get('share_email_on_intro')) and bool(k.get('owner_share_email'))
     text = match.card_text(k)
-    msg_block = f"Their message:\n{message}\n\n" if message else ''
+    msg_block = (f"Their message (written by @{buyer['handle']} on blade-book — "
+                 f"we haven't checked it):\n{message}\n\n") if message else ''
     to_seller = {
         'to': k['owner_email'],
         'subject': f"blade-book: someone on the board is interested in your {k['tag']}",

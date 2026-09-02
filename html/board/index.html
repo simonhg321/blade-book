@@ -185,7 +185,7 @@
   $('rsend').addEventListener('click', function () {
     var k = current; if (!k) return;
     var reason = $('rmsg').value.trim();
-    if (reason.length < 3) { $('rmsg').focus(); return; }
+    if (reason.length < 3) { say('say why — a few words', true); $('rmsg').focus(); return; }
     $('rsend').disabled = true;
     post(BOARD + '/' + k.id + '/report', { reason: reason }).then(function (res) {
       $('rsend').disabled = false;

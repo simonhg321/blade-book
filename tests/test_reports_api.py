@@ -45,6 +45,17 @@ def test_report_own_knife_is_400(client, mailer, con):
     assert r.status_code == 400 and 'your own' in r.get_json()['error']
 
 
+def test_report_rejects_private_and_gated_owners(client, mailer, con):
+    priv = _seller(con, email='p@example.com', handle='p-guy', profile_private=1)
+    kp = _mk_knife(con, priv['id'])
+    gated = _seller(con, email='g@example.com', handle='g-guy', public_key='GATE')
+    kg = _mk_knife(con, gated['id'])
+    signed_in(client, mailer, email='r@example.com')
+    assert client.post(f"{B}/{kp['id']}/report", json={'reason': 'fake listing'}).status_code == 404
+    assert client.post(f"{B}/{kg['id']}/report", json={'reason': 'fake listing'}).status_code == 404
+    assert con.execute('SELECT count(*) FROM reports').fetchone()[0] == 0
+
+
 def test_three_counting_reports_auto_hide_and_republish(client, mailer, con, monkeypatch):
     s, k = _target(con)
     scheduled = []

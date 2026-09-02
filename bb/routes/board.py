@@ -123,6 +123,11 @@ def report_knife(knife_id):
         k = db.get_knife_any(con, knife_id)
         if k is None or k['status'] != 'live' or not k['is_public']:
             return jsonify({'error': 'not found'}), 404
+        owner = db.get_user(con, k['owner_id'])
+        # private or key-gated owners never appear on the board — a reporter
+        # could not legitimately see such a knife, so treat it as not found.
+        if owner.get('profile_private') or (owner.get('public_key') or '').strip():
+            return jsonify({'error': 'not found'}), 404
         if k['owner_id'] == g.user['id']:
             return jsonify({'error': "that's your own knife"}), 400
         try:
@@ -135,7 +140,7 @@ def report_knife(knife_id):
         if not hidden and db.counting_open_reports(con, knife_id) >= db.AUTO_HIDE_REPORTS:
             db.hide_knife(con, knife_id, 'reports', f'auto-hidden: {db.AUTO_HIDE_REPORTS} open reports')
             hidden = True
-            log.warning('%s (@%s) auto-hidden after %d reports', k['tag'], k['owner_id'], db.AUTO_HIDE_REPORTS)
+            log.warning('%s (owner %d) auto-hidden after %d reports', k['tag'], k['owner_id'], db.AUTO_HIDE_REPORTS)
             publish.schedule(k['owner_id'])
     finally:
         con.close()
