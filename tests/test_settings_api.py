@@ -41,3 +41,20 @@ def test_settings_change_schedules_publish(client, mailer, monkeypatch):
                         type('P', (), {'schedule': staticmethod(calls.append)})())
     client.patch(S, json={'profile_private': True})
     assert len(calls) == 1
+
+
+def test_share_email_on_intro_roundtrip(client, mailer):
+    signed_in(client, mailer)
+    r = client.get(S)
+    assert r.get_json()['share_email_on_intro'] == 1
+    r = client.patch(S, json={'share_email_on_intro': False})
+    assert r.status_code == 200 and r.get_json()['share_email_on_intro'] == 0
+    r = client.get(S)
+    assert r.get_json()['share_email_on_intro'] == 0
+    r = client.patch(S, json={'share_email_on_intro': True})
+    assert r.status_code == 200 and r.get_json()['share_email_on_intro'] == 1
+
+
+def test_share_email_on_intro_validation(client, mailer):
+    signed_in(client, mailer)
+    assert client.patch(S, json={'share_email_on_intro': 'yes'}).status_code == 400

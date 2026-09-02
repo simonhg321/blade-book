@@ -19,6 +19,7 @@ def _view(u):
             'public_url': auth.base_url() + paths.URL_PREFIX + '/@' + u['handle'],
             'hide_born_day': u['hide_born_day'],
             'profile_private': u['profile_private'],
+            'share_email_on_intro': u['share_email_on_intro'],
             'has_key': bool(u.get('public_key'))}
 
 
@@ -35,7 +36,7 @@ def patch_settings():
     if not isinstance(body, dict):
         return jsonify({'error': 'body must be a JSON object'}), 400
     fields = {}
-    for name in ('hide_born_day', 'profile_private'):
+    for name in ('hide_born_day', 'profile_private', 'share_email_on_intro'):
         if name in body:
             if not isinstance(body[name], bool):
                 return jsonify({'error': f'{name} must be true or false'}), 400
@@ -48,7 +49,7 @@ def patch_settings():
         if len(key) > MAX_KEY:
             return jsonify({'error': f'public_key over {MAX_KEY} characters'}), 400
         fields['public_key'] = key or None
-    bad = set(body) - {'hide_born_day', 'profile_private', 'public_key'}
+    bad = set(body) - {'hide_born_day', 'profile_private', 'public_key', 'share_email_on_intro'}
     if bad:
         return jsonify({'error': f'unknown setting: {sorted(bad)}'}), 400
     con = db.connect()
