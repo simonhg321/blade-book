@@ -264,3 +264,19 @@ def test_no_share_fallback_copy_does_not_promise_a_dead_end(con):
     assert "hasn't shared a contact address" in owner_mail['text']
     assert 'Reach the owner via their register page' not in wanter_mail['text']
     assert 'They can reach you through your public page' not in owner_mail['text']
+
+
+def test_match_retry_lane_ignores_board_claims(con):
+    """plan 09: a board contact claims an intros row with want_id NULL and
+    sends synchronously; a cron run in that window must neither send nor
+    'skip' it (which would stamp sent_at and break the board's failure
+    rollback)."""
+    from tests.test_board_db import _seller
+    s = _seller(con)
+    k = _mk_knife(con, s['id'], sale_status='for_sale', asking_price=500)
+    b = _u(con, email='b@example.com', handle='b-guy')
+    iid = db.claim_intro(con, None, k['id'], b['id'], s['id'], kind='board', message='hi')
+    m = FakeMailer()
+    assert match.run(con, m) == 0 and m.sent == []
+    row = con.execute('SELECT sent_at FROM intros WHERE id = ?', (iid,)).fetchone()
+    assert row['sent_at'] is None

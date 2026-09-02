@@ -822,6 +822,16 @@ def delete_intro(con, intro_id):
     con.commit()
 
 
+def board_contacts_since(con, from_user, since_iso, to_user=None):
+    """Board intros this buyer has claimed since `since_iso` (all sellers, or one)."""
+    sql = "SELECT count(*) FROM intros WHERE kind = 'board' AND from_user = ? AND created >= ?"
+    args = [from_user, since_iso]
+    if to_user is not None:
+        sql += ' AND to_user = ?'
+        args.append(to_user)
+    return con.execute(sql, args).fetchone()[0]
+
+
 # --- publish dirty flag (debounced rebuild of the public bundle) --------------
 
 def mark_publish_dirty(con, owner_id):
