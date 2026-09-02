@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 
 from bb import paths
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 SALE_STATUSES = ('keeping', 'for_trade', 'for_sale', 'consigned', 'sold')
 KNIFE_STATUSES = ('draft', 'live')
@@ -24,6 +24,7 @@ WANT_MODES = ('trade', 'sale', 'either')
 WANT_FIELDS = ('maker', 'model', 'generation', 'size', 'blade_shape', 'blade_steel',
                'keyword', 'born_from', 'born_to', 'mode', 'max_price')
 MAX_ACTIVE_WANTS = 20
+HIDDEN_BY = ('reports', 'admin')
 
 # never leaves the private register — see spec §5 invariant
 PRIVATE_COLUMNS = frozenset({'price_paid', 'acquired_from', 'acquired_date',
@@ -63,10 +64,16 @@ CREATE TABLE IF NOT EXISTS intros (
   kind TEXT NOT NULL DEFAULT 'match' CHECK (kind IN ('match','board')),
   sent_at TEXT,
   resend_msg_id TEXT,
+  message TEXT,
   created TEXT NOT NULL,
   UNIQUE (want_id, knife_id)
 );
 """
+
+# One OPEN report per (knife, reporter): a partial UNIQUE index, so a
+# resolved report never blocks a fresh one on the same knife later.
+REPORTS_OPEN_INDEX_DDL = ('CREATE UNIQUE INDEX IF NOT EXISTS idx_reports_open '
+                          'ON reports(knife_id, reporter_id) WHERE resolved_at IS NULL;')
 
 SCHEMA = f"""
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
@@ -119,6 +126,8 @@ CREATE TABLE IF NOT EXISTS knives (
   sale_status TEXT NOT NULL DEFAULT 'keeping'
     CHECK (sale_status IN {SALE_STATUSES}),
   asking_price REAL, seller_note TEXT,
+  listed_at TEXT,
+  hidden_at TEXT, hidden_by TEXT, hidden_note TEXT,
   hero_photo INTEGER,
   created TEXT NOT NULL, updated TEXT NOT NULL,
   UNIQUE (owner_id, tag)
@@ -163,6 +172,7 @@ CREATE TABLE IF NOT EXISTS reports (
   created TEXT NOT NULL,
   resolved_at TEXT, resolution TEXT
 );
+{REPORTS_OPEN_INDEX_DDL}
 
 CREATE TABLE IF NOT EXISTS deleted_users (
   email_hash TEXT PRIMARY KEY,
@@ -233,6 +243,17 @@ MIGRATIONS = {
         WANTS_DDL,
         WANTS_INDEX_DDL,
         INTROS_DDL],
+    # plan 09: board + moderation columns. ALTERs are guarded by _migrate's
+    # 'duplicate column' tolerance (a v5 box gets intros.message from the v6
+    # INTROS_DDL already). listed_at is backfilled from `updated` for knives
+    # already for_sale so the board has an order on day one.
+    7: ['ALTER TABLE knives ADD COLUMN listed_at TEXT',
+        'ALTER TABLE knives ADD COLUMN hidden_at TEXT',
+        'ALTER TABLE knives ADD COLUMN hidden_by TEXT',
+        'ALTER TABLE knives ADD COLUMN hidden_note TEXT',
+        'ALTER TABLE intros ADD COLUMN message TEXT',
+        REPORTS_OPEN_INDEX_DDL,
+        "UPDATE knives SET listed_at = updated WHERE sale_status = 'for_sale' AND listed_at IS NULL"],
 }
 
 
@@ -560,9 +581,13 @@ def set_sale(con, owner_id, knife_id, sale_status, asking_price=None, seller_not
     k = get_knife(con, owner_id, knife_id)
     if k is None:
         return None
-    con.execute('UPDATE knives SET sale_status = ?, asking_price = ?, seller_note = ?, updated = ? '
-                'WHERE id = ? AND owner_id = ?',
-                (sale_status, asking_price, seller_note, now(), knife_id, owner_id))
+    if sale_status == 'for_sale':
+        listed_at = k['listed_at'] if k['sale_status'] == 'for_sale' and k.get('listed_at') else now()
+    else:
+        listed_at = None
+    con.execute('UPDATE knives SET sale_status = ?, asking_price = ?, seller_note = ?, listed_at = ?, '
+                'updated = ? WHERE id = ? AND owner_id = ?',
+                (sale_status, asking_price, seller_note, listed_at, now(), knife_id, owner_id))
     con.commit()
     if sale_status != k['sale_status'] and (sale_status != 'keeping' or k['sale_status'] in _LISTED):
         add_event(con, owner_id, knife_id, SALE_EVENT[sale_status], detail=seller_note or None,
@@ -673,7 +698,8 @@ def active_wants(con):
 def all_public_knives(con):
     """Every knife matchable by wants, across all owners: live, public,
     not sold/consigned, owner not private and not key-gated (a gated
-    register is link+key only — never matched, plan 06/07 precedent)."""
+    register is link+key only — never matched, plan 06/07 precedent);
+    hidden (reports/admin) knives are excluded — plan 09."""
     out = []
     for r in con.execute(
             "SELECT k.*, u.handle AS owner_handle, u.email AS owner_email, "
@@ -682,6 +708,7 @@ def all_public_knives(con):
             "FROM knives k JOIN users u ON u.id = k.owner_id "
             "WHERE k.status = 'live' AND k.is_public = 1 "
             "AND k.sale_status NOT IN ('sold', 'consigned') "
+            "AND k.hidden_at IS NULL "
             "AND u.profile_private = 0 "
             "AND (u.public_key IS NULL OR trim(u.public_key) = '') "
             "ORDER BY k.id"):
@@ -690,7 +717,7 @@ def all_public_knives(con):
     return out
 
 
-def claim_intro(con, want_id, knife_id, from_user, to_user, kind='match'):
+def claim_intro(con, want_id, knife_id, from_user, to_user, kind='match', message=None):
     """Claim an intro between a want and knife. For kind='match', dedupes on
     (from_user, knife_id) regardless of want_id — this is what actually
     enforces spec §5 "one fire per pair, ever": intros.want_id is ON DELETE
@@ -698,9 +725,11 @@ def claim_intro(con, want_id, knife_id, from_user, to_user, kind='match'):
     finds its old, now want_id=NULL, row here and claims nothing new. It
     also collapses N overlapping wants from the same user matching the same
     knife into a single claim/email pair instead of N. Board-kind intros
-    (a later plan) are unaffected. INSERT OR IGNORE on the (want_id,
-    knife_id) UNIQUE is the remaining guard against a genuine same-pair
-    race. Returns intro_id, or None if nothing was claimed. Commits."""
+    (plan 09) pass want_id=None — NULLs are distinct under the UNIQUE, so
+    many buyers can contact the same knife; the per-day limits live in
+    bb/board.py. INSERT OR IGNORE on the (want_id, knife_id) UNIQUE is the
+    remaining guard against a genuine same-pair race. Returns intro_id, or
+    None if nothing was claimed. Commits."""
     if kind == 'match':
         dupe = con.execute(
             'SELECT id FROM intros WHERE from_user = ? AND knife_id = ? AND kind = ?',
@@ -708,14 +737,13 @@ def claim_intro(con, want_id, knife_id, from_user, to_user, kind='match'):
         if dupe:
             return None
     cur = con.execute(
-        'INSERT OR IGNORE INTO intros (want_id, knife_id, from_user, to_user, kind, created) '
-        'VALUES (?, ?, ?, ?, ?, ?)',
-        (want_id, knife_id, from_user, to_user, kind, now()))
+        'INSERT OR IGNORE INTO intros (want_id, knife_id, from_user, to_user, kind, message, created) '
+        'VALUES (?, ?, ?, ?, ?, ?, ?)',
+        (want_id, knife_id, from_user, to_user, kind, message, now()))
     con.commit()
     if cur.rowcount == 0:
         return None
-    return con.execute('SELECT id FROM intros WHERE want_id = ? AND knife_id = ?',
-                       (want_id, knife_id)).fetchone()[0]
+    return cur.lastrowid
 
 
 def mark_intro_sent(con, intro_id, msg_id):
@@ -725,9 +753,17 @@ def mark_intro_sent(con, intro_id, msg_id):
     con.commit()
 
 
-def unsent_intros(con):
-    """All intros with sent_at NULL (unsent claims)."""
-    return [dict(r) for r in con.execute('SELECT * FROM intros WHERE sent_at IS NULL')]
+def unsent_intros(con, kind='match'):
+    """Intros with sent_at NULL, of ONE kind. The match cron's retry lane
+    must never pick up a board claim (plan 09 sends those synchronously and
+    deletes the claim on failure)."""
+    return [dict(r) for r in con.execute(
+        'SELECT * FROM intros WHERE sent_at IS NULL AND kind = ?', (kind,))]
+
+
+def delete_intro(con, intro_id):
+    con.execute('DELETE FROM intros WHERE id = ?', (intro_id,))
+    con.commit()
 
 
 # --- publish dirty flag (debounced rebuild of the public bundle) --------------
@@ -759,11 +795,12 @@ def dirty_owners(con, quiet_s=30):
 def public_knives(con, owner_id):
     """The knives that belong on the owner's PUBLIC page: live, is_public, and
     not sold/consigned (pieces that left the collection or sit with a dealer
-    leave the public surface — crkinv rule). Oldest first (register order)."""
+    leave the public surface — crkinv rule); hidden (reports/admin) knives
+    are excluded — plan 09. Oldest first (register order)."""
     out = []
     for r in con.execute(
             "SELECT * FROM knives WHERE owner_id = ? AND status = 'live' AND is_public = 1 "
-            "AND sale_status NOT IN ('sold', 'consigned') ORDER BY id", (owner_id,)):
+            "AND sale_status NOT IN ('sold', 'consigned') AND hidden_at IS NULL ORDER BY id", (owner_id,)):
         out.append(_knife_row(con, r))
     return out
 
@@ -878,6 +915,31 @@ def delete_knife(con, owner_id, knife_id):
     con.execute('DELETE FROM knives WHERE id = ? AND owner_id = ?', (knife_id, owner_id))  # photos cascade
     con.commit()
     return keys
+
+
+def get_knife_any(con, knife_id):
+    """A knife by id with NO owner filter — for report/admin paths only.
+    Never use it on an owner-scoped route (spec §5: a knife you don't own
+    must be indistinguishable from one that doesn't exist)."""
+    return _knife_row(con, con.execute('SELECT * FROM knives WHERE id = ?', (knife_id,)).fetchone())
+
+
+def hide_knife(con, knife_id, by, note):
+    """Hide a knife from every public surface (board, bundle, search, matching).
+    Callers re-publish the owner. Returns whether a row changed."""
+    if by not in HIDDEN_BY:
+        raise ValueError(f'bad hidden_by {by!r}')
+    ok = con.execute('UPDATE knives SET hidden_at = ?, hidden_by = ?, hidden_note = ? WHERE id = ?',
+                     (now(), by, note, knife_id)).rowcount == 1
+    con.commit()
+    return ok
+
+
+def restore_knife(con, knife_id):
+    ok = con.execute('UPDATE knives SET hidden_at = NULL, hidden_by = NULL, hidden_note = NULL '
+                     'WHERE id = ?', (knife_id,)).rowcount == 1
+    con.commit()
+    return ok
 
 
 def add_photo(con, owner_id, knife_id, seq, store_key, sha256, width, height):

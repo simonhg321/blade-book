@@ -84,3 +84,46 @@ def test_v5_migration_repairs_old_wants_intros_shape(env):
     m = FakeMailer()
     assert match.run(con, m) == 2
     con.close()
+
+
+def _build_v6_db():
+    """A fresh DB stamped v6: current shape minus the plan-09 columns/index
+    (sqlite ≥ 3.35 supports DROP COLUMN; stark has 3.45)."""
+    path = paths.db_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    raw = sqlite3.connect(path)
+    raw.executescript(db.SCHEMA)
+    raw.executescript("""
+        DROP INDEX IF EXISTS idx_reports_open;
+        ALTER TABLE knives DROP COLUMN listed_at;
+        ALTER TABLE knives DROP COLUMN hidden_at;
+        ALTER TABLE knives DROP COLUMN hidden_by;
+        ALTER TABLE knives DROP COLUMN hidden_note;
+        ALTER TABLE intros DROP COLUMN message;
+    """)
+    ts = '2026-09-01T00:00:00+00:00'
+    raw.execute("INSERT INTO users (id, email, handle, created) VALUES (1, 'v6@example.com', 'v6-guy', ?)", (ts,))
+    raw.execute("INSERT INTO knives (id, owner_id, tag, status, sale_status, asking_price, created, updated) "
+                "VALUES (1, 1, 'K01', 'live', 'for_sale', 500, ?, ?)", (ts, '2026-09-01T12:00:00+00:00'))
+    raw.execute("INSERT INTO knives (id, owner_id, tag, status, sale_status, created, updated) "
+                "VALUES (2, 1, 'K02', 'live', 'keeping', ?, ?)", (ts, ts))
+    raw.execute('INSERT INTO schema_version VALUES (6)')
+    raw.commit()
+    raw.close()
+
+
+def test_v6_to_v7_adds_columns_index_and_backfills_listed_at(env):
+    _build_v6_db()
+    con = db.connect()
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION == 7
+    kcols = {r[1] for r in con.execute('PRAGMA table_info(knives)')}
+    assert {'listed_at', 'hidden_at', 'hidden_by', 'hidden_note'} <= kcols
+    assert 'message' in {r[1] for r in con.execute('PRAGMA table_info(intros)')}
+    assert 'idx_reports_open' in [r[1] for r in con.execute('PRAGMA index_list(reports)')]
+    rows = {r[0]: r[1] for r in con.execute('SELECT tag, listed_at FROM knives')}
+    assert rows['K01'] == '2026-09-01T12:00:00+00:00'   # for_sale before the upgrade → listed_at = updated
+    assert rows['K02'] is None
+    con.close()
+    con = db.connect()                                   # idempotent second open
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == 7
+    con.close()
