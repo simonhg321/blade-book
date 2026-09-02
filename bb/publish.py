@@ -245,7 +245,9 @@ def _mark_svg(px):
             'stroke-linecap="round" opacity=".65" fill="none"/></svg>')
 
 
-def _head(title, desc, og_image, noindex):
+def _head(title, desc, og_image, noindex, extra_style=''):
+    """Document head through `<body>`. Callers open their own `<main>` (the
+    register index puts a full-bleed hero BEFORE main)."""
     e = html_mod.escape
     robots = '<meta name="robots" content="noindex, nofollow">\n' if noindex else ''
     og_img = f'<meta property="og:image" content="{e(og_image)}">\n' if og_image else ''
@@ -258,7 +260,7 @@ def _head(title, desc, og_image, noindex):
             f'<link rel="icon" type="image/svg+xml" href="/blade-book/mark.svg">\n'
             f'<link rel="apple-touch-icon" href="/blade-book/apple-touch-icon.png">\n'
             f'<link rel="stylesheet" href="/blade-book/vibe.css">\n'
-            f'<style>{_STYLE}</style>\n</head>\n<body>\n<main>\n')
+            f'<style>{_STYLE}{extra_style}</style>\n</head>\n<body>\n')
 
 
 def _knife_page(row, handle, gated):
@@ -278,7 +280,7 @@ def _knife_page(row, handle, gated):
         f"born {row['born']}" if row.get('born') else None) if b]
     desc = '' if gated else (' · '.join(desc_bits) or 'From a private register on blade-book.')
     og_image = (f"{_public_base()}/@{handle}/img/{row['img']}" if row.get('img') and not gated else '')
-    out = _head(title, desc, og_image, noindex=gated)
+    out = _head(title, desc, og_image, noindex=gated) + '<main>\n'
     out += f'<p class="tag">{e(row["tag"])}</p>\n<h1>{e(name)}</h1>\n'
     if row.get('img'):
         out += f'<img class="hero" src="../img/{e(row["img"])}" alt="{e(name)}">\n'
@@ -317,39 +319,248 @@ def _knife_page(row, handle, gated):
     return out + '</body>\n</html>\n'
 
 
+# Register index (2026-09-02 UI pass): full-bleed parallax hero over the
+# collector's first display photo, then the register as a crk-style sortable
+# list or a thumb grid (toggle remembered in localStorage). Everything below
+# is server-rendered + escaped; the script reads data-* attributes and
+# reorders existing nodes only — no innerHTML, no data reaches JS as markup.
+_INDEX_STYLE = """
+  body { overflow-x:hidden; }
+  .hero-bg { position:fixed; inset:-12vh 0 0 0; z-index:-1; background:#1a1a1a center/cover no-repeat;
+             will-change:transform; }
+  .hero { position:relative; min-height:54vh; display:flex; flex-direction:column; justify-content:flex-end;
+          padding:22px 20px 40px; color:#fff;
+          background:linear-gradient(180deg, rgba(26,26,26,.05) 0%, rgba(26,26,26,.25) 45%, rgba(26,26,26,.82) 100%); }
+  .hero.plain { background:none; color:var(--ink,#141210); min-height:0; padding-bottom:10px; }
+  .hero .tag { color:#f3d5c9; text-shadow:0 1px 8px rgba(0,0,0,.6); }
+  .hero.plain .tag { color:var(--accent,#b8452c); text-shadow:none; }
+  .hero h1 { font-size:3.4rem; line-height:1; margin:.15rem 0 0; text-shadow:0 2px 14px rgba(0,0,0,.55); }
+  .hero.plain h1 { text-shadow:none; }
+  .hero .count { color:#ece4d4; font-weight:600; text-shadow:0 1px 8px rgba(0,0,0,.6); }
+  .hero.plain .count { color:#555; text-shadow:none; }
+  .hero .signin { color:#fff; }
+  .hero.plain .signin { color:var(--accent,#b8452c); }
+  .feat { display:inline-flex; flex-direction:column; gap:2px; align-self:flex-start; margin-top:16px;
+          background:var(--cream,#f6f1e7); color:var(--ink,#141210); border:2px solid var(--ink,#141210);
+          border-radius:14px; padding:10px 14px; text-decoration:none; text-shadow:none;
+          box-shadow:0 10px 30px rgba(0,0,0,.35); max-width:100%; }
+  .feat .flabel { font-size:.66rem; letter-spacing:.14em; color:#666; font-weight:700; }
+  .feat .fname { font-weight:800; font-size:1.05rem; line-height:1.2; }
+  .feat .fname .tag { margin-right:6px; }
+  .feat .fborn { color:var(--accent,#b8452c); font-weight:700; font-size:.85rem; }
+  .feat .badge-sale { margin-top:4px; align-self:flex-start; }
+  .feat:hover { transform:translateY(-2px); }
+  .stats { display:flex; flex-wrap:wrap; gap:8px 22px; padding:14px 4px 4px; color:#555; font-size:.88rem; }
+  .stats b { color:var(--ink,#141210); font-family:'Bebas Neue',Impact,sans-serif; font-weight:400;
+             font-size:1.5rem; letter-spacing:.04em; margin-right:4px; vertical-align:-2px; }
+  main.reg { position:relative; max-width:none; margin:-22px 0 0; padding:0; background:var(--cream,#f6f1e7);
+             border-radius:24px 24px 0 0; box-shadow:0 -10px 34px rgba(0,0,0,.28); }
+  .hero.plain + main.reg { margin-top:0; border-radius:0; box-shadow:none; }
+  main.reg .inner { max-width:960px; margin:0 auto; padding:18px 16px 60px; }
+  .toolbar { display:flex; gap:10px; align-items:center; position:sticky; top:0; z-index:2;
+             background:var(--cream,#f6f1e7); padding:12px 0 10px; }
+  #q { flex:1; min-width:0; padding:10px 12px; font:inherit; border:2px solid var(--ink,#141210);
+       border-radius:12px; background:#fff; }
+  #view { display:flex; border:2px solid var(--ink,#141210); border-radius:12px; overflow:hidden; }
+  #view button { font:inherit; font-weight:800; font-size:.8rem; letter-spacing:.06em; padding:9px 12px;
+                 border:0; background:#fff; color:var(--ink,#141210); cursor:pointer; }
+  #view button.on { background:var(--ink,#141210); color:var(--cream,#f6f1e7); }
+  #cols { display:grid; grid-template-columns:92px 1fr 118px 96px; gap:8px; padding:6px 8px 4px;
+          border-bottom:2px solid var(--ink,#141210); }
+  #cols button { font:inherit; font-size:.7rem; letter-spacing:.09em; text-transform:uppercase; color:#555;
+                 background:none; border:0; padding:0; text-align:left; cursor:pointer; }
+  #cols button.asc::after { content:" ▲"; color:var(--accent,#b8452c); }
+  #cols button.desc::after { content:" ▼"; color:var(--accent,#b8452c); }
+  .k { transition:opacity .45s ease-out, transform .45s ease-out, box-shadow .2s; }
+  .k.pre { opacity:0; transform:translateY(16px); }
+  #reg.list .k { display:grid; grid-template-columns:92px 1fr 118px 96px; gap:8px; align-items:center;
+                 padding:6px 8px; border-bottom:1px solid var(--line,#e2d9c8); border-radius:8px; }
+  #reg.list .k:hover { background:#fff; box-shadow:0 6px 18px rgba(0,0,0,.08); transform:translateY(-1px); }
+  #reg.list .t { width:84px; height:63px; object-fit:cover; border-radius:6px; background:var(--soft,#e8e0d0);
+                 display:block; cursor:zoom-in; }
+  #reg.list span.t { cursor:default; }
+  #reg .name { color:var(--ink,#141210); font-weight:700; }
+  #reg .name .tag { margin-right:4px; }
+  #reg .born { color:var(--accent,#b8452c); font-weight:700; font-size:.9rem; }
+  .badge-sale { display:inline-block; background:var(--accent,#b8452c); color:#fff; font-size:.66rem; font-weight:800;
+                letter-spacing:.06em; padding:3px 8px; border-radius:12px; white-space:nowrap; }
+  #reg.grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin-top:10px; }
+  #reg.grid .k { display:flex; flex-direction:column; background:#fff; border:1px solid var(--line,#e2d9c8);
+                 border-radius:12px; overflow:hidden; }
+  #reg.grid .k:hover { transform:translateY(-3px); box-shadow:0 10px 24px rgba(0,0,0,.12); }
+  #reg.grid .t { width:100%; aspect-ratio:1; object-fit:cover; display:block; background:var(--soft,#e8e0d0);
+                 cursor:zoom-in; }
+  #reg.grid .name { padding:6px 8px 0; font-size:.82rem; line-height:1.25; }
+  #reg.grid .born { padding:2px 8px 0; font-size:.78rem; }
+  #reg.grid .badge-sale { margin:6px 8px 8px; align-self:flex-start; }
+  #reg.grid .k > :last-child { margin-bottom:8px; }
+  .empty { text-align:center; color:#888; padding:30px 0; }
+  dialog#lb { border:0; padding:0; background:#000; border-radius:14px; max-width:94vw; }
+  dialog#lb img { max-width:90vw; max-height:82vh; display:block; }
+  dialog#lb::backdrop { background:rgba(10,8,4,.75); }
+  main.reg footer { text-align:center; }
+  @media (min-width: 700px) {
+    .hero { min-height:60vh; padding:28px 40px 52px; }
+    .hero h1 { font-size:4.6rem; }
+    #reg.grid { grid-template-columns:repeat(5, 1fr); gap:12px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .hero-bg { position:absolute; inset:0; height:60vh; }
+    .k, .k.pre { transition:none; opacity:1; transform:none; }
+  }
+"""
+
+_INDEX_SCRIPT = """
+(function () {
+  var reg = document.getElementById('reg'), q = document.getElementById('q');
+  var view = document.getElementById('view'), cols = document.getElementById('cols');
+  var rows = Array.prototype.slice.call(reg.querySelectorAll('.k'));
+  function setView(v) {
+    reg.className = v;
+    cols.hidden = (v === 'grid');
+    Array.prototype.forEach.call(view.querySelectorAll('button'), function (b) {
+      b.classList.toggle('on', b.getAttribute('data-view') === v);
+    });
+    try { localStorage.setItem('bb_view', v); } catch (e) {}
+  }
+  var saved = 'list';
+  try { saved = localStorage.getItem('bb_view') || 'list'; } catch (e) {}
+  setView(saved === 'grid' ? 'grid' : 'list');
+  view.addEventListener('click', function (ev) {
+    var b = ev.target.closest('button'); if (b) setView(b.getAttribute('data-view'));
+  });
+  var empty = document.getElementById('empty');
+  q.addEventListener('input', function () {
+    var t = q.value.trim().toLowerCase(), shown = 0;
+    rows.forEach(function (r) {
+      var hit = !t || r.textContent.toLowerCase().indexOf(t) >= 0;
+      r.hidden = !hit; if (hit) shown++;
+    });
+    empty.hidden = shown > 0;
+  });
+  var dir = {};
+  var heads = Array.prototype.slice.call(cols.querySelectorAll('[data-sort]'));
+  heads.forEach(function (h) {
+    h.addEventListener('click', function () {
+      var k = h.getAttribute('data-sort');
+      dir[k] = dir[k] === 'asc' ? 'desc' : 'asc';
+      var d = dir[k] === 'asc' ? 1 : -1;
+      rows.sort(function (a, b) {
+        var x = a.getAttribute('data-' + k) || '', y = b.getAttribute('data-' + k) || '';
+        if (k === 'tag') { x = parseInt(x.slice(1), 10) || 0; y = parseInt(y.slice(1), 10) || 0; return (x - y) * d; }
+        if (!x && y) return 1; if (x && !y) return -1;
+        return x < y ? -d : x > y ? d : 0;
+      });
+      rows.forEach(function (r) { reg.appendChild(r); });
+      heads.forEach(function (o) { o.classList.remove('asc', 'desc'); });
+      h.classList.add(dir[k]);
+    });
+  });
+  var lb = document.getElementById('lb'), li = lb.querySelector('img');
+  reg.addEventListener('click', function (ev) {
+    var t = ev.target;
+    if (t.tagName === 'IMG' && t.getAttribute('data-full')) {
+      li.src = t.getAttribute('data-full'); li.alt = t.alt; lb.showModal();
+    }
+  });
+  lb.addEventListener('click', function () { lb.close(); });
+  var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!still && 'IntersectionObserver' in window) {
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (en) { if (en.isIntersecting) { en.target.classList.remove('pre'); io.unobserve(en.target); } });
+    }, { rootMargin: '0px 0px -6% 0px' });
+    rows.forEach(function (r) {
+      if (r.getBoundingClientRect().top > window.innerHeight) { r.classList.add('pre'); io.observe(r); }
+    });
+  }
+  var bg = document.querySelector('.hero-bg');
+  if (bg && !still) {
+    var ticking = false;
+    window.addEventListener('scroll', function () {
+      if (ticking) return; ticking = true;
+      window.requestAnimationFrame(function () {
+        bg.style.transform = 'translateY(' + (window.scrollY * 0.32) + 'px)'; ticking = false;
+      });
+    }, { passive: true });
+  }
+})();
+"""
+
+
 def _index_html(rows, user, gated):
     e = html_mod.escape
     handle = user['handle']
     n = len(rows)
+    count = f'{n} {"knives" if n != 1 else "knife"}'
     title = f'@{handle} — blade-book register'
-    desc = '' if gated else f'{n} {"knives" if n != 1 else "knife"} in a collector’s public register.'
-    out = _head(title, desc, '', noindex=gated)
+    desc = '' if gated else f'{count} in a collector’s public register.'
+    hero_row = next((r for r in rows if r.get('img')), None)
+    out = _head(title, desc, '', noindex=gated, extra_style=_INDEX_STYLE)
+    if hero_row:
+        out += (f'<div class="hero-bg" style="background-image:url(img/{e(hero_row["img"])})"></div>\n'
+                '<header class="hero">\n')
+    else:
+        out += '<header class="hero plain">\n'
     out += ('<p class="signin"><a href="/blade-book/me/">sign in</a></p>\n'
             f'{_mark_svg(46)}\n<p class="tag">BLADE-BOOK REGISTER</p>\n<h1>@{e(handle)}</h1>\n'
-            f'<p>{n} {"knives" if n != 1 else "knife"}</p>\n'
-            '<p><a class="cta" href="/blade-book/how/">Keep a register like this — how it works →</a></p>\n')
+            f'<p class="count">{count}</p>\n')
+    if hero_row:
+        fname = display_name(hero_row)
+        fborn = f'<span class="fborn">born {e(hero_row["born"])}</span>' if hero_row.get('born') else ''
+        fbadge = ''
+        if hero_row.get('for_sale'):
+            fprice = f" · ${hero_row['asking_price']:g}" if hero_row.get('asking_price') else ''
+            fbadge = f'<span class="badge-sale">FOR SALE{fprice}</span>'
+        elif hero_row.get('for_trade'):
+            fbadge = '<span class="badge-sale">FOR TRADE</span>'
+        out += (f'<a class="feat" href="{e(hero_row["tag"])}/"><span class="flabel">IN THE PHOTO</span>'
+                f'<span class="fname"><span class="tag">{e(hero_row["tag"])}</span>{e(fname)}</span>'
+                f'{fborn}{fbadge}</a>\n')
+    out += '</header>\n<main class="reg">\n<div class="inner">\n'
+    years = sorted({r['born_on'][:4] for r in rows if r.get('born_on')})
+    for_sale = sum(1 for r in rows if r.get('for_sale'))
+    stats = [f'<span><b>{n}</b> {"knives" if n != 1 else "knife"}</span>']
+    if years:
+        span = years[0] if len(years) == 1 else f'{years[0]}–{years[-1]}'
+        stats.append(f'<span><b>{span}</b> born</span>')
+    if for_sale:
+        stats.append(f'<span><b>{for_sale}</b> for sale</span>')
+    out += f'<div class="stats">{"".join(stats)}</div>\n'
+    out += (
+            '<div class="toolbar"><input id="q" type="search" placeholder="search this register — model, born, steel…" '
+            'autocomplete="off" aria-label="search this register">'
+            '<div id="view" role="group" aria-label="view"><button type="button" data-view="list">LIST</button>'
+            '<button type="button" data-view="grid">GRID</button></div></div>\n'
+            '<div id="cols"><span></span><button type="button" data-sort="name">knife</button>'
+            '<button type="button" data-sort="born">born</button><button type="button" data-sort="tag">tag</button></div>\n'
+            '<div id="reg" class="list">\n')
     for row in rows:
         name = display_name(row)
-        badge = ''
+        badge = '<span></span>'
         if row.get('for_sale'):
             price = f" · ${row['asking_price']:g}" if row.get('asking_price') else ''
-            badge = f'<p class="sale">FOR SALE{price}</p>'
+            badge = f'<span class="badge-sale">FOR SALE{price}</span>'
         elif row.get('for_trade'):
-            badge = '<p class="sale">FOR TRADE</p>'
-        img = ''
+            badge = '<span class="badge-sale">FOR TRADE</span>'
         if row.get('img_t'):
-            srcset = f'img/{e(row["img_t"])} {THUMB_EDGE}w'
-            if row.get('img'):
-                srcset += f', img/{e(row["img"])} {DISPLAY_EDGE}w'
-            img = (f'<img src="img/{e(row["img_t"])}" srcset="{srcset}" '
-                   f'sizes="(max-width: 600px) 92vw, 528px" alt="{e(name)}" loading="lazy">')
-        born = f' — born {e(row["born"])}' if row.get('born') else ''
-        out += (f'<div class="card"><a href="{e(row["tag"])}/">{img}'
-                f'<p><span class="tag">{e(row["tag"])}</span> {e(name)}{born}</p></a>{badge}</div>\n')
-    out += ('<footer>Kept on <a href="/blade-book/">blade-book</a> — '
+            full = f' data-full="img/{e(row["img"])}"' if row.get('img') else ''
+            img = f'<img class="t" src="img/{e(row["img_t"])}"{full} alt="{e(name)}" loading="lazy">'
+        else:
+            img = '<span class="t"></span>'
+        born = e(row['born']) if row.get('born') else ''
+        out += (f'<article class="k" data-tag="{e(row["tag"])}" data-name="{e(name)}" '
+                f'data-born="{e(row.get("born_on") or "")}">{img}'
+                f'<a class="name" href="{e(row["tag"])}/"><span class="tag">{e(row["tag"])}</span>{e(name)}</a>'
+                f'<span class="born">{born}</span>{badge}</article>\n')
+    out += ('</div>\n<p id="empty" class="empty" hidden>nothing matches</p>\n'
+            '<p style="text-align:center;margin-top:22px"><a class="cta" href="/blade-book/how/">'
+            'Keep a register like this — how it works →</a></p>\n'
+            '<footer>Kept on <a href="/blade-book/">blade-book</a> — '
             'a register for knife collectors. <a href="/blade-book/how/">How it works →</a> · '
             '<a href="/blade-book/search/">search all registers</a> · '
-            '<a href="/blade-book/me/">sign in</a></footer>\n</main>\n')
+            '<a href="/blade-book/me/">sign in</a></footer>\n</div>\n</main>\n'
+            '<dialog id="lb"><img alt=""></dialog>\n'
+            f'<script>{_INDEX_SCRIPT}</script>\n')
     out += _gate_snippet('') if gated else ''
     return out + '</body>\n</html>\n'
 

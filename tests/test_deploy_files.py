@@ -333,3 +333,8 @@ def test_register_page_shows_hidden_badge():
 def test_runbook_move_mentions_reports_and_hidden():
     s = _read('docs/RUNBOOK-move.md')
     assert 'reports' in s and 'hidden_at' in s
+
+
+def test_landing_says_one_shot():
+    html = open(os.path.join(ROOT, 'html', 'index.html')).read()
+    assert 'How it works — the one shot →' in html and 'three shots' not in html

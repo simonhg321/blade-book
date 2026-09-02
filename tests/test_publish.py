@@ -154,3 +154,77 @@ def test_export_hero_no_photos_or_bad_bytes(tmp_path):
 def test_export_hero_missing_store_key(tmp_path):
     # photo row references a store key the store doesn't actually have
     assert publish.export_hero(MemStore({}), _hero_knife(), 'pub', str(tmp_path)) == (None, None)
+
+
+# --- register index: parallax hero + list/grid views (2026-09-02 UI pass) ---
+
+def _rows(n=3, with_img=True):
+    rows = []
+    for i in range(n):
+        r = publish.public_row(_knife(tag=f'K0{i + 1}', born_on=f'20{20 + i}-0{i + 1}-1{i}'), USER)
+        if with_img:
+            r['img'], r['img_t'] = f'K0{i + 1}.jpg', f'K0{i + 1}_t.jpg'
+        rows.append(r)
+    return rows
+
+
+def test_index_hero_uses_first_display_photo():
+    html = publish._index_html(_rows(), USER, gated=False)
+    assert 'class="hero"' in html and 'img/K01.jpg' in html
+    assert 'BLADE-BOOK REGISTER' in html and '@simon-collector' in html and '3 knives' in html
+    assert 'prefers-reduced-motion' in html
+
+
+def test_index_without_photos_has_no_hero_image():
+    html = publish._index_html(_rows(with_img=False), USER, gated=False)
+    assert 'class="hero-bg"' not in html and 'img/K01.jpg' not in html and 'class="hero plain"' in html
+    assert '@simon-collector' in html and '3 knives' in html
+
+
+def test_index_rows_carry_sort_data_and_view_toggle():
+    html = publish._index_html(_rows(), USER, gated=False)
+    for needle in ('id="q"', 'id="view"', 'id="reg"', 'data-sort="tag"', 'data-sort="name"',
+                   'data-sort="born"', 'data-tag="K02"', 'data-born="2021-02-11"',
+                   'data-name="Large Sebenza 31"', 'bb_view', 'localStorage', '<dialog id="lb">',
+                   'IntersectionObserver', 'href="K02/"', 'img/K02_t.jpg', 'data-full="img/K02.jpg"'):
+        assert needle in html, needle
+
+
+def test_index_escapes_data_attributes():
+    row = _rows(1)[0]
+    row['model'] = '<b>x</b>"'
+    html = publish._index_html([row], USER, gated=False)
+    assert '<b>x</b>' not in html and '&lt;b&gt;x&lt;/b&gt;&quot;' in html
+
+
+def test_index_ungated_has_no_innerhtml():
+    assert 'innerHTML' not in publish._index_html(_rows(), USER, gated=False)
+
+
+def test_index_gated_keeps_gate_and_noindex():
+    html = publish._index_html(_rows(), USER, gated=True)
+    assert 'noindex' in html and 'id="gate"' in html or "ov.id = 'gate'" in html
+
+
+def test_index_list_thumbs_are_a_hair_bigger():
+    """Simon on his phone, 2026-09-02: 64×48 read small — 84×63 with a 92px column."""
+    css = publish._INDEX_STYLE
+    assert 'width:84px; height:63px' in css and '92px 1fr' in css and '64px' not in css
+
+
+def test_index_hero_has_featured_knife_card_and_stats_strip():
+    rows = _rows()
+    rows[1]['for_sale'], rows[1]['asking_price'] = 1, 500
+    html = publish._index_html(rows, USER, gated=False)
+    feat = html.split('class="feat"')[1][:200]
+    assert 'href="K01/"' in feat and 'IN THE PHOTO' in feat and 'Large Sebenza 31' in feat
+    assert 'class="stats"' in html and '2020–2022' in html and '>1</b> for sale' in html and '>3</b> knives' in html
+
+
+def test_index_stats_omit_missing_born_and_sale():
+    rows = _rows(with_img=False)
+    for r in rows:
+        r['born_on'], r['born'] = '', ''
+    html = publish._index_html(rows, USER, gated=False)
+    assert 'class="feat"' not in html          # no photo → no featured card
+    assert 'for sale' not in html and 'born</span>' not in html and '>3</b> knives' in html
