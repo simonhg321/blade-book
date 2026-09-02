@@ -1,0 +1,207 @@
+<!doctype html>
+<!-- Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>blade-book — your wants</title>
+<link rel="icon" type="image/svg+xml" href="/blade-book/mark.svg">
+<link rel="apple-touch-icon" href="/blade-book/apple-touch-icon.png">
+<link rel="stylesheet" href="/blade-book/vibe.css">
+<style>
+  body{max-width:560px;margin:0 auto;padding:14px 14px 60px}
+  header{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:6px}
+  header h1{font-size:2.2rem;margin:0}
+  nav{display:flex;gap:12px;align-items:center;font-size:.9rem}
+  nav a{color:var(--muted);text-decoration:none}
+  nav a.add{color:var(--accent);font-weight:700}
+  .lede{color:var(--muted);margin:0 0 16px;font-size:.92rem}
+  #status{text-align:center;color:var(--muted);min-height:1.3em;margin:6px 0;font-size:.9rem}
+  #status.err{color:var(--accent);font-weight:700}
+  .form{display:grid;gap:8px;margin-bottom:22px}
+  .form label{display:grid;gap:3px;font-size:.8rem;color:var(--muted)}
+  .form input,.form select{font:inherit;padding:.6rem .7rem;border:1px solid var(--line);border-radius:8px;background:#fff;width:100%}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .want{background:#fff;border:2px solid var(--ink);border-radius:12px;padding:10px 12px;margin-bottom:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .want .wsum{flex:1;min-width:0;font-weight:600}
+  .want label{display:flex;align-items:center;gap:6px;font-size:.85rem;color:var(--muted)}
+  .empty{text-align:center;color:var(--muted);padding:24px 0}
+  #settings{margin-top:26px;border-top:2px solid var(--ink);padding-top:14px}
+  #settings label{display:flex;align-items:center;gap:8px;font-size:.92rem}
+  h2.sec{font-size:.78rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
+</style>
+
+<header>
+  <h1 class="bb-display"><img class="bbmark" src="/blade-book/mark.svg" alt="" width="30" style="vertical-align:-4px;margin-right:6px">YOUR WANTS</h1>
+  <nav><a class="add" href="/blade-book/me/add/">+ add</a><a href="/blade-book/me/">register</a><a href="/blade-book/">home</a></nav>
+</header>
+<p class="lede">Tell the register what you're hunting. When a matching knife goes up for trade or sale anywhere on blade-book, you and the owner each get ONE email introduction. Blank fields match anything.</p>
+<div id="status" aria-live="polite"></div>
+
+<h2 class="sec">add a want</h2>
+<form id="wform" class="form">
+  <label>model<input name="model" type="text" maxlength="100" autocomplete="off"></label>
+  <div class="row2">
+    <label>generation<input name="generation" type="text" maxlength="40" autocomplete="off"></label>
+    <label>size<input name="size" type="text" maxlength="40" autocomplete="off"></label>
+  </div>
+  <div class="row2">
+    <label>blade steel<input name="blade_steel" type="text" maxlength="60" autocomplete="off"></label>
+    <label>blade shape<input name="blade_shape" type="text" maxlength="60" autocomplete="off"></label>
+  </div>
+  <label>keyword<input name="keyword" type="text" maxlength="100" autocomplete="off" placeholder="any word — smith, edition, pattern…"></label>
+  <div class="row2">
+    <label>born from<input name="born_from" type="number" min="0" max="9999" inputmode="numeric"></label>
+    <label>born to<input name="born_to" type="number" min="0" max="9999" inputmode="numeric"></label>
+  </div>
+  <label>looking for
+    <select name="mode">
+      <option value="either">either — trade or sale</option>
+      <option value="trade">trade</option>
+      <option value="sale">sale</option>
+    </select>
+  </label>
+  <label id="maxpricewrap">max price $<input name="max_price" type="number" min="0" step="1"></label>
+  <button class="btn accent" type="submit">ADD WANT</button>
+</form>
+
+<h2 class="sec">your wants</h2>
+<div id="wlist"></div>
+
+<template id="wtpl">
+  <div class="want">
+    <div class="wsum"></div>
+    <label><input type="checkbox" class="wactive"> active</label>
+    <button class="btn link wdel" type="button">delete</button>
+  </div>
+</template>
+
+<div id="settings">
+  <h2 class="sec">notifications</h2>
+  <label><input type="checkbox" id="shareemail"> Share my email in intro emails (both sides must opt in)</label>
+</div>
+
+<script>
+(function () {
+  var API = '/blade-book/api';
+  var WANTS = '/blade-book/api/wants';
+  var $ = function (id) { return document.getElementById(id); };
+  var wants = [];
+
+  function say(t, err) { var s = $('status'); s.textContent = t || ''; s.className = err ? 'err' : ''; }
+  function req(url, opts) {
+    opts = opts || {}; opts.credentials = 'same-origin';
+    return fetch(url, opts).then(function (r) {
+      if (r.status === 401) { location.href = '/blade-book/'; throw new Error('sign in'); }
+      return r.json().catch(function () { return {}; }).then(function (j) { return { ok: r.ok, status: r.status, j: j }; });
+    });
+  }
+  function api(path, opts) { return req(API + path, opts); }
+  function json(method, path, body) {
+    return api(path, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
+  }
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function clear(n) { while (n.firstChild) n.removeChild(n.firstChild); }
+
+  var TEXT_FIELDS = ['model', 'generation', 'size', 'blade_steel', 'blade_shape', 'keyword'];
+  var LABELS = { model: 'model', generation: 'gen', size: 'size', blade_steel: 'steel', blade_shape: 'shape' };
+
+  function syncMode() {
+    var m = $('wform').elements.mode.value;
+    $('maxpricewrap').classList.toggle('hidden', m === 'trade');
+  }
+  $('wform').elements.mode.addEventListener('change', syncMode);
+  syncMode();
+
+  function collectForm(form) {
+    var body = {};
+    TEXT_FIELDS.forEach(function (f) {
+      var v = form.elements[f].value.trim();
+      if (v) body[f] = v;
+    });
+    ['born_from', 'born_to', 'max_price'].forEach(function (f) {
+      var v = form.elements[f].value;
+      if (v !== '') body[f] = Number(v);
+    });
+    body.mode = form.elements.mode.value;
+    return body;
+  }
+
+  $('wform').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var form = ev.target;
+    var body = collectForm(form);
+    req(WANTS, { credentials: 'same-origin', method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then(function (res) {
+        if (res.status === 409) { say(res.j.error || 'too many wants', true); return; }
+        if (!res.ok) { say('✗ ' + (res.j.error || 'could not add want'), true); return; }
+        form.reset(); syncMode(); say('want added'); return loadWants();
+      }).catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); });
+  });
+
+  function summarize(w) {
+    var parts = [];
+    TEXT_FIELDS.forEach(function (f) {
+      if (w[f]) parts.push(f === 'keyword' ? '“' + w[f] + '”' : LABELS[f] + ' ' + w[f]);
+    });
+    if (w.born_from || w.born_to) parts.push('born ' + (w.born_from || '…') + '–' + (w.born_to || '…'));
+    parts.push(w.mode);
+    if (w.max_price != null) parts.push('≤ $' + w.max_price);
+    return parts.length ? parts.join(' · ') : 'anything (all fields blank)';
+  }
+
+  function renderWant(w) {
+    var row = $('wtpl').content.firstElementChild.cloneNode(true);
+    row.querySelector('.wsum').textContent = summarize(w);
+    var chk = row.querySelector('.wactive');
+    chk.checked = !!w.active;
+    chk.addEventListener('change', function () {
+      var next = chk.checked;
+      json('PATCH', '/wants/' + w.id, { active: next }).then(function (res) {
+        if (!res.ok) { say('✗ ' + (res.j.error || 'could not update'), true); chk.checked = !next; return; }
+        w.active = next; say('updated');
+      }).catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); chk.checked = !next; });
+    });
+    row.querySelector('.wdel').addEventListener('click', function () {
+      if (!confirm('Delete this want?')) return;
+      req(WANTS + '/' + w.id, { credentials: 'same-origin', method: 'DELETE' }).then(function (res) {
+        if (!res.ok) { say('✗ ' + (res.j.error || 'could not delete'), true); return; }
+        wants = wants.filter(function (x) { return x.id !== w.id; });
+        renderList(); say('deleted');
+      }).catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); });
+    });
+    return row;
+  }
+
+  function renderList() {
+    var box = $('wlist'); clear(box);
+    if (!wants.length) { box.appendChild(el('div', 'empty', 'no wants yet — add one above')); return; }
+    wants.forEach(function (w) { box.appendChild(renderWant(w)); });
+  }
+
+  function loadWants() {
+    return req(WANTS, { credentials: 'same-origin' }).then(function (res) {
+      if (!res.ok) { say('✗ could not load your wants', true); return; }
+      wants = res.j.wants || []; renderList();
+    });
+  }
+
+  function loadSettings() {
+    return api('/settings').then(function (res) {
+      if (!res.ok) { say('✗ could not load settings', true); return; }
+      $('shareemail').checked = !!res.j.share_email_on_intro;
+    }).catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); });
+  }
+
+  $('shareemail').addEventListener('change', function (ev) {
+    var next = ev.target.checked;
+    json('PATCH', '/settings', { share_email_on_intro: next }).then(function (res) {
+      if (!res.ok) { say('✗ ' + (res.j.error || 'could not update'), true); return loadSettings(); }
+    }).catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); loadSettings(); });
+  });
+
+  api('/auth/me').then(function () {
+    loadSettings();
+    return loadWants();
+  }).catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); });
+})();
+</script>

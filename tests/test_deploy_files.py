@@ -235,3 +235,15 @@ def test_search_page_wiring():
     assert 'innerHTML' not in html and 'fonts.googleapis.com' not in html
     for rel in ('index.html', 'how/index.html'):
         assert '/blade-book/search/' in open(os.path.join(ROOT, 'html', rel)).read(), rel
+
+
+def test_wants_page_wiring():
+    html = open(os.path.join(ROOT, 'html', 'me', 'wants', 'index.html')).read()
+    for needle in ('YOUR WANTS', "'/blade-book/api/wants", "'/auth/me'", 'id="wlist"',
+                   'id="wform"', 'trade', 'sale', 'either', 'max_price', 'keyword',
+                   'born_from', 'born_to', 'share_email_on_intro', "'/settings'",
+                   'bbmark', '/blade-book/mark.svg', 'href="/blade-book/vibe.css"',
+                   'too many wants', 'href="/blade-book/me/"'):
+        assert needle in html, needle
+    assert 'innerHTML' not in html and 'fonts.googleapis.com' not in html
+    assert '/blade-book/me/wants/' in open(os.path.join(ROOT, 'html', 'me', 'index.html')).read()
