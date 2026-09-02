@@ -181,6 +181,18 @@ def login_required(fn):
     return wrapper
 
 
+def admin_required(fn):
+    """login_required, then is_admin — 403 (not 404: an admin URL is not a
+    secret, the data behind it is). login_required runs first and sets
+    g.user, so the inner check can read it."""
+    @wraps(fn)
+    def wrapper(*a, **kw):
+        if not g.user.get('is_admin'):
+            return jsonify({'error': 'admin only'}), 403
+        return fn(*a, **kw)
+    return login_required(wrapper)
+
+
 # --- rate limits -------------------------------------------------------------
 
 EMAIL_LINKS_PER_HOUR = 5
