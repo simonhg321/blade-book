@@ -20,11 +20,14 @@ supervisor program; nothing imports from billboard.
 5. `curl http://127.0.0.1:5004/blade-book/api/healthz` → ok.
 6. DNS: `blade-book.com` → new box. Leave the stark `/blade-book/` alias as a
    redirect for 30 days, then remove the include + supervisor conf on stark.
-7. Move the crontab — three lines, from `crontab -u shg -l` on stark:
+7. Move the crontab — four lines, from `crontab -u shg -l` on stark:
    `30 3 * * * bash /home/shg/blade-book/scripts/backup.sh >> /var/log/blade-book/backup.log 2>&1`
    `15 4 * * * cd /home/shg/blade-book && python3 scripts/purge_drafts.py >> /var/log/blade-book/purge.log 2>&1`
    `*/5 * * * * /usr/bin/python3 /home/shg/blade-book/scripts/publish_sweep.py >> /var/log/blade-book/publish.log 2>&1`
-   Confirm `/home/backup/blade-book-*.tgz` appears on new, check `purge.log` the following morning, and monitor `publish.log` for publish_sweep activity.
+   `*/15 * * * * cd /home/shg/blade-book && python3 scripts/match_cron.py >> /var/log/blade-book/match.log 2>&1`
+   Confirm `/home/backup/blade-book-*.tgz` appears on new, check `purge.log` the following morning, monitor
+   `publish.log` for publish_sweep activity, and monitor `match.log` for match_cron activity (silent unless
+   it sends).
 8. The search index (`search_cards`/`search_fts`) is derived data, not a
    thing to restore/rsync — after any restore, repair/backfill it the same
    way as the bundles: `python3 scripts/publish_sweep.py --all` as shg.

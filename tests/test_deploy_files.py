@@ -93,6 +93,15 @@ def test_runbook_move_lists_publish_sweep():
     assert 'scripts/publish_sweep.py' in _read('docs/RUNBOOK-move.md')
 
 
+def test_install_has_match_cron():
+    sh = open(os.path.join(ROOT, 'scripts', 'install.sh')).read()
+    assert 'scripts/match_cron.py' in sh and 'match.log' in sh
+
+
+def test_runbook_move_lists_match_cron():
+    assert 'match_cron' in _read('docs/RUNBOOK-move.md')
+
+
 def test_runbook_move_covers_the_search_index():
     s = _read('docs/RUNBOOK-move.md')
     assert 'search_cards' in s and 'search_fts' in s
