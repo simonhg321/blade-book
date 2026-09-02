@@ -576,12 +576,17 @@ def set_user_settings(con, user_id, fields):
 
 def create_want(con, owner_id, fields):
     """Create a want record. Validates: unknown keys, bad mode, non-int born_from/born_to/max_price,
-    and active-wants cap. Strings stripped; empty → NULL. Returns the fresh want dict."""
+    text fields str or None, and active-wants cap. Strings stripped; empty → NULL. Returns fresh dict."""
     bad_keys = set(fields) - set(WANT_FIELDS)
     if bad_keys:
         raise ValueError('bad field')
     if 'mode' in fields and fields['mode'] not in WANT_MODES:
         raise ValueError('bad mode')
+    text_fields = ('maker', 'model', 'generation', 'size', 'blade_shape', 'blade_steel', 'keyword', 'mode')
+    for field in text_fields:
+        if field in fields and fields[field] is not None:
+            if not isinstance(fields[field], str):
+                raise ValueError('bad field')
     for field in ('born_from', 'born_to', 'max_price'):
         if field in fields and fields[field] is not None:
             try:
@@ -597,6 +602,8 @@ def create_want(con, owner_id, fields):
         v = fields[k]
         if isinstance(v, str):
             v = v.strip() or None
+        elif k in ('born_from', 'born_to', 'max_price') and v is not None:
+            v = int(v)
         vals[k] = v
     cols = ', '.join(vals.keys())
     marks = ', '.join('?' * len(vals))
