@@ -308,7 +308,8 @@ def _knife_page(row, handle, gated):
             '<p><a class="cta" href="/blade-book/how/">Keep a register like this — how it works →</a></p>\n'
             f'<footer>{_mark_svg(16)} Recorded on <a href="/blade-book/">blade-book</a> — '
             'a register for knife collectors. <a href="/blade-book/how/">How it works →</a> · '
-            '<a href="/blade-book/search/">search all registers</a></footer>\n</main>\n')
+            '<a href="/blade-book/search/">search all registers</a> · '
+            '<a href="/blade-book/me/">sign in</a></footer>\n</main>\n')
     out += _gate_snippet('../') if gated else ''
     return out + '</body>\n</html>\n'
 
@@ -343,7 +344,8 @@ def _index_html(rows, user, gated):
                 f'<p><span class="tag">{e(row["tag"])}</span> {e(name)}{born}</p></a>{badge}</div>\n')
     out += ('<footer>Kept on <a href="/blade-book/">blade-book</a> — '
             'a register for knife collectors. <a href="/blade-book/how/">How it works →</a> · '
-            '<a href="/blade-book/search/">search all registers</a></footer>\n</main>\n')
+            '<a href="/blade-book/search/">search all registers</a> · '
+            '<a href="/blade-book/me/">sign in</a></footer>\n</main>\n')
     out += _gate_snippet('') if gated else ''
     return out + '</body>\n</html>\n'
 
