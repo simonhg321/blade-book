@@ -290,3 +290,41 @@ def test_wants_page_wiring():
         assert needle in html, needle
     assert 'innerHTML' not in html and 'fonts.googleapis.com' not in html
     assert '/blade-book/me/wants/' in open(os.path.join(ROOT, 'html', 'me', 'index.html')).read()
+
+
+def test_board_page_wiring():
+    html = open(os.path.join(ROOT, 'html', 'board', 'index.html')).read()
+    for needle in ('THE BOARD', "'/blade-book/api/board'", "'/auth/me'", 'id="cards"', 'id="more"',
+                   'id="tpl"', 'id="cdlg"', 'id="rdlg"', '/contact', '/report', 'contact seller', 'report',
+                   'maxlength="500"', '429', '502', 'sign in to contact', 'bbmark', '/blade-book/mark.svg',
+                   'href="/blade-book/vibe.css"', 'seller_note', 'asking_price', 'listed_at',
+                   "'/blade-book/@' + k.handle + '/img/' + k.img_t"):
+        assert needle in html, needle
+    assert 'innerHTML' not in html and 'fonts.googleapis.com' not in html
+    for rel in ('index.html', 'search/index.html'):
+        assert '/blade-book/board/' in open(os.path.join(ROOT, 'html', rel)).read(), rel
+
+
+def test_landing_board_strip_and_admin_link():
+    html = open(os.path.join(ROOT, 'html', 'index.html')).read()
+    for needle in ('id="board"', 'id="bcards"', "'/blade-book/api/board?limit=6'", 'href="/blade-book/board/"',
+                   'ON THE BOARD', 'id="adminlink"', 'is_admin', 'href="/blade-book/admin/"',
+                   "fetch('/blade-book/api/board?limit=6')"):
+        assert needle in html, needle
+    # the strip renders via createElement — the only innerHTML on the landing page is the
+    # pre-existing OIDC provider button (plan 02), which is a trusted literal
+    assert html.count('innerHTML') == 1
+
+
+def test_admin_page_wiring():
+    html = open(os.path.join(ROOT, 'html', 'admin', 'index.html')).read()
+    for needle in ('REPORTS', "'/blade-book/api/admin'", "'/auth/me'", 'is_admin', "'hide'", "'restore'", "'delete'",
+                   "'/knives/' + knifeId + '/' + action", 'prompt(', 'confirm(', 'id="queue"', 'reporter_handle', 'owner_handle', 'hidden_at', 'bbmark',
+                   'href="/blade-book/vibe.css"', 'noindex'):
+        assert needle in html, needle
+    assert 'innerHTML' not in html and 'fonts.googleapis.com' not in html
+
+
+def test_register_page_shows_hidden_badge():
+    html = open(os.path.join(ROOT, 'html', 'me', 'index.html')).read()
+    assert 'hidden_at' in html and 'under review' in html

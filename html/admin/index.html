@@ -1,0 +1,112 @@
+<!doctype html>
+<!-- Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>blade-book — admin</title>
+<link rel="icon" type="image/svg+xml" href="/blade-book/mark.svg">
+<link rel="stylesheet" href="/blade-book/vibe.css">
+<style>
+  body{max-width:640px;margin:0 auto;padding:14px 14px 60px}
+  header{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:6px}
+  header h1{font-size:2.2rem;margin:0}
+  nav a{color:var(--muted);text-decoration:none;font-size:.9rem;margin-left:12px}
+  #status{text-align:center;color:var(--muted);min-height:1.3em;margin:6px 0;font-size:.9rem}
+  #status.err{color:var(--accent);font-weight:700}
+  .item{background:#fff;border:2px solid var(--ink);border-radius:12px;padding:10px 12px;margin-bottom:10px}
+  .item .top{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .item .top a{color:var(--ink);font-weight:700;text-decoration:none}
+  .item ul{margin:6px 0 8px;padding-left:18px;font-size:.9rem}
+  .item li span{color:var(--muted);font-size:.8rem}
+  .item .acts{display:flex;gap:8px}
+  .item .acts .btn{padding:.45rem .7rem;font-size:.82rem}
+  .empty{text-align:center;color:var(--muted);padding:24px 0}
+</style>
+
+<header>
+  <h1 class="bb-display"><img class="bbmark" src="/blade-book/mark.svg" alt="" width="30" style="vertical-align:-4px;margin-right:6px">REPORTS</h1>
+  <nav><a href="/blade-book/board/">board</a><a href="/blade-book/me/">register</a><a href="/blade-book/">home</a></nav>
+</header>
+<div id="status" aria-live="polite"></div>
+<div id="queue"></div>
+
+<script>
+(function () {
+  var API = '/blade-book/api';
+  var ADMIN = '/blade-book/api/admin';
+  var $ = function (id) { return document.getElementById(id); };
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function clear(n) { while (n.firstChild) n.removeChild(n.firstChild); }
+  function say(t, err) { var s = $('status'); s.textContent = t || ''; s.className = err ? 'err' : ''; }
+  function req(url, opts) {
+    opts = opts || {}; opts.credentials = 'same-origin';
+    return fetch(url, opts).then(function (r) {
+      if (r.status === 401 || r.status === 403) { location.href = '/blade-book/'; throw new Error('sign in'); }
+      return r.json().catch(function () { return {}; }).then(function (j) { return { ok: r.ok, status: r.status, j: j }; });
+    });
+  }
+  function post(url, body) {
+    return req(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
+  }
+
+  function act(knifeId, action, tag) {
+    var note = prompt(action + ' ' + tag + ' — note (required, goes on the resolved reports):');
+    if (!note || !note.trim()) return;
+    if (action === 'delete' && !confirm('DELETE ' + tag + ' and its photos for good?')) return;
+    post(ADMIN + '/knives/' + knifeId + '/' + action, { note: note.trim() }).then(function (res) {
+      if (!res.ok) { say('✗ ' + (res.j.error || 'failed'), true); return; }
+      say('✓ ' + action + ' ' + tag);
+      load();
+    }).catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); });
+  }
+
+  function render(reports) {
+    var box = $('queue'); clear(box);
+    if (!reports.length) { box.appendChild(el('div', 'empty', 'no open reports')); return; }
+    var byKnife = {};
+    reports.forEach(function (r) { (byKnife[r.knife_id] = byKnife[r.knife_id] || []).push(r); });
+    Object.keys(byKnife).forEach(function (kid) {
+      var rs = byKnife[kid], first = rs[0];
+      var item = el('div', 'item');
+      var top = el('div', 'top');
+      var a = el('a', null, '@' + first.owner_handle + ' / ' + first.tag);
+      a.href = '/blade-book/@' + first.owner_handle + '/' + first.tag + '/'; a.target = '_blank'; a.rel = 'noopener';
+      top.appendChild(a);
+      top.appendChild(el('span', 'badge ' + (first.hidden_at ? 'warn' : ''), first.hidden_at ? 'hidden · ' + first.hidden_by : 'visible'));
+      top.appendChild(el('span', 'badge', rs.length + ' open'));
+      item.appendChild(top);
+      var ul = el('ul');
+      rs.forEach(function (r) {
+        var li = el('li', null, r.reason + ' ');
+        li.appendChild(el('span', null, '— @' + r.reporter_handle + ' · ' + String(r.created).slice(0, 16).replace('T', ' ')));
+        ul.appendChild(li);
+      });
+      item.appendChild(ul);
+      var acts = el('div', 'acts');
+      var hide = el('button', 'btn alt', 'hide'); hide.type = 'button'; hide.disabled = !!first.hidden_at;
+      var restore = el('button', 'btn alt', 'restore'); restore.type = 'button'; restore.disabled = !first.hidden_at;
+      var del = el('button', 'btn accent', 'delete'); del.type = 'button';
+      hide.addEventListener('click', function () { act(kid, 'hide', first.tag); });
+      restore.addEventListener('click', function () { act(kid, 'restore', first.tag); });
+      del.addEventListener('click', function () { act(kid, 'delete', first.tag); });
+      acts.appendChild(hide); acts.appendChild(restore); acts.appendChild(del);
+      item.appendChild(acts);
+      box.appendChild(item);
+    });
+  }
+
+  function load() {
+    say('loading…');
+    req(ADMIN + '/reports').then(function (res) {
+      if (!res.ok) { say(res.j.error || 'failed', true); return; }
+      say('');
+      render(res.j.reports || []);
+    }).catch(function (e) { if (e.message !== 'sign in') say('could not reach the server', true); });
+  }
+
+  req(API + '/auth/me').then(function (res) {
+    if (!res.ok || !res.j.is_admin) { location.href = '/blade-book/'; return; }
+    load();
+  }).catch(function () {});
+})();
+</script>

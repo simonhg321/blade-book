@@ -163,6 +163,7 @@
 
   function badges(k) {
     var out = [];
+    if (k.hidden_at) out.push(['hidden — under review', 'warn']);
     if (k.status === 'draft') out.push(['draft', 'warn']);
     if (!k.is_public) out.push(['private', '']);
     if (k.sale_status && k.sale_status !== 'keeping') out.push([k.sale_status.replace('_', ' '), k.sale_status === 'sold' ? '' : 'accent']);

@@ -33,6 +33,15 @@
   #sent .big-note{font-size:2.6rem;line-height:1}
   #sent button[disabled]{opacity:.55;cursor:default}
   button.link{background:none;color:var(--muted);border:none;text-decoration:underline;padding:.25rem}
+  #board{margin-top:1.6rem;text-align:left}
+  #board h2{font-family:'Bebas Neue',Impact,sans-serif;font-weight:400;font-size:1.5rem;letter-spacing:.06em;margin:0 0 .5rem;text-align:center}
+  #bcards{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  #bcards a{display:block;background:#fff;border:2px solid var(--ink);border-radius:12px;overflow:hidden;text-decoration:none;color:var(--ink)}
+  #bcards img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;background:var(--soft)}
+  #bcards .b{padding:6px 8px;font-size:.82rem}
+  #bcards .b b{display:block;font-size:.9rem}
+  #bcards .b .p{color:var(--accent);font-weight:700}
+  #board .all{display:block;text-align:center;margin-top:.7rem;color:var(--accent);font-weight:700}
 </style>
 <main>
   <svg class="bbmark" viewBox="24 14 200 200" width="104" role="img" aria-label="blade-book mark" style="margin-bottom:.5rem">
@@ -80,7 +89,14 @@
     <div id="drafts" aria-live="polite"></div>
     <a href="/blade-book/how/" style="color:var(--accent);font-weight:700;font-size:.95rem">how it works — the guide</a>
     <a href="/blade-book/search/" style="color:var(--accent);font-weight:700;font-size:.95rem">search the registers →</a>
+    <a id="adminlink" href="/blade-book/admin/" style="color:var(--muted);font-size:.85rem" hidden>admin — report queue</a>
     <button id="signout" type="button">sign out</button>
+  </section>
+
+  <section id="board" hidden>
+    <h2>ON THE BOARD</h2>
+    <div id="bcards"></div>
+    <a class="all" href="/blade-book/board/">see the whole board →</a>
   </section>
 </main>
 <script>
@@ -101,6 +117,7 @@
     $('handle').textContent = '@' + u.handle;
     $('publink').href = '/blade-book/@' + u.handle + '/';
     $('publink').hidden = false;
+    if (u.is_admin) $('adminlink').hidden = false;
     $('signed-out').classList.add('hidden');
     $('signed-in').classList.remove('hidden');
     fetch('/blade-book/api/knives/?status=draft', {credentials: 'same-origin'})
@@ -187,5 +204,26 @@
     await fetch(API + '/signout', {method: 'POST', credentials: 'same-origin'});
     location.href = '/blade-book/';
   });
+
+  // the board strip — public, six newest, built with createElement (no HTML-string parsing)
+  fetch('/blade-book/api/board?limit=6').then(r => r.json()).then(j => {
+    const ks = j.knives || [];
+    if (!ks.length) return;
+    const box = $('bcards');
+    for (const k of ks) {
+      const a = document.createElement('a');
+      a.href = '/blade-book/@' + k.handle + '/' + k.tag + '/';
+      if (k.img_t) { const img = document.createElement('img'); img.src = '/blade-book/@' + k.handle + '/img/' + k.img_t; img.alt = k.name || k.tag; a.appendChild(img); }
+      const b = document.createElement('div'); b.className = 'b';
+      const name = document.createElement('b'); name.textContent = k.name || k.tag; b.appendChild(name);
+      const p = document.createElement('span'); p.className = 'p';
+      p.textContent = k.asking_price ? '$' + Number(k.asking_price).toLocaleString('en-US', {maximumFractionDigits: 0}) : 'for sale';
+      b.appendChild(p);
+      b.appendChild(document.createTextNode(' · @' + k.handle));
+      a.appendChild(b);
+      box.appendChild(a);
+    }
+    $('board').hidden = false;
+  }).catch(() => {});
 })();
 </script>
