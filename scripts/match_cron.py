@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 # Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
-"""*/15 cron: run one wants-matching pass. Safe to run concurrently with the
-app — claims are UNIQUE-constrained, sends are idempotent per pair."""
+"""*/15 cron: run one wants-matching pass. Safe to run concurrently with
+itself or the app — bb/match.py's run() is flock-serialized, so an
+overlapping invocation (this run outliving 15 minutes) skips rather than
+double-sending."""
 import sys
 
 sys.path.insert(0, __file__.rsplit('/scripts/', 1)[0])

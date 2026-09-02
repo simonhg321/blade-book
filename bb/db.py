@@ -30,6 +30,44 @@ PRIVATE_COLUMNS = frozenset({'price_paid', 'acquired_from', 'acquired_date',
                              'location', 'notes_private', 'condition_note',
                              'confidence', 'card_text', 'decode_note'})
 
+# wants/intros DDL lives in named constants (not inline in SCHEMA) so the v6
+# migration below can create the SAME shape a fresh DB gets, byte for byte —
+# no drift between "what a new box creates" and "what an upgraded box gets".
+WANTS_DDL = """
+CREATE TABLE IF NOT EXISTS wants (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  maker TEXT NOT NULL DEFAULT 'crk',
+  model TEXT, generation TEXT, size TEXT, blade_shape TEXT, blade_steel TEXT,
+  keyword TEXT,
+  born_from INTEGER, born_to INTEGER,
+  mode TEXT NOT NULL DEFAULT 'either' CHECK (mode IN ('trade','sale','either')),
+  max_price INTEGER,
+  active INTEGER NOT NULL DEFAULT 1,
+  created TEXT NOT NULL
+);
+"""
+WANTS_INDEX_DDL = 'CREATE INDEX IF NOT EXISTS idx_wants_owner ON wants(owner_id);'
+# want_id is ON DELETE SET NULL (not CASCADE): deleting a want must NOT erase
+# its intros history, or a delete-then-recreate-identical-want re-fires a
+# pair already sent — violates spec §5 "one fire per pair, ever" (the
+# from_user+knife_id dedupe in claim_intro() is what actually catches the
+# recreate; SET NULL is what lets that dedupe see the old row at all).
+INTROS_DDL = """
+CREATE TABLE IF NOT EXISTS intros (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  want_id INTEGER REFERENCES wants(id) ON DELETE SET NULL,
+  knife_id INTEGER NOT NULL REFERENCES knives(id) ON DELETE CASCADE,
+  from_user INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  to_user INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL DEFAULT 'match' CHECK (kind IN ('match','board')),
+  sent_at TEXT,
+  resend_msg_id TEXT,
+  created TEXT NOT NULL,
+  UNIQUE (want_id, knife_id)
+);
+"""
+
 SCHEMA = f"""
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
 
@@ -112,31 +150,9 @@ CREATE TABLE IF NOT EXISTS events (
 );
 CREATE INDEX IF NOT EXISTS events_knife ON events(knife_id);
 
-CREATE TABLE IF NOT EXISTS wants (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  maker TEXT NOT NULL DEFAULT 'crk',
-  model TEXT, generation TEXT, size TEXT, blade_shape TEXT, blade_steel TEXT,
-  keyword TEXT,
-  born_from INTEGER, born_to INTEGER,
-  mode TEXT NOT NULL DEFAULT 'either' CHECK (mode IN ('trade','sale','either')),
-  max_price INTEGER,
-  active INTEGER NOT NULL DEFAULT 1,
-  created TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_wants_owner ON wants(owner_id);
-CREATE TABLE IF NOT EXISTS intros (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  want_id INTEGER REFERENCES wants(id) ON DELETE CASCADE,
-  knife_id INTEGER NOT NULL REFERENCES knives(id) ON DELETE CASCADE,
-  from_user INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  to_user INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  kind TEXT NOT NULL DEFAULT 'match' CHECK (kind IN ('match','board')),
-  sent_at TEXT,
-  resend_msg_id TEXT,
-  created TEXT NOT NULL,
-  UNIQUE (want_id, knife_id)
-);
+{WANTS_DDL}
+{WANTS_INDEX_DDL}
+{INTROS_DDL}
 
 CREATE TABLE IF NOT EXISTS reports (
   id INTEGER PRIMARY KEY,
@@ -205,6 +221,18 @@ MIGRATIONS = {
         'ALTER TABLE knives ADD COLUMN decode_note TEXT'],
     4: ['ALTER TABLE users ADD COLUMN public_key TEXT',
         'ALTER TABLE users ADD COLUMN publish_dirty_at TEXT'],
+    # wants/intros have existed since v1 with a DIFFERENT shape (TEXT
+    # born_from/born_to, no intros.created, sent_at NOT NULL) — CREATE TABLE
+    # IF NOT EXISTS in SCHEMA is therefore a no-op against them on any box
+    # upgrading from v5, so the reshape has to be a real migration: drop
+    # (0 rows on every v5 box that exists) and recreate from the SAME DDL
+    # constants SCHEMA uses, so there is no drift. Order matters: intros
+    # (the child, FK'd to wants) drops before wants (the parent).
+    6: ['DROP TABLE IF EXISTS intros',
+        'DROP TABLE IF EXISTS wants',
+        WANTS_DDL,
+        WANTS_INDEX_DDL,
+        INTROS_DDL],
 }
 
 
@@ -663,8 +691,22 @@ def all_public_knives(con):
 
 
 def claim_intro(con, want_id, knife_id, from_user, to_user, kind='match'):
-    """Claim an intro (match) between a want and knife. INSERT OR IGNORE on UNIQUE;
-    returns intro_id or None on conflict. Commits."""
+    """Claim an intro between a want and knife. For kind='match', dedupes on
+    (from_user, knife_id) regardless of want_id — this is what actually
+    enforces spec §5 "one fire per pair, ever": intros.want_id is ON DELETE
+    SET NULL (not CASCADE), so a delete-then-recreate-identical-want still
+    finds its old, now want_id=NULL, row here and claims nothing new. It
+    also collapses N overlapping wants from the same user matching the same
+    knife into a single claim/email pair instead of N. Board-kind intros
+    (a later plan) are unaffected. INSERT OR IGNORE on the (want_id,
+    knife_id) UNIQUE is the remaining guard against a genuine same-pair
+    race. Returns intro_id, or None if nothing was claimed. Commits."""
+    if kind == 'match':
+        dupe = con.execute(
+            'SELECT id FROM intros WHERE from_user = ? AND knife_id = ? AND kind = ?',
+            (from_user, knife_id, kind)).fetchone()
+        if dupe:
+            return None
     cur = con.execute(
         'INSERT OR IGNORE INTO intros (want_id, knife_id, from_user, to_user, kind, created) '
         'VALUES (?, ?, ?, ?, ?, ?)',

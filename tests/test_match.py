@@ -1,4 +1,7 @@
 # Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+import threading
+import time
+
 from bb import db, match
 from bb.mail import FakeMailer
 from tests.test_search import _mk_knife
@@ -128,3 +131,136 @@ def test_failed_send_retries_without_duplicate(con):
     m.fail = False
     assert match.run(con, m) == 2                   # retry lane sends BOTH sides, no re-claim
     assert match.run(con, m) == 0
+
+
+def test_overlapping_wants_collapse_to_one_claim_per_knife(con):
+    """Final-review finding 2: N overlapping wants from the same user
+    matching the same knife must fire exactly one intro pair, not N — the
+    dedupe in db.claim_intro is keyed on (from_user, knife_id), not
+    (want_id, knife_id)."""
+    wanter = _u(con)
+    owner = _u(con, email='o@example.com', handle='o-guy')
+    _sale_knife(con, owner['id'])
+    db.create_want(con, wanter['id'], {'model': 'Sebenza', 'mode': 'sale'})
+    db.create_want(con, wanter['id'], {'maker': 'crk', 'mode': 'either'})  # broader, also matches
+    m = FakeMailer()
+    assert match.run(con, m) == 2                   # not 4
+    assert con.execute("SELECT COUNT(*) FROM intros WHERE kind='match'").fetchone()[0] == 1
+
+
+def test_delete_recreate_identical_want_does_not_refire(con):
+    """Final-review finding 2: intros.want_id is ON DELETE SET NULL (not
+    CASCADE), and claim_intro dedupes on (from_user, knife_id) regardless
+    of want_id — so deleting a want and recreating an identical one must
+    NOT re-fire a pair already sent (spec §5: one fire per pair, ever)."""
+    wanter = _u(con)
+    owner = _u(con, email='o@example.com', handle='o-guy')
+    _sale_knife(con, owner['id'])
+    w = db.create_want(con, wanter['id'], {'model': 'Sebenza', 'mode': 'sale'})
+    m = FakeMailer()
+    assert match.run(con, m) == 2
+    assert db.delete_want(con, wanter['id'], w['id'])
+    db.create_want(con, wanter['id'], {'model': 'Sebenza', 'mode': 'sale'})
+    assert match.run(con, m) == 0                   # same pair, zero new emails
+    assert len(m.sent) == 2
+
+
+def test_send_cap_drains_over_multiple_runs(con, monkeypatch):
+    """Final-review finding 2: MAX_EMAILS_PER_RUN bounds one pass's outbound
+    volume; anything past the cap stays claimed-but-unsent and drains over
+    later runs."""
+    monkeypatch.setattr(match, 'MAX_EMAILS_PER_RUN', 4)
+    wanter = _u(con)
+    db.create_want(con, wanter['id'], {'maker': 'crk', 'mode': 'either'})
+    for i in range(4):
+        owner = _u(con, email=f'o{i}@example.com', handle=f'o-guy-{i}')
+        _sale_knife(con, owner['id'])
+    m = FakeMailer()
+    assert match.run(con, m) == 4                   # exactly the cap: 2 of 4 pairs
+    assert len(db.unsent_intros(con)) == 2
+    assert match.run(con, m) == 4                   # drains the rest
+    assert len(db.unsent_intros(con)) == 0
+    assert match.run(con, m) == 0
+
+
+def test_overlapping_runs_are_serialized_by_flock(con):
+    """Final-review finding 3: an flock around run() means an overlapping
+    invocation (a cron run that outlives its interval) SKIPS (returns 0)
+    instead of racing the send loop of a run already in flight."""
+    wanter = _u(con)
+    owner = _u(con, email='o@example.com', handle='o-guy')
+    _sale_knife(con, owner['id'])
+    db.create_want(con, wanter['id'], {'model': 'Sebenza'})
+
+    class SlowMailer(FakeMailer):
+        def send(self, *a, **kw):
+            time.sleep(0.2)
+            return super().send(*a, **kw)
+
+    m = SlowMailer()
+    results = []
+
+    def go():
+        c = db.connect()
+        try:
+            results.append(match.run(c, m))
+        finally:
+            c.close()
+
+    t1 = threading.Thread(target=go)
+    t1.start()
+    time.sleep(0.05)   # give t1 the lock before t2 tries
+    t2 = threading.Thread(target=go)
+    t2.start()
+    t1.join()
+    t2.join()
+    assert sorted(results) == [0, 2]
+    assert len(m.sent) == 2
+
+
+def test_asking_price_formats_whole_dollars_without_trailing_zero():
+    """Final-review finding 5: asking_price is stored as a float (bb/edit.py
+    _number), so an unformatted f-string produces 'asking $1500.0'."""
+    k = {'tag': 'K01', 'model': 'Sebenza', 'born_on': '2008-03-14',
+         'sale_status': 'for_sale', 'asking_price': 1500.0,
+         'ext': {'generation': '21', 'size': 'Large'}, 'notes_public': '',
+         'owner_hide_born_day': 0}
+    text = match._card_text(k)
+    assert 'asking $1500' in text and '$1500.0' not in text
+    text2 = match._card_text(dict(k, asking_price=499.99))
+    assert 'asking $499.99' in text2
+
+
+def test_owner_email_does_not_repeat_the_tag(con):
+    """Final-review finding 8 (noted): the owner's email said 'your K01
+    (K01 — Large Sebenza 21 · ...)' — the tag must appear once."""
+    wanter = _u(con)
+    owner = _u(con, email='o@example.com', handle='o-guy')
+    k = _sale_knife(con, owner['id'])
+    db.create_want(con, wanter['id'], {'model': 'Sebenza', 'mode': 'sale'})
+    m = FakeMailer()
+    match.run(con, m)
+    owner_mail = next(x for x in m.sent if x['to'] == 'o@example.com')
+    # the tag legitimately appears twice overall (prose + permalink path) —
+    # what must NOT happen is the card repeating it right after the prose
+    # mention, e.g. "your K01 (K01 — Large Sebenza 21 ..."
+    assert f"({k['tag']} —" not in owner_mail['text']
+    assert f"your {k['tag']} (Large" in owner_mail['text']
+
+
+def test_no_share_fallback_copy_does_not_promise_a_dead_end(con):
+    """Final-review finding 4: the old copy pointed to a register-page
+    'contact' affordance that does not exist. Both fallbacks must be honest
+    about there being no contact channel yet."""
+    wanter = _u(con, share_email_on_intro=0)
+    owner = _u(con, email='o@example.com', handle='o-guy')
+    _sale_knife(con, owner['id'])
+    db.create_want(con, wanter['id'], {'model': 'Sebenza'})
+    m = FakeMailer()
+    match.run(con, m)
+    wanter_mail = next(x for x in m.sent if x['to'] == 'w@example.com')
+    owner_mail = next(x for x in m.sent if x['to'] == 'o@example.com')
+    assert "hasn't shared a contact address" in wanter_mail['text']
+    assert "hasn't shared a contact address" in owner_mail['text']
+    assert 'Reach the owner via their register page' not in wanter_mail['text']
+    assert 'They can reach you through your public page' not in owner_mail['text']
