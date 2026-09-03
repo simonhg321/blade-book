@@ -63,8 +63,13 @@ Small items that don't warrant a plan. Bigger work lives in the plan roadmap
   per-worker under gunicorn (2 workers = up to 2 ZIPs per 10 min). Fine at this scale; a `users.export_at`
   column if it ever isn't.
 - [ ] settings: the public-page toggles (hide born day / private / key / hero pin) still live on `/me`,
-  not `/me/settings` — nav/layout pass decides whether they move.
+  not `/me/settings` — stays on `/me` (plan 13 ruling: `/me/settings` is account-level, `/me` is page-level).
 - [ ] settings: the export route sets `resp.direct_passthrough = False` so Werkzeug's `call_on_close`
   unlink actually fires (with the default the ZIP leaks under gunicorn); a crash-safe follow-up keeps
   `send_file` but opens → fstat → unlink → `send_file(fh)`, so the ZIP is gone from disk the instant the
   fd is open, restart or not.
+- [ ] ops: Cloudflare Web Analytics injects `static.cloudflareinsights.com/beacon.min.js` into every page and our
+  CSP blocks it (console error on every load) — and `/terms` promises "no analytics scripts". Simon: turn Web
+  Analytics OFF for the zone in the Cloudflare dashboard (not allowlisted on purpose).
+- [ ] nav: PWA manifest + service worker (roadmap item for plan 12, not built) — belongs with the next `/me/add`
+  camera work.
