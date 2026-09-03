@@ -1,4 +1,5 @@
 <!doctype html>
+<!-- Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
@@ -119,7 +120,7 @@
   var API = '/blade-book/api';
   var $ = function (id) { return document.getElementById(id); };
   var SLOTS = [[1, 'BOX + KIT + CARD'], [2, 'HERO open'], [3, 'HERO closed']];
-  var drafts = [], idx = -1, current = null, photos = [], retakeSeq = 0;
+  var drafts = [], idx = -1, current = null, photos = [], retakeSeq = 0, billing = null;
   var file = $('file'), refile = $('refile');
   file.accept = 'image/*'; refile.accept = 'image/*';
 
@@ -164,6 +165,16 @@
     });
   }
 
+  // account-age gate: cached from /billing so it survives render() (prev/next
+  // re-render clears #agenote unconditionally — this puts the account-level
+  // warning back every time, using the last billing summary we fetched).
+  function applyAccountNote() {
+    if (billing && billing.ok && !billing.j.active && billing.j.account_free_days_left === 0) {
+      $('agenote').textContent = 'Your account is over a year old — saving new knives needs a subscription.';
+      $('agenote').style.display = 'block';
+    }
+  }
+
   function render(k) {
     var have = {}; photos.forEach(function (p) { have[p.seq] = p; });
     var n = photos.length;
@@ -174,6 +185,7 @@
     $('proc').disabled = n === 0;
     $('save').disabled = n === 0;
     $('agenote').textContent = ''; $('agenote').style.display = 'none';
+    applyAccountNote();
     $('pick').firstChild.textContent = n >= 3 ? '✓ 3/3 — tap a photo to retake ' : '📷  ADD PHOTOS TO ';
     var th = $('thumbs'); while (th.firstChild) th.removeChild(th.firstChild);
     SLOTS.forEach(function (s) {
@@ -313,8 +325,13 @@
         if (old) {
           api('/billing').then(function (b) {
             if (!b.ok) return;
+            billing = b;   // cache: render() re-applies the account note from this on prev/next
             var born = res.j.born_on ? 'Born ' + res.j.born_on + ' — ' : 'No birth date read — ';
+            // the server checks the account backstop BEFORE the free-slot count
+            // (bb/billing.py can_add) — an over-a-year account is gated even
+            // with free_old_left > 0, so that check must come first here too.
             if (b.j.active) $('agenote').textContent = born + 'older than 12 months. Covered by your subscription.';
+            else if (b.j.account_free_days_left === 0) $('agenote').textContent = 'Your account is over a year old — saving new knives needs a subscription.';
             else if (b.j.free_old_left > 0) $('agenote').textContent = born + 'older than 12 months. Saving uses 1 of your ' + b.j.free_old_allowance + ' free older-knife saves (' + b.j.free_old_left + ' left).';
             else $('agenote').textContent = born + 'older than 12 months and your free older-knife saves are used — saving needs a subscription.';
             $('agenote').style.display = $('agenote').textContent ? 'block' : 'none';
@@ -333,8 +350,9 @@
         $('paywall-why').textContent = res.j.error || 'this knife needs a subscription';
         $('paywall-price').textContent = res.j.price || '';
         $('paywall-mail').href = 'mailto:' + (res.j.contact || '') + '?subject=blade-book%20subscription';
-        $('paywall').showModal();
         $('save').disabled = false; say('');
+        var d = $('paywall');
+        if (d.showModal) d.showModal(); else d.setAttribute('open', '');
         return;
       }
       if (!res.ok) throw new Error(res.j.error || 'save failed');
@@ -358,10 +376,8 @@
   api('/auth/me').then(function () {
     return loadDrafts().then(function () {
       return api('/billing').then(function (b) {
-        if (b.ok && b.j.account_free_days_left === 0 && !b.j.active) {
-          $('agenote').textContent = 'Your account is over a year old — saving new knives needs a subscription.';
-          $('agenote').style.display = 'block';
-        }
+        billing = b;
+        applyAccountNote();
       }).catch(function () {});
     });
   }).catch(function () { say('✗ could not reach blade-book', true); });

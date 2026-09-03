@@ -29,7 +29,7 @@
 </style>
 
 <header>
-  <h1 class="bb-display"><img class="bbmark" src="/blade-book/mark.svg" alt="" width="30" style="vertical-align:-4px;margin-right:6px">REPORTS</h1>
+  <h1 class="bb-display"><img class="bbmark" src="/blade-book/mark.svg" alt="" width="30" style="vertical-align:-4px;margin-right:6px">ADMIN</h1>
   <nav><a href="/blade-book/board/">board</a><a href="/blade-book/me/">register</a><a href="/blade-book/">home</a></nav>
 </header>
 <div id="status" aria-live="polite"></div>
@@ -128,7 +128,7 @@
       var a = el('a', null, '@' + u.handle); a.href = '/blade-book/@' + u.handle + '/'; a.target = '_blank'; a.rel = 'noopener';
       a.style.color = 'var(--ink)'; a.style.fontWeight = '700'; a.style.textDecoration = 'none';
       left.appendChild(a);
-      left.appendChild(el('span', 'badge ' + (u.sub_status === 'active' ? 'ok' : ''), ' ' + u.sub_status));
+      left.appendChild(el('span', 'badge ' + (u.sub_status === 'active' ? 'ok' : ''), u.sub_status));
       if (u.is_admin) left.appendChild(el('span', 'badge', 'admin'));
       left.appendChild(el('div', 'meta', u.email + ' · ' + u.knives + ' knives · free_old_used ' + u.free_old_used +
         ' · joined ' + String(u.created).slice(0, 10) + (u.verified_at ? '' : ' · UNVERIFIED')));
@@ -147,10 +147,12 @@
 
   function loadUsers(keep) {
     req(ADMIN + '/users').then(function (res) {
-      if (!res.ok) { say(res.j.error || 'failed', true); return; }
+      if (!res.ok) { clear($('users')); $('users').appendChild(el('div', 'empty', res.j.error || 'could not load users')); return; }
       if (keep) say(keep);
       renderUsers(res.j.users || []);
-    }).catch(function (e) { if (e.message !== 'sign in') say('could not reach the server', true); });
+    }).catch(function (e) {
+      if (e.message !== 'sign in') { clear($('users')); $('users').appendChild(el('div', 'empty', 'could not load users')); }
+    });
   }
 
   req(API + '/auth/me').then(function (res) {
