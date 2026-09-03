@@ -1,5 +1,7 @@
 # Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+from bb import db
 from tests.conftest import signed_in
+from tests.test_search import _mk_knife
 
 S = '/blade-book/api/settings'
 
@@ -58,3 +60,39 @@ def test_share_email_on_intro_roundtrip(client, mailer):
 def test_share_email_on_intro_validation(client, mailer):
     signed_in(client, mailer)
     assert client.patch(S, json={'share_email_on_intro': 'yes'}).status_code == 400
+
+
+def test_featured_knife_id_roundtrip(client, mailer, con):
+    me = signed_in(client, mailer)
+    k = _mk_knife(con, me['id'])
+    r = client.get(S)
+    assert r.get_json()['featured_knife_id'] is None
+    r = client.patch(S, json={'featured_knife_id': k['id']})
+    assert r.status_code == 200 and r.get_json()['featured_knife_id'] == k['id']
+    r = client.get(S)
+    assert r.get_json()['featured_knife_id'] == k['id']
+    r = client.patch(S, json={'featured_knife_id': None})
+    assert r.status_code == 200 and r.get_json()['featured_knife_id'] is None
+
+
+def test_featured_knife_id_validation(client, mailer, con):
+    me = signed_in(client, mailer)
+    other = db.create_user(con, 'other@example.com', 'other-guy')
+    other_knife = _mk_knife(con, other)                           # not owned by the caller
+    draft = db.create_draft_knife(con, me['id'])                  # no photo, still a draft
+
+    for bad in (other_knife['id'], draft['id'], 9999999, 'K01', 1.5, True):
+        r = client.patch(S, json={'featured_knife_id': bad})
+        assert r.status_code == 400, bad
+        assert r.get_json()['error'] == 'featured_knife_id must be one of your live knives with a photo'
+    assert client.get(S).get_json()['featured_knife_id'] is None
+
+
+def test_featured_knife_id_change_schedules_publish(client, mailer, con, monkeypatch):
+    me = signed_in(client, mailer)
+    k = _mk_knife(con, me['id'])
+    calls = []
+    monkeypatch.setattr('bb.routes.settings.publish',
+                        type('P', (), {'schedule': staticmethod(calls.append)})())
+    client.patch(S, json={'featured_knife_id': k['id']})
+    assert len(calls) == 1

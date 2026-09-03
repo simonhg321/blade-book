@@ -20,7 +20,8 @@ def _view(u):
             'hide_born_day': u['hide_born_day'],
             'profile_private': u['profile_private'],
             'share_email_on_intro': u['share_email_on_intro'],
-            'has_key': bool(u.get('public_key'))}
+            'has_key': bool(u.get('public_key')),
+            'featured_knife_id': u.get('featured_knife_id')}
 
 
 @bp.get('/', strict_slashes=False)
@@ -49,11 +50,22 @@ def patch_settings():
         if len(key) > MAX_KEY:
             return jsonify({'error': f'public_key over {MAX_KEY} characters'}), 400
         fields['public_key'] = key or None
-    bad = set(body) - {'hide_born_day', 'profile_private', 'public_key', 'share_email_on_intro'}
+    bad = set(body) - {'hide_born_day', 'profile_private', 'public_key', 'share_email_on_intro',
+                       'featured_knife_id'}
     if bad:
         return jsonify({'error': f'unknown setting: {sorted(bad)}'}), 400
     con = db.connect()
     try:
+        if 'featured_knife_id' in body:
+            val = body['featured_knife_id']
+            knife = None
+            if val is not None:
+                if isinstance(val, int) and not isinstance(val, bool):
+                    knife = db.get_knife(con, g.user['id'], val)
+                if not knife or knife['status'] != 'live' or not knife['photos']:
+                    return jsonify({'error': 'featured_knife_id must be one of your '
+                                             'live knives with a photo'}), 400
+            fields['featured_knife_id'] = val
         u = db.set_user_settings(con, g.user['id'], fields)
     finally:
         con.close()

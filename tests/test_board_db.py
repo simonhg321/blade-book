@@ -31,7 +31,7 @@ def test_schema_v7_columns_and_open_report_index(con):
     assert 'message' in icols
     idx = [r[1] for r in con.execute('PRAGMA index_list(reports)')]
     assert 'idx_reports_open' in idx
-    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == 7
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION
 
 
 def test_set_sale_stamps_and_clears_listed_at(con):
