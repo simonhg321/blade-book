@@ -38,16 +38,13 @@
   dialog textarea{width:100%;font:inherit;padding:.6rem;border:1px solid var(--line);border-radius:8px;min-height:90px;box-sizing:border-box}
   dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
   .cta{display:block;text-align:center;padding:1.1rem 0;font-size:1.2rem;font-weight:800;letter-spacing:.06em;background:var(--accent);color:#fff;border-radius:14px;text-decoration:none;margin:26px 0 10px}
-  footer{margin-top:34px;text-align:center;font-size:.78rem;color:var(--muted)}
-  footer img{vertical-align:-4px}
-  footer a{color:var(--accent);text-decoration:none;font-weight:700}
 </style>
 
 <header>
   <a href="/blade-book/"><img class="bbmark" src="/blade-book/mark.svg" alt="blade-book" width="72"></a>
   <h1>THE BOARD</h1>
 </header>
-<p class="lede">Knives for sale from registered collectors, newest first. <a href="/blade-book/search/">search the registers →</a></p>
+<p class="lede">Knives for sale from registered collectors, newest first.</p>
 <div id="status" aria-live="polite"></div>
 <div id="cards"></div>
 <button id="more" class="btn alt" type="button" hidden>show more</button>
@@ -84,7 +81,7 @@
 
 <a class="cta" href="/blade-book/me/">📖 &nbsp;LIST YOUR OWN — FROM YOUR REGISTER</a>
 
-<footer><img src="/blade-book/mark.svg" alt="" width="16"> blade-book — a register for knife collectors · <a href="/blade-book/how/">how it works →</a> · <a href="/blade-book/">sign in</a></footer>
+<footer class="bb-foot"><img src="/blade-book/mark.svg" alt="" width="16"> <a href="/blade-book/search/">search</a> · <a href="/blade-book/board/">board</a> · <a href="/blade-book/how/">how</a> · <a href="/blade-book/about/">about</a> · <a href="/blade-book/terms/">terms</a> · <a class="bb-auth" href="/blade-book/me/">sign in</a></footer>
 
 <script>
 (function () {
@@ -202,3 +199,4 @@
   req(API + '/auth/me').then(function (res) { me = res.ok ? res.j : null; }).catch(function () { me = null; }).then(load);
 })();
 </script>
+<script src="/blade-book/nav.js"></script>

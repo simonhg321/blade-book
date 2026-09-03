@@ -103,11 +103,12 @@ def test_runbook_move_exists_and_names_the_steps():
 def test_landing_has_sign_in_wiring():
     html = open(os.path.join(ROOT, 'html', 'index.html')).read()
     for needle in ("'/blade-book/api/auth'", "'/magic'", "'/me'", "'/providers'",
-                   "'/signout'", "'expired'", "'failed'", "'unverified'", "'required'", 'type="email"',
+                   "'expired'", "'failed'", "'unverified'", "'required'", 'type="email"',
                    # post-send panel: replaces the form, holds the resend button for 60 s
                    'id="sent"', 'id="sent-to"', 'id="resend"', 'RESEND_WAIT = 60', 'if (sending) return;'):
         assert needle in html, needle
     assert 'fonts.googleapis.com' not in html  # billboard vhost CSP blocks it (plan 05 self-hosts)
+    # sign-out itself moved to nav.js (plan 13, single source) — covered by test_nav_js_shape
 
 
 def test_env_doc_lists_every_key_the_code_reads():
@@ -362,9 +363,7 @@ def test_landing_board_strip_and_admin_link():
                    'ON THE BOARD', 'id="adminlink"', 'is_admin', 'href="/blade-book/admin/"',
                    "fetch('/blade-book/api/board?limit=6')"):
         assert needle in html, needle
-    # the strip renders via createElement — the only innerHTML on the landing page is the
-    # pre-existing OIDC provider button (plan 02), which is a trusted literal
-    assert html.count('innerHTML') == 1
+    assert 'innerHTML' not in html
 
 
 def test_admin_page_wiring():
@@ -492,3 +491,27 @@ def test_vibe_css_has_shared_nav_rules():
     css = _read('html/vibe.css')
     for sel in ('.bb-foot{', '.bb-foot a{', '.bb-head{', '.bb-head h1{', '.bb-nav{', '.bb-nav a{', '.bb-nav a.add{'):
         assert sel in css, sel
+
+
+PUBLIC_PAGES = ('index.html', 'board/index.html', 'search/index.html', 'how/index.html',
+                'about/index.html', 'terms/index.html')
+STRIP_LINKS = ('href="/blade-book/search/">search<', 'href="/blade-book/board/">board<', 'href="/blade-book/how/">how<',
+               'href="/blade-book/about/">about<', 'href="/blade-book/terms/">terms<',
+               'class="bb-auth" href="/blade-book/me/">sign in<')
+
+
+def test_public_pages_share_the_footer_strip():
+    for rel in PUBLIC_PAGES:
+        html = _read('html/' + rel)
+        assert html.count('class="bb-foot"') == 1, rel
+        foot = html[html.index('class="bb-foot"'):]
+        pos = [foot.index(n) for n in STRIP_LINKS]
+        assert pos == sorted(pos), (rel, pos)                              # fixed order
+        assert '<script src="/blade-book/nav.js"></script>' in foot, rel
+        assert html.count('<footer') == 1, rel                              # the strip is the only footer
+        assert 'innerHTML' not in html, rel
+    assert 'the board — knives for sale' not in _read('html/search/index.html')
+    assert 'search the registers' not in _read('html/board/index.html')
+    assert 'search the registers' not in _read('html/index.html')
+    assert 'about</a> · <a' not in _read('html/index.html').split('class="bb-foot"')[0]   # the old about · terms cluster is gone
+    assert "' knives'" in _read('html/search/index.html') and 'knifes' not in _read('html/search/index.html')

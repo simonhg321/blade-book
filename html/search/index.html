@@ -37,15 +37,13 @@
   .knife .sale{display:inline-block;margin-top:6px;font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:.15rem .5rem;border-radius:999px;background:var(--accent);color:#fff}
   .empty{text-align:center;color:var(--muted);padding:30px 0}
   .cta{display:block;text-align:center;padding:1.1rem 0;font-size:1.2rem;font-weight:800;letter-spacing:.06em;background:var(--accent);color:#fff;border-radius:14px;text-decoration:none;margin:26px 0 10px}
-  footer{margin-top:34px;text-align:center;font-size:.78rem;color:var(--muted)}
-  footer img{vertical-align:-4px}
 </style>
 
 <header>
   <a href="/blade-book/"><img class="bbmark" src="/blade-book/mark.svg" alt="blade-book" width="72"></a>
   <h1>SEARCH THE REGISTERS</h1>
 </header>
-<p class="lede">Every public knife on blade-book. <a href="/blade-book/board/" style="color:var(--accent);font-weight:700;text-decoration:none">the board — knives for sale →</a></p>
+<p class="lede">Every public knife on blade-book.</p>
 
 <input id="q" type="search" placeholder="model, steel, damascus smith, edition…" autocomplete="off">
 
@@ -79,7 +77,7 @@
 
 <a class="cta" href="/blade-book/me/add/">📷 &nbsp;REGISTER YOUR OWN KNIVES</a>
 
-<footer><img src="/blade-book/mark.svg" alt="" width="16"> blade-book — a register for knife collectors · <a href="/blade-book/how/">how it works →</a></footer>
+<footer class="bb-foot"><img src="/blade-book/mark.svg" alt="" width="16"> <a href="/blade-book/search/">search</a> · <a href="/blade-book/board/">board</a> · <a href="/blade-book/how/">how</a> · <a href="/blade-book/about/">about</a> · <a href="/blade-book/terms/">terms</a> · <a class="bb-auth" href="/blade-book/me/">sign in</a></footer>
 
 <script>
 (function () {
@@ -115,7 +113,7 @@
 
   function renderAggs(aggregates, count) {
     clear($('aggs'));
-    var parts = [count + ' knife' + (count === 1 ? '' : 's')];
+    var parts = [count + (count === 1 ? ' knife' : ' knives')];
     // aggregates.models is an ORDERED list of [name, n] pairs straight from
     // the SQL ORDER BY count(*) DESC — never a dict (Flask 3.1's default
     // JSON provider sorts dict keys alphabetically, which would silently
@@ -222,3 +220,4 @@
   runSearch();
 })();
 </script>
+<script src="/blade-book/nav.js"></script>

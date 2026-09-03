@@ -20,8 +20,6 @@
   ul.check li{background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 12px}
   ul.check li::before{content:'✓ ';color:var(--ok);font-weight:700}
   ul.check li.no::before{content:'✕ ';color:var(--accent)}
-  footer{margin-top:34px;text-align:center;font-size:.78rem;color:var(--muted)}
-  footer img{vertical-align:-4px}
 </style>
 
 <header>
@@ -54,7 +52,7 @@
 <h2>Early access</h2>
 <p>blade-book is new. Prices and features may change while we find our feet; when they do, <a href="/blade-book/about/">about</a> says so first. Questions: <a class="contact" href="#">email us</a>.</p>
 
-<footer><img src="/blade-book/mark.svg" alt="" width="16"> blade-book · <a href="/blade-book/about/">about</a> · <a href="/blade-book/how/">how it works</a> · <a href="/blade-book/search/">search all registers</a></footer>
+<footer class="bb-foot"><img src="/blade-book/mark.svg" alt="" width="16"> <a href="/blade-book/search/">search</a> · <a href="/blade-book/board/">board</a> · <a href="/blade-book/how/">how</a> · <a href="/blade-book/about/">about</a> · <a href="/blade-book/terms/">terms</a> · <a class="bb-auth" href="/blade-book/me/">sign in</a></footer>
 
 <script>
 (function () {
@@ -78,3 +76,4 @@
     .catch(fallback);
 })();
 </script>
+<script src="/blade-book/nav.js"></script>
