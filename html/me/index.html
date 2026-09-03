@@ -163,9 +163,14 @@
   function fmtDate(s) { return (s || '').slice(0, 10); }
   function ageLabel(m) { if (m == null) return ''; if (m < 1) return 'this month'; if (m < 24) return m + ' mo'; return Math.floor(m / 12) + ' yr'; }
 
+  function isHeroEligible(k) { return !!(k.is_public && !k.hidden_at && k.photos.length); }
+
   function badges(k) {
     var out = [];
-    if (k.id === featuredId) out.push(['★ HERO', 'accent']);
+    if (k.id === featuredId) {
+      if (isHeroEligible(k)) out.push(['★ HERO', 'accent']);
+      else out.push(['★ pinned, but not public — fallback hero in use', '']);
+    }
     if (k.hidden_at) out.push(['hidden — under review', 'warn']);
     if (k.status === 'draft') out.push(['draft', 'warn']);
     if (!k.is_public) out.push(['private', '']);
@@ -351,9 +356,9 @@
       }).catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); });
     });
     var heroBtn = art.querySelector('.hero');
-    if (k.photos.length) {
+    var pinned = k.id === featuredId;
+    if (pinned || isHeroEligible(k)) {
       heroBtn.hidden = false;
-      var pinned = k.id === featuredId;
       heroBtn.textContent = pinned ? 'unpin' : '★ register hero';
       heroBtn.addEventListener('click', function () {
         json('PATCH', '/settings', { featured_knife_id: pinned ? null : k.id }).then(function (res) {
@@ -491,10 +496,13 @@
     }).catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); loadSettings(); });
   });
 
-  api('/auth/me').then(function (res) {
-    $('handle').textContent = '@' + (res.j.handle || '');
-    return loadSettings();
-  }).then(function () {
+  // /auth/me and /settings are independent — fetch in parallel, but wait for
+  // BOTH (loadSettings swallows its own error) before the first render, so
+  // featuredId is already known and no card briefly claims a false hero state.
+  Promise.all([
+    api('/auth/me').then(function (res) { $('handle').textContent = '@' + (res.j.handle || ''); }),
+    loadSettings()
+  ]).then(function () {
     return reload();
   }).catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); });
 })();

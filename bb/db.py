@@ -600,13 +600,20 @@ def set_sale(con, owner_id, knife_id, sale_status, asking_price=None, seller_not
 
 
 def set_public(con, owner_id, knife_ids, is_public):
-    """Bulk public/private. Only the owner's rows change; returns the count."""
+    """Bulk public/private. Only the owner's rows change; returns the count.
+    Taking the pinned register hero private clears the pin (hero-pin) — a knife
+    off the public page can't still be "the" hero photo. Hiding it (moderator
+    action, see hide_knife) is deliberately NOT covered here: the owner didn't
+    act, so the pin stays and the register just falls back until it's restored."""
     ids = [int(i) for i in knife_ids]
     if not ids:
         return 0
     marks = ','.join('?' * len(ids))
     n = con.execute(f'UPDATE knives SET is_public = ?, updated = ? WHERE owner_id = ? AND id IN ({marks})',
                     [1 if is_public else 0, now(), owner_id, *ids]).rowcount
+    if not is_public:
+        con.execute(f'UPDATE users SET featured_knife_id = NULL '
+                   f'WHERE id = ? AND featured_knife_id IN ({marks})', [owner_id, *ids])
     con.commit()
     return n
 

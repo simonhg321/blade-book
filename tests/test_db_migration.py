@@ -129,14 +129,44 @@ def test_v6_to_v7_adds_columns_index_and_backfills_listed_at(env):
     con.close()
 
 
+# Verbatim shape of `users` at schema v7 — before hero-pin's featured_knife_id
+# column. Hand-written (not derived from the live db.SCHEMA, unlike a bare
+# `ALTER TABLE ... DROP COLUMN` against it) so this fixture keeps meaning
+# "v7" even after a later migration touches `users` again.
+OLD_USERS_V7_DDL = """
+CREATE TABLE users (
+  id INTEGER PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,
+  handle TEXT NOT NULL UNIQUE,
+  display_name TEXT,
+  auth_subjects TEXT NOT NULL DEFAULT '{}',
+  created TEXT NOT NULL,
+  verified_at TEXT,
+  is_admin INTEGER NOT NULL DEFAULT 0,
+  sub_status TEXT NOT NULL DEFAULT 'free'
+    CHECK (sub_status IN ('free', 'active', 'lapsed')),
+  sub_source TEXT NOT NULL DEFAULT 'manual',
+  stripe_customer_id TEXT,
+  free_old_used INTEGER NOT NULL DEFAULT 0,
+  share_email_on_intro INTEGER NOT NULL DEFAULT 1,
+  hide_born_day INTEGER NOT NULL DEFAULT 0,
+  profile_private INTEGER NOT NULL DEFAULT 0,
+  public_key TEXT,
+  publish_dirty_at TEXT,
+  session_secret TEXT NOT NULL DEFAULT '',
+  last_tag_no INTEGER NOT NULL DEFAULT 0
+);
+"""
+
+
 def _build_v7_db():
-    """A fresh DB stamped v7: current shape minus plan hero-pin's column
-    (users.featured_knife_id, added in v8)."""
+    """A fresh DB stamped v7: current shape for every other table, `users`
+    hand-written to the v7 shape (no featured_knife_id)."""
     path = paths.db_path()
     os.makedirs(os.path.dirname(path), exist_ok=True)
     raw = sqlite3.connect(path)
     raw.executescript(db.SCHEMA)
-    raw.executescript('ALTER TABLE users DROP COLUMN featured_knife_id;')
+    raw.executescript('DROP TABLE users;' + OLD_USERS_V7_DDL)
     ts = '2026-09-02T00:00:00+00:00'
     raw.execute("INSERT INTO users (id, email, handle, created) VALUES (1, 'v7@example.com', 'v7-guy', ?)", (ts,))
     raw.execute('INSERT INTO schema_version VALUES (7)')

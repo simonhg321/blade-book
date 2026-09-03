@@ -256,7 +256,8 @@ def test_register_page_wiring():
 
 def test_register_page_hero_pin_wiring():
     html = _read('html/me/index.html')
-    for needle in ('featured_knife_id', 'register hero', '★ HERO', "'/settings'"):
+    for needle in ('featured_knife_id: pinned ? null : k.id', 'register hero', '★ HERO',
+                   'not public', 'is_public && !k.hidden_at'):
         assert needle in html, needle
     assert 'innerHTML' not in html
 

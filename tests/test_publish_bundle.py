@@ -93,6 +93,39 @@ def test_build_user_hero_follows_featured_knife_id(con, tmp_path):
     assert f'/@bundle-guy/img/{k2["tag"]}.jpg">' in idx.split('property="og:image"')[1][:120]
 
 
+def test_unpublishing_the_pinned_hero_clears_the_pin_and_falls_back(con, tmp_path):
+    """hero-pin review fix: taking the pinned knife private must clear
+    featured_knife_id in the SAME write (db.set_public), not just leave the
+    register to silently fall back while /me still thinks it's pinned."""
+    user, st, k1 = _setup(con, tmp_path)
+    uid = user['id']
+    k2 = db.create_draft_knife(con, uid)
+    con.execute("UPDATE knives SET confidence = '{}', model = 'Mnandi' WHERE id = ?", (k2['id'],))
+    con.commit()
+    key2 = f"{uid}/{k2['id']}/1.jpg"
+    st.put(key2, _jpeg_with_exif(800, 600))
+    db.add_photo(con, uid, k2['id'], 1, key2, hashlib.sha256(b'y').hexdigest(), 800, 600)
+    db.publish_knife(con, uid, k2['id'])
+    db.set_user_settings(con, uid, {'featured_knife_id': k2['id']})
+    assert db.get_user(con, uid)['featured_knife_id'] == k2['id']
+
+    db.set_public(con, uid, [k2['id']], False)                  # owner unticks "public on my page"
+    assert db.get_user(con, uid)['featured_knife_id'] is None
+
+    user = db.get_user(con, uid)
+    publish.build_user(con, user, st)
+    d = publish.bundle_dir('bundle-guy')
+    idx = open(os.path.join(d, 'index.html')).read()
+    assert f'img/{k1["tag"]}.jpg' in idx.split('class="hero-bg"')[1][:60]   # fell back to k1
+
+
+def test_set_public_true_does_not_touch_the_pin(con, tmp_path):
+    user, st, k = _setup(con, tmp_path)
+    db.set_user_settings(con, user['id'], {'featured_knife_id': k['id']})
+    db.set_public(con, user['id'], [k['id']], True)             # already public — no-op for the pin
+    assert db.get_user(con, user['id'])['featured_knife_id'] == k['id']
+
+
 def test_key_gate_publishes_hashes_only(con, tmp_path):
     user, st, k = _setup(con, tmp_path, public_key='Ozzy Rules')
     publish.build_user(con, user, st)

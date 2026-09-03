@@ -50,8 +50,7 @@ def patch_settings():
         if len(key) > MAX_KEY:
             return jsonify({'error': f'public_key over {MAX_KEY} characters'}), 400
         fields['public_key'] = key or None
-    bad = set(body) - {'hide_born_day', 'profile_private', 'public_key', 'share_email_on_intro',
-                       'featured_knife_id'}
+    bad = set(body) - db.SETTINGS_COLUMNS
     if bad:
         return jsonify({'error': f'unknown setting: {sorted(bad)}'}), 400
     con = db.connect()
