@@ -206,6 +206,8 @@ def save_knife(knife_id):
             return _not_found()
         charge = False
         if k['status'] == 'draft':
+            if not k['photos']:                              # a subscription won't fix a missing photo
+                return jsonify({'error': 'add a photo first'}), 400
             user = db.get_user(con, g.user['id'])          # fresh counter, not the session's cached row
             gate = billing.can_add(user, k.get('born_on'))
             if not gate.ok:

@@ -91,6 +91,19 @@ def test_missing_photo_is_400_and_spends_nothing(client, mailer, con):
     assert db.get_user(con, me['id'])['free_old_used'] == 0
 
 
+def test_missing_photo_beats_the_gate_even_when_fully_gated(client, mailer, con):
+    """A gated user with no free slots left still gets the photo error, not the
+    billing 402 — a subscription would not fix a missing photo."""
+    me = signed_in(client, mailer)
+    _user(con, me, free_old_used=3)
+    k = db.create_draft_knife(con, me['id'])
+    con.execute("UPDATE knives SET confidence = '{}', born_on = '2008-01-01' WHERE id = ?", (k['id'],)); con.commit()
+    r = client.post(f"{K}/{k['id']}/save")
+    assert r.status_code == 400 and 'photo' in r.get_json()['error']
+    assert db.get_user(con, me['id'])['free_old_used'] == 3
+    assert db.get_knife(con, me['id'], k['id'])['status'] == 'draft'
+
+
 def test_no_admin_bypass_at_save(client, mailer, con):
     me = signed_in(client, mailer, email='admin@example.com')
     _user(con, me, is_admin=1, free_old_used=3)
