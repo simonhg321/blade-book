@@ -73,3 +73,8 @@ Small items that don't warrant a plan. Bigger work lives in the plan roadmap
   Analytics OFF for the zone in the Cloudflare dashboard (not allowlisted on purpose).
 - [ ] nav: PWA manifest + service worker (roadmap item for plan 12, not built) — belongs with the next `/me/add`
   camera work.
+- [ ] assets: Cloudflare caches `/blade-book/vibe.css` and `nav.js` at the edge for 4 h (its own TTL overrides
+  our `max-age=300`; seen 2026-09-03 after plan 13 — stale CSS for the new footer). Fix: version the asset
+  URLs (`vibe.css?v=N`, `nav.js?v=N`) in every page + `bb/publish.py` and bump N on change (tests pin the
+  `href="/blade-book/vibe.css"` needle — update to a shared constant). Until then: purge the zone cache
+  after any CSS/JS deploy (Simon, Cloudflare dashboard).
