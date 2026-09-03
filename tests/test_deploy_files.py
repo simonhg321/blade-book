@@ -476,3 +476,19 @@ def test_settings_page_wiring():
 def test_register_nav_links_settings():
     html = _read('html/me/index.html')
     assert 'href="/blade-book/me/settings/"' in html
+
+
+def test_nav_js_shape():
+    js = _read('html/nav.js')
+    assert js.startswith('// Copyright (c) 2026 Simon SGH')
+    for needle in ("'/blade-book/api/auth/me'", "'.bb-auth'", "'my register'", 'adminlink', 'is_admin',
+                   'signout', "'/blade-book/api/auth/signout'", "location.href = '/blade-book/'",
+                   "credentials: 'same-origin'", "cache: 'no-store'", '.catch('):
+        assert needle in js, needle
+    assert 'innerHTML' not in js and 'eval(' not in js
+
+
+def test_vibe_css_has_shared_nav_rules():
+    css = _read('html/vibe.css')
+    for sel in ('.bb-foot{', '.bb-foot a{', '.bb-head{', '.bb-head h1{', '.bb-nav{', '.bb-nav a{', '.bb-nav a.add{'):
+        assert sel in css, sel
