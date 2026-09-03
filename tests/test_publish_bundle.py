@@ -21,7 +21,7 @@ def _assert_strip(html):
     foot = html[html.index('class="bb-foot"'):]
     pos = [foot.index(n) for n in STRIP]
     assert pos == sorted(pos)
-    assert '<script src="/blade-book/nav.js" defer></script>' in foot
+    assert '<script src="/blade-book/nav.js?v=20260903" defer></script>' in foot
     assert html.count('<footer') == 1
 
 
