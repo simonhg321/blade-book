@@ -71,12 +71,19 @@
 <script>
 (function () {
   fetch('/blade-book/api/billing', { credentials: 'same-origin', cache: 'no-store' })
-    .then(function (r) { return r.json(); })
+    .then(function (r) { if (!r.ok) throw new Error('billing ' + r.status); return r.json(); })
     .then(function (b) {
       document.getElementById('price').textContent = b.price || '';
       var a = document.getElementById('contact');
-      a.href = 'mailto:' + (b.contact || '') + '?subject=blade-book%20subscription';
+      if (b.contact) {
+        a.href = 'mailto:' + b.contact + '?subject=blade-book%20subscription';
+      } else {
+        a.hidden = true;
+      }
     })
-    .catch(function () { document.getElementById('price').textContent = 'see the sign-in page'; });
+    .catch(function () {
+      document.getElementById('price').textContent = 'see the sign-in page';
+      document.getElementById('contact').hidden = true;
+    });
 })();
 </script>
