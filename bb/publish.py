@@ -326,8 +326,14 @@ def _knife_page(row, handle, gated):
 # reorders existing nodes only — no innerHTML, no data reaches JS as markup.
 _INDEX_STYLE = """
   body { overflow-x:hidden; }
-  .hero-bg { position:fixed; inset:-12vh 0 0 0; z-index:-1; background:#1a1a1a center/cover no-repeat;
+  /* Blur-fill framing: the photo sits whole (contain, padded) on a blurred, darkened copy of
+     itself (cover). A portrait card spread used to be center/cover-cropped to its middle band. */
+  .hero-bg { position:fixed; inset:-12vh 0 0 0; z-index:-1; background:#1a1a1a; overflow:hidden;
              will-change:transform; }
+  .hero-bg::before { content:""; position:absolute; inset:-6%; background:var(--hero) center/cover no-repeat;
+                     filter:blur(26px) brightness(.55) saturate(1.1); }
+  .hero-bg::after { content:""; position:absolute; inset:3vh 4vw; background:var(--hero) center/contain no-repeat;
+                    filter:drop-shadow(0 12px 28px rgba(0,0,0,.45)); }
   .hero { position:relative; min-height:54vh; display:flex; flex-direction:column; justify-content:flex-end;
           padding:22px 20px 40px; color:#fff;
           background:linear-gradient(180deg, rgba(26,26,26,.05) 0%, rgba(26,26,26,.25) 45%, rgba(26,26,26,.82) 100%); }
@@ -507,7 +513,7 @@ def _index_html(rows, user, gated, featured_tag=None):
     og_image = (f"{_public_base()}/@{handle}/img/{hero_row['img']}" if hero_row and not gated else '')
     out = _head(title, desc, og_image, noindex=gated, extra_style=_INDEX_STYLE)
     if hero_row:
-        out += (f'<div class="hero-bg" style="background-image:url(img/{e(hero_row["img"])})"></div>\n'
+        out += (f'<div class="hero-bg" style="--hero:url(img/{e(hero_row["img"])})"></div>\n'
                 '<header class="hero">\n')
     else:
         out += '<header class="hero plain">\n'

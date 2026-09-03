@@ -268,3 +268,18 @@ def test_index_featured_hidden_or_gone_falls_back():
     resolving to nothing must fall back exactly like unset."""
     html = publish._index_html(_rows(), USER, gated=False, featured_tag='K99')
     assert 'img/K01.jpg' in html.split('class="hero-bg"')[1][:60]
+
+
+# --- hero framing: blur-fill, never crop (Simon, 2026-09-02) ----------------
+
+def test_index_hero_is_blur_filled_not_cropped():
+    """A portrait card-spread pinned as the hero used to be center/cover-cropped to the
+    middle band (pivot + cards, blade gone). Now the photo sits whole (contain) on a
+    blurred, darkened copy of itself (cover) — framed, whatever its aspect."""
+    html = publish._index_html(_rows(), USER, gated=False)
+    assert '--hero:url(img/K01.jpg)' in html.split('class="hero-bg"')[1][:60]
+    assert 'background-image:url(' not in html                       # the old cropping style is gone
+    before = html.split('.hero-bg::before')[1].split('}')[0]
+    after = html.split('.hero-bg::after')[1].split('}')[0]
+    assert 'var(--hero)' in before and 'cover' in before and 'filter:blur(' in before
+    assert 'var(--hero)' in after and 'contain' in after and 'blur' not in after
