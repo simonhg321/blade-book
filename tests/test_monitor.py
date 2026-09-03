@@ -215,3 +215,13 @@ def test_main_dry_run_exits_zero_and_sends_nothing(mon, env, capsys):
     assert rc == 0
     out = capsys.readouterr().out
     assert 'dry-run' in out
+
+
+def test_main_returns_zero_when_mail_setup_raises(mon, env, monkeypatch):
+    import bb.mail
+    def boom():
+        raise RuntimeError('resend import failed')
+    monkeypatch.setattr(bb.mail, 'from_env', boom)
+    monkeypatch.setattr(mon, 'gather', lambda now, **k: [mon.Event('errors', 'x', 'y', False)])
+    monkeypatch.setenv('BLADEBOOK_ADMIN_EMAIL', 'admin@example.com')
+    assert mon.main([]) == 0

@@ -275,11 +275,7 @@ def gather(now, fetch=None, con=None, backup_glob=BACKUP_GLOB):
     return events
 
 
-def main(argv=None):
-    ap = argparse.ArgumentParser()
-    ap.add_argument('--dry-run', action='store_true')
-    args = ap.parse_args(argv)
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
+def _run(args):
     config.load()
     now = datetime.now(timezone.utc)
     try:
@@ -299,6 +295,18 @@ def main(argv=None):
     counts = deliver(events, mail.from_env(), admin)
     print(f'{now.isoformat()} events={len(events)} {counts} ' + ' '.join(e.key for e in events))
     return 0
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--dry-run', action='store_true')
+    args = ap.parse_args(argv)
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
+    try:
+        return _run(args)
+    except Exception as e:  # noqa: BLE001 — cron noise is the enemy; the log is the record
+        log.exception('monitor run failed: %r', e)
+        return 0
 
 
 if __name__ == '__main__':
