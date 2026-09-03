@@ -14,7 +14,6 @@ Small items that don't warrant a plan. Bigger work lives in the plan roadmap
 - [ ] Vhost `Permissions-Policy: camera=()` → `camera=(self)` if iPhone capture is blocked
   on `/blade-book/me/add/` (sudo; unverified).
 - [ ] /me: photo re-order / replace from the register (today: only via /me/add before save, or re-upload by slot through the API).
-- [ ] account deletion (plan 11) MUST remove /var/www/html/blade-book/@handle, its .tmp, and its DATA_DIR publish lock — otherwise a deleted user's public page serves forever (final review, plan 06).
 - [ ] board: contact / report buttons on the static `/@handle/K07` permalink pages (they're
   static bundles; today both live on `/blade-book/board/` only — plan 09 ruling).
 - [ ] board: `listed_at` is a UTC ISO stamp shown as a date; localise if anyone asks.
@@ -33,16 +32,29 @@ Small items that don't warrant a plan. Bigger work lives in the plan roadmap
   and change the check to `<` so old workers read-as-is.
 - [ ] billing (plan 10 deferrals): (a) "your account turns one next month" mail (spec §10 Mail) — first
   account turns one 2027-08-29; a daily cron over users where created ∈ [335, 336) days ago, one send
-  ever (needs a `turns_one_sent_at` column). (b) `sign_in_by_email` must consult `deleted_users`
-  (email hash) so a re-created account gets no fresh free_old_used allowance — lands with plan 11's
-  delete, which is what writes that table. (c) free_old_used TOCTOU: two concurrent saves of the 3rd
+  ever (needs a `turns_one_sent_at` column). (c) free_old_used TOCTOU: two concurrent saves of the 3rd
   and 4th old knife can both pass `< 3` (over-by-one, same shape as the plan-09 caps; not worth a
   transaction at this scale); same shape again for two concurrent saves of the SAME draft on
   different workers — both read status=draft, both charge; hardening = publish_knife's UPDATE
   `WHERE … AND status='draft'` returning whether a transition happened, charge only then. (d) the
   early-access mailto defaults to `hello@` at MAIL_FROM's domain (`BLADEBOOK_CONTACT_EMAIL`
   overrides) — make that mailbox real or set the env before the first outside 402.
-- [ ] billing surfaces still missing from spec §3: `/me/settings` should show the sub row (plan 11)
-  and `/about` should read the price from `/api/billing` like the intake and search cards (plan 12).
+- [ ] billing surfaces still missing from spec §3: `/about` should read the price from `/api/billing`
+  like the intake and search cards (plan 12).
 - [ ] `account_days` uses users.created; an account whose created stamp predates the gate (all three
   live users: 08-29 → 09-02) gets its full first year from that date — intended, no backfill.
+- [ ] settings: **email change** (spec §3 lists it; deferred from plan 11, Simon 2026-09-03). Shape when it
+  lands: a `change_email` magic token kind sent to the NEW address; on click, swap `users.email` (unique
+  check), keep `auth_subjects`; the old address gets a plain notice. Until then: sign in with the new
+  address = a new account.
+- [ ] settings: a changed-away handle is neither reserved nor redirected (plan 11 ruling). If a squatter
+  ever takes an old handle to impersonate, add the old slug to a `retired_handles` table for 90 days.
+- [ ] settings: export rate limit is in-process (`bb/routes/settings._last_export`) — resets on restart,
+  per-worker under gunicorn (2 workers = up to 2 ZIPs per 10 min). Fine at this scale; a `users.export_at`
+  column if it ever isn't.
+- [ ] settings: the public-page toggles (hide born day / private / key / hero pin) still live on `/me`,
+  not `/me/settings` — nav/layout pass decides whether they move.
+- [ ] settings: the export route sets `resp.direct_passthrough = False` so Werkzeug's `call_on_close`
+  unlink actually fires (with the default the ZIP leaks under gunicorn); a crash-safe follow-up keeps
+  `send_file` but opens → fstat → unlink → `send_file(fh)`, so the ZIP is gone from disk the instant the
+  fd is open, restart or not.

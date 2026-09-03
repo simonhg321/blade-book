@@ -10,6 +10,8 @@ supervisor program; nothing imports from billboard.
    `rsync -a /var/lib/blade-book/ new:/var/lib/blade-book/`
    `sudo rsync -a /etc/blade-book/ new:/etc/blade-book/`
    `rsync -a /var/www/html/blade-book/ new:/var/www/html/blade-book/`
+   `exports/` under the data dir is transient (ZIPs mid-download) — safe to exclude from the rsync;
+   `publish-locks/` likewise.
 4. On new: `sudo bash /home/shg/blade-book/scripts/install.sh` — but with the
    Apache include placed in a `blade-book.com` vhost instead of the billboard
    ones (certbot for TLS). install.sh already runs the one-time
