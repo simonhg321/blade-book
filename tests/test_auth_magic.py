@@ -1,6 +1,6 @@
 # Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
 from bb import db
-from tests.conftest import magic_link_from
+from tests.conftest import magic_link_from, signed_in
 
 
 def test_request_link_sends_mail_and_never_reveals_existence(client, mailer):
@@ -144,3 +144,17 @@ def test_browser_navigation_signed_out_gets_unauthenticated_page(client):
     assert r.status_code == 401 and r.get_json() == {'error': 'sign in required'}
     r = client.get('/blade-book/api/knives/', headers={'Accept': 'application/json'})
     assert r.status_code == 401
+
+
+def test_tombstoned_email_recreates_with_allowance_spent(client, mailer):
+    me = signed_in(client, mailer)
+    assert client.post('/blade-book/api/settings/delete', json={'confirm': me['handle']}).status_code == 200
+    again = signed_in(client, mailer)                      # same sam@example.com
+    # (no `again['id'] != me['id']` — users.id is a bare INTEGER PRIMARY KEY, so
+    # sqlite may hand the recreated row the same rowid; identity is the tombstone)
+    con = db.connect()
+    u = db.get_user(con, again['id'])
+    con.close()
+    assert u['free_old_used'] == 3 and u['sub_status'] == 'free'
+    r = client.get('/blade-book/api/billing').get_json()
+    assert r['free_old_left'] == 0

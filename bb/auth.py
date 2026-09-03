@@ -7,6 +7,7 @@ to /blade-book, carrying {'uid', 'ssh'} where ssh is a hash of the user's
 session_secret. Rotating that secret invalidates every device at once.
 """
 import hashlib
+import logging
 import re
 import unicodedata
 from functools import wraps
@@ -14,6 +15,8 @@ from functools import wraps
 from flask import g, jsonify, request, session
 
 from bb import config, db, paths
+
+log = logging.getLogger('blade-book.auth')
 
 HANDLE_MAX = 24
 HANDLE_MIN = 3
@@ -122,13 +125,16 @@ def sign_in_by_email(con, email, provider=None, sub=None, verified=True):
     """Find-or-create the account for a proven email, merge the OIDC subject
     if any, mark verified, and log in. The single entry point for every
     sign-in method (spec §6: same email across providers → one user)."""
-    # TODO plan 11: consult deleted_users (email hash) so a re-created account gets no fresh free_old_used allowance (docs/TODO.md billing (b))
     email = email.strip().lower()
     user = db.get_user_by_email(con, email)
     if user is None and provider and sub:
         user = db.get_user_by_subject(con, provider, sub)  # email changed at provider
     if user is None:
-        uid = db.create_user(con, email, handle_for_email(con, email))
+        from bb import billing  # billing imports db only; local import keeps auth's import graph flat
+        spent = billing.FREE_OLD_KNIVES if db.is_tombstoned(con, email) else 0
+        uid = db.create_user(con, email, handle_for_email(con, email), free_old_used=spent)
+        if spent:
+            log.info('re-created a tombstoned account for %s: free_old_used starts at %d', email, spent)
         db.rotate_session_secret(con, uid)
         user = db.get_user(con, uid)
     if provider and sub and user['auth_subjects'].get(provider) != sub:

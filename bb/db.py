@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 
 from bb import paths
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 SALE_STATUSES = ('keeping', 'for_trade', 'for_sale', 'consigned', 'sold')
 KNIFE_STATUSES = ('draft', 'live')
@@ -99,7 +99,8 @@ CREATE TABLE IF NOT EXISTS users (
   publish_dirty_at TEXT,
   session_secret TEXT NOT NULL DEFAULT '',
   last_tag_no INTEGER NOT NULL DEFAULT 0,
-  featured_knife_id INTEGER
+  featured_knife_id INTEGER,
+  handle_changed_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS knives (
@@ -257,6 +258,7 @@ MIGRATIONS = {
         "UPDATE knives SET listed_at = updated WHERE sale_status = 'for_sale' AND listed_at IS NULL"],
     # hero-pin: pin one live knife with a photo as the register's hero image.
     8: ['ALTER TABLE users ADD COLUMN featured_knife_id INTEGER'],
+    9: ['ALTER TABLE users ADD COLUMN handle_changed_at TEXT'],
 }
 
 
@@ -299,12 +301,14 @@ def _user_row(row):
     return d
 
 
-def create_user(con, email, handle, display_name=None, auth_subjects=None):
+def create_user(con, email, handle, display_name=None, auth_subjects=None, free_old_used=0):
+    """free_old_used > 0 only for a re-created account whose email is tombstoned
+    (plan 11): the free older-knife allowance is spent before it starts."""
     cur = con.execute(
-        'INSERT INTO users (email, handle, display_name, auth_subjects, created) '
-        'VALUES (?, ?, ?, ?, ?)',
+        'INSERT INTO users (email, handle, display_name, auth_subjects, created, free_old_used) '
+        'VALUES (?, ?, ?, ?, ?, ?)',
         (email.strip().lower(), handle, display_name,
-         json.dumps(auth_subjects or {}), now()))
+         json.dumps(auth_subjects or {}), now(), int(free_old_used)))
     con.commit()
     return cur.lastrowid
 
@@ -445,6 +449,15 @@ def get_user_by_subject(con, provider, sub):
 def handle_exists(con, handle):
     return con.execute('SELECT 1 FROM users WHERE handle = ?',
                        (handle,)).fetchone() is not None
+
+
+def set_handle(con, user_id, handle):
+    """The one-time handle change (plan 11). Validation is bb/account's job;
+    this just writes the new slug and stamps handle_changed_at."""
+    con.execute('UPDATE users SET handle = ?, handle_changed_at = ? WHERE id = ?',
+                (handle, now(), user_id))
+    con.commit()
+    return get_user(con, user_id)
 
 
 def purge_auth_tables(con):
@@ -1030,6 +1043,42 @@ def delete_knife(con, owner_id, knife_id):
                (owner_id, knife_id))
     con.commit()
     return keys
+
+
+# --- account deletion (plan 11) --------------------------------------------------
+
+def tombstone_email(con, email):
+    """Remember a deleted account by email hash only (spec §6) so a re-created
+    account gets no fresh free-tier allowance."""
+    con.execute('INSERT OR REPLACE INTO deleted_users (email_hash, deleted_at) VALUES (?, ?)',
+                (_sha(_norm_email(email)), now()))
+    con.commit()
+
+
+def is_tombstoned(con, email):
+    return con.execute('SELECT 1 FROM deleted_users WHERE email_hash = ?',
+                       (_sha(_norm_email(email)),)).fetchone() is not None
+
+
+def owner_photo_keys(con, owner_id):
+    """Every store key the owner's photos occupy (original + thumb), every
+    knife, every status — the list delete_account removes from the store."""
+    keys = []
+    for r in con.execute('SELECT store_key FROM photos WHERE owner_id = ?', (owner_id,)):
+        keys += [r['store_key'], thumb_key(r['store_key'])]
+    return keys
+
+
+def delete_user(con, user_id):
+    """DELETE the users row; FK cascade (PRAGMA foreign_keys=ON in connect)
+    takes knives, photos, events, wants, intros (both sides), reports (both
+    sides). Returns the counts the caller logs. Store keys, the public bundle
+    and the search index are NOT here — see bb/account.delete_account."""
+    knives = con.execute('SELECT count(*) FROM knives WHERE owner_id = ?', (user_id,)).fetchone()[0]
+    photos = con.execute('SELECT count(*) FROM photos WHERE owner_id = ?', (user_id,)).fetchone()[0]
+    con.execute('DELETE FROM users WHERE id = ?', (user_id,))
+    con.commit()
+    return {'knives': knives, 'photos': photos}
 
 
 def get_knife_any(con, knife_id):

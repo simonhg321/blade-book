@@ -458,3 +458,21 @@ def test_terms_page_wiring():
     assert len(re.findall(r'\w+', re.sub(r'<[^>]+>', ' ', prose))) < 900   # plain English, short
     landing = _read('html/index.html')
     assert 'By signing in you agree to the <a href="/blade-book/terms/"' in landing
+def test_settings_page_wiring():
+    html = _read('html/me/settings/index.html')
+    for needle in ('SETTINGS', "'/settings'", 'href="/blade-book/api/settings/export"', "'/settings/delete'",
+                   "'/auth/signout-all'", "'/auth/signout'", "'/billing'", "'/auth/me'",
+                   'id="handle"', 'id="newhandle"', 'id="changehandle"', 'can_change_handle',
+                   'id="email"', 'id="since"', 'id="sub"', 'id="subcard"', 'id="subprice"', 'id="submail"',
+                   'id="signoutall"', 'id="export"', 'id="confirm"', 'id="delete"',
+                   'one change, ever', 'real and complete', 'type your handle',
+                   "location.href = '/blade-book/?deleted=1'", 'href="/blade-book/me/"',
+                   'href="/blade-book/vibe.css"', 'bbmark', '/blade-book/mark.svg', 'class="bb-display"'):
+        assert needle in html, needle
+    assert 'innerHTML' not in html and 'fonts.googleapis.com' not in html
+    assert '<!-- Copyright (c) 2026 Simon SGH' in html
+
+
+def test_register_nav_links_settings():
+    html = _read('html/me/index.html')
+    assert 'href="/blade-book/me/settings/"' in html

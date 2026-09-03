@@ -177,11 +177,44 @@ def _build_v7_db():
 def test_v7_to_v8_adds_featured_knife_id(env):
     _build_v7_db()
     con = db.connect()
-    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION == 8
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION == 9
     ucols = {r[1] for r in con.execute('PRAGMA table_info(users)')}
     assert 'featured_knife_id' in ucols
     assert con.execute('SELECT featured_knife_id FROM users WHERE id = 1').fetchone()[0] is None
     con.close()
     con = db.connect()                                   # idempotent second open
-    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == 8
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == 9
+
+
+# Verbatim `users` at schema v8 (v7 + featured_knife_id) — before plan 11's
+# handle_changed_at. Hand-written for the same reason as OLD_USERS_V7_DDL.
+OLD_USERS_V8_DDL = OLD_USERS_V7_DDL.replace(
+    '  last_tag_no INTEGER NOT NULL DEFAULT 0\n);',
+    '  last_tag_no INTEGER NOT NULL DEFAULT 0,\n  featured_knife_id INTEGER\n);')
+
+
+def _build_v8_db():
+    assert 'featured_knife_id' in OLD_USERS_V8_DDL
+    path = paths.db_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    raw = sqlite3.connect(path)
+    raw.executescript(db.SCHEMA)
+    raw.executescript('DROP TABLE users;' + OLD_USERS_V8_DDL)
+    raw.execute("INSERT INTO users (id, email, handle, created) VALUES (1, 'v8@example.com', 'v8-guy', "
+                "'2026-09-03T00:00:00+00:00')")
+    raw.execute('INSERT INTO schema_version VALUES (8)')
+    raw.commit()
+    raw.close()
+
+
+def test_v8_to_v9_adds_handle_changed_at(env):
+    _build_v8_db()
+    con = db.connect()
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION == 9
+    assert 'handle_changed_at' in {r[1] for r in con.execute('PRAGMA table_info(users)')}
+    assert con.execute('SELECT handle_changed_at FROM users WHERE id = 1').fetchone()[0] is None
+    con.close()
+    con = db.connect()                                   # idempotent second open
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == 9
+    con.close()
     con.close()
