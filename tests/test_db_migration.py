@@ -115,7 +115,7 @@ def _build_v6_db():
 def test_v6_to_v7_adds_columns_index_and_backfills_listed_at(env):
     _build_v6_db()
     con = db.connect()
-    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION == 7
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION
     kcols = {r[1] for r in con.execute('PRAGMA table_info(knives)')}
     assert {'listed_at', 'hidden_at', 'hidden_by', 'hidden_note'} <= kcols
     assert 'message' in {r[1] for r in con.execute('PRAGMA table_info(intros)')}
@@ -125,5 +125,33 @@ def test_v6_to_v7_adds_columns_index_and_backfills_listed_at(env):
     assert rows['K02'] is None
     con.close()
     con = db.connect()                                   # idempotent second open
-    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == 7
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION
+    con.close()
+
+
+def _build_v7_db():
+    """A fresh DB stamped v7: current shape minus plan hero-pin's column
+    (users.featured_knife_id, added in v8)."""
+    path = paths.db_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    raw = sqlite3.connect(path)
+    raw.executescript(db.SCHEMA)
+    raw.executescript('ALTER TABLE users DROP COLUMN featured_knife_id;')
+    ts = '2026-09-02T00:00:00+00:00'
+    raw.execute("INSERT INTO users (id, email, handle, created) VALUES (1, 'v7@example.com', 'v7-guy', ?)", (ts,))
+    raw.execute('INSERT INTO schema_version VALUES (7)')
+    raw.commit()
+    raw.close()
+
+
+def test_v7_to_v8_adds_featured_knife_id(env):
+    _build_v7_db()
+    con = db.connect()
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION == 8
+    ucols = {r[1] for r in con.execute('PRAGMA table_info(users)')}
+    assert 'featured_knife_id' in ucols
+    assert con.execute('SELECT featured_knife_id FROM users WHERE id = 1').fetchone()[0] is None
+    con.close()
+    con = db.connect()                                   # idempotent second open
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == 8
     con.close()

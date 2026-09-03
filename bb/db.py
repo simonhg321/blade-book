@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 
 from bb import paths
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 SALE_STATUSES = ('keeping', 'for_trade', 'for_sale', 'consigned', 'sold')
 KNIFE_STATUSES = ('draft', 'live')
@@ -98,7 +98,8 @@ CREATE TABLE IF NOT EXISTS users (
   public_key TEXT,
   publish_dirty_at TEXT,
   session_secret TEXT NOT NULL DEFAULT '',
-  last_tag_no INTEGER NOT NULL DEFAULT 0
+  last_tag_no INTEGER NOT NULL DEFAULT 0,
+  featured_knife_id INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS knives (
@@ -254,6 +255,8 @@ MIGRATIONS = {
         'ALTER TABLE intros ADD COLUMN message TEXT',
         REPORTS_OPEN_INDEX_DDL,
         "UPDATE knives SET listed_at = updated WHERE sale_status = 'for_sale' AND listed_at IS NULL"],
+    # hero-pin: pin one live knife with a photo as the register's hero image.
+    8: ['ALTER TABLE users ADD COLUMN featured_knife_id INTEGER'],
 }
 
 
