@@ -11,15 +11,15 @@
     if (out) {
       out.addEventListener('click', function () {
         fetch('/blade-book/api/auth/signout', { method: 'POST', credentials: 'same-origin', cache: 'no-store' })
-          .catch(function () {})
-          .then(function () { location.href = '/blade-book/'; });
+          .then(function () { location.href = '/blade-book/'; }, function () { location.href = '/blade-book/'; })
+          .catch(function () {});
       });
     }
     fetch('/blade-book/api/auth/me', { credentials: 'same-origin', cache: 'no-store' })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (me) {
         if (!me) return;
-        Array.prototype.forEach.call(document.querySelectorAll('.bb-auth'), function (a) { a.textContent = 'my register'; });
+        Array.prototype.forEach.call(document.querySelectorAll('a' + '.bb-auth'), function (a) { a.textContent = 'my register'; });
         if (me.is_admin) {
           Array.prototype.forEach.call(document.querySelectorAll('#adminlink'), function (a) { a.hidden = false; });
         }
