@@ -286,7 +286,7 @@ def test_landing_links_the_register():
 
 def test_register_page_wiring():
     html = open(os.path.join(ROOT, 'html', 'me', 'index.html')).read()
-    for needle in ("'/knives/full'", "'/auth/me'", "'/auth/signout'", "'/decode'", "'/sale'", "'/public'", "'/knives/bulk'",
+    for needle in ("'/knives/full'", "'/auth/me'", "'/decode'", "'/sale'", "'/public'", "'/knives/bulk'",
                    "json('PATCH'", "method: 'DELETE'", 'href="/blade-book/vibe.css"', 'href="/blade-book/me/add/"',
                    'id="q"', 'id="cards"', 'id="bulkbar"', 'id="tpl"', 'class="bb-display"',
                    "location.href = '/blade-book/'", 'prompt(', 'FIELDS = [', 'sale_status', 'is_public',
@@ -460,7 +460,7 @@ def test_terms_page_wiring():
 def test_settings_page_wiring():
     html = _read('html/me/settings/index.html')
     for needle in ('SETTINGS', "'/settings'", 'href="/blade-book/api/settings/export"', "'/settings/delete'",
-                   "'/auth/signout-all'", "'/auth/signout'", "'/billing'", "'/auth/me'",
+                   "'/auth/signout-all'", "'/billing'", "'/auth/me'",
                    'id="handle"', 'id="newhandle"', 'id="changehandle"', 'can_change_handle',
                    'id="email"', 'id="since"', 'id="sub"', 'id="subcard"', 'id="subprice"', 'id="submail"',
                    'id="signoutall"', 'id="export"', 'id="confirm"', 'id="delete"',
@@ -515,3 +515,25 @@ def test_public_pages_share_the_footer_strip():
     assert 'search the registers' not in _read('html/index.html')
     assert 'about</a> · <a' not in _read('html/index.html').split('class="bb-foot"')[0]   # the old about · terms cluster is gone
     assert "' knives'" in _read('html/search/index.html') and 'knifes' not in _read('html/search/index.html')
+
+
+APP_PAGES = {'me/index.html': 'MY REGISTER', 'me/add/index.html': 'ADD A KNIFE', 'me/wants/index.html': 'YOUR WANTS',
+             'me/settings/index.html': 'SETTINGS', 'admin/index.html': 'ADMIN'}
+ROW_LINKS = ('class="add" href="/blade-book/me/add/">+ add<', 'href="/blade-book/me/">register<', 'href="/blade-book/me/wants/">wants<',
+             'href="/blade-book/me/settings/">settings<', 'href="/blade-book/board/">board<', 'href="/blade-book/">home<',
+             'id="adminlink" href="/blade-book/admin/" hidden>admin<', 'id="signout" class="btn link" type="button">sign out<')
+
+
+def test_app_pages_share_the_header_row():
+    for rel, title in APP_PAGES.items():
+        html = _read('html/' + rel)
+        assert html.count('class="bb-head"') == 1 and html.count('class="bb-nav"') == 1, rel
+        head = html[html.index('class="bb-head"'):html.index('</header>')]
+        assert title in head, (rel, title)
+        pos = [head.index(n) for n in ROW_LINKS]
+        assert pos == sorted(pos), (rel, pos)
+        assert '<script src="/blade-book/nav.js"></script>' in html, rel
+        style = html[html.index('<style>'):html.index('</style>')]
+        for local in ('\n  header{', '\n  nav{', '\n  nav a{', 'header h1{'):
+            assert local not in style, (rel, local)                         # shared rules only
+        assert 'innerHTML' not in html, rel

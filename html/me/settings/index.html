@@ -8,12 +8,6 @@
 <link rel="stylesheet" href="/blade-book/vibe.css">
 <style>
   body{max-width:560px;margin:0 auto;padding:14px 14px 60px}
-  header{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:6px;flex-wrap:wrap}
-  header h1{font-size:2.2rem;margin:0;white-space:nowrap}
-  header h1 span{color:var(--accent)}
-  nav{display:flex;gap:12px;align-items:center;font-size:.9rem;flex-wrap:wrap;justify-content:flex-end}
-  nav a{color:var(--muted);text-decoration:none}
-  nav a.add{color:var(--accent);font-weight:700}
   h2.bb-display{font-size:1.5rem;margin:0 0 8px}
   section.card{margin:12px 0}
   section.card p{margin:8px 0}
@@ -36,9 +30,9 @@
   .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 </style>
 
-<header>
-  <h1 class="bb-display"><img class="bbmark" src="/blade-book/mark.svg" alt="" width="30" style="vertical-align:-4px;margin-right:6px">BLADE-<span>BOOK</span></h1>
-  <nav><a class="add" href="/blade-book/me/add/">+ add</a><a href="/blade-book/me/">register</a><a href="/blade-book/me/wants/">wants</a><a href="/blade-book/how/">how</a><a href="/blade-book/">home</a><button id="signout" class="btn link" type="button">sign out</button></nav>
+<header class="bb-head">
+  <h1 class="bb-display"><img class="bbmark" src="/blade-book/mark.svg" alt="" width="30">SETTINGS</h1>
+  <nav class="bb-nav"><a class="add" href="/blade-book/me/add/">+ add</a><a href="/blade-book/me/">register</a><a href="/blade-book/me/wants/">wants</a><a href="/blade-book/me/settings/">settings</a><a href="/blade-book/board/">board</a><a href="/blade-book/">home</a><a id="adminlink" href="/blade-book/admin/" hidden>admin</a><button id="signout" class="btn link" type="button">sign out</button></nav>
 </header>
 <h2 class="bb-display">SETTINGS</h2>
 <div id="status" aria-live="polite"></div>
@@ -154,10 +148,6 @@
     api('/auth/signout-all', { method: 'POST' }).then(function () { location.href = '/blade-book/'; })
       .catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); });
   });
-  $('signout').addEventListener('click', function () {
-    api('/auth/signout', { method: 'POST' }).then(function () { location.href = '/blade-book/'; })
-      .catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); });
-  });
 
   $('export').addEventListener('click', function () { say('building your ZIP…'); setTimeout(function () { say(''); }, 4000); });
 
@@ -177,3 +167,4 @@
     .catch(function (e) { if (e.message !== 'sign in') say('✗ could not reach blade-book', true); });
 })();
 </script>
+<script src="/blade-book/nav.js"></script>

@@ -9,11 +9,6 @@
 <link rel="stylesheet" href="/blade-book/vibe.css">
 <style>
   body{max-width:560px;margin:0 auto;padding:14px 14px 60px}
-  header{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:6px}
-  header h1{font-size:2.2rem;margin:0}
-  nav{display:flex;gap:12px;align-items:center;font-size:.9rem}
-  nav a{color:var(--muted);text-decoration:none}
-  nav a.add{color:var(--accent);font-weight:700}
   .lede{color:var(--muted);margin:0 0 16px;font-size:.92rem}
   #status{text-align:center;color:var(--muted);min-height:1.3em;margin:6px 0;font-size:.9rem}
   #status.err{color:var(--accent);font-weight:700}
@@ -30,9 +25,9 @@
   h2.sec{font-size:.78rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
 </style>
 
-<header>
-  <h1 class="bb-display"><img class="bbmark" src="/blade-book/mark.svg" alt="" width="30" style="vertical-align:-4px;margin-right:6px">YOUR WANTS</h1>
-  <nav><a class="add" href="/blade-book/me/add/">+ add</a><a href="/blade-book/me/">register</a><a href="/blade-book/">home</a></nav>
+<header class="bb-head">
+  <h1 class="bb-display"><img class="bbmark" src="/blade-book/mark.svg" alt="" width="30">YOUR WANTS</h1>
+  <nav class="bb-nav"><a class="add" href="/blade-book/me/add/">+ add</a><a href="/blade-book/me/">register</a><a href="/blade-book/me/wants/">wants</a><a href="/blade-book/me/settings/">settings</a><a href="/blade-book/board/">board</a><a href="/blade-book/">home</a><a id="adminlink" href="/blade-book/admin/" hidden>admin</a><button id="signout" class="btn link" type="button">sign out</button></nav>
 </header>
 <p class="lede">Tell the register what you're hunting. When a matching knife goes up for trade or sale anywhere on blade-book, you and the owner each get ONE email introduction. Blank fields match anything.</p>
 <div id="status" aria-live="polite"></div>
@@ -205,3 +200,4 @@
   }).catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); });
 })();
 </script>
+<script src="/blade-book/nav.js"></script>
