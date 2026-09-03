@@ -88,7 +88,8 @@
   <article class="knife card">
     <div class="top"><input type="checkbox" class="sel" title="select"><span class="tag bb-display"></span><span class="title"></span><span class="badges"></span></div>
     <div class="photos"></div>
-    <div class="toggles"><label><input type="checkbox" class="pub"> public on my page</label></div>
+    <div class="toggles"><label><input type="checkbox" class="pub"> public on my page</label>
+      <button class="btn alt hero" type="button" hidden>★ register hero</button></div>
     <details class="more"><summary>details · sale · edit</summary>
       <table><tbody class="rows"></tbody></table>
       <div class="flags"></div>
@@ -111,6 +112,7 @@
   var $ = function (id) { return document.getElementById(id); };
   var knives = [], selected = {}, didScroll = false;
   var openMap = {};   // per-knife details expander state — survives re-renders
+  var featuredId = null;   // settings.featured_knife_id — the pinned register hero
 
   function say(t, err) { var s = $('status'); s.textContent = t || ''; s.className = err ? 'err' : ''; }
   function api(path, opts) {
@@ -163,6 +165,7 @@
 
   function badges(k) {
     var out = [];
+    if (k.id === featuredId) out.push(['★ HERO', 'accent']);
     if (k.hidden_at) out.push(['hidden — under review', 'warn']);
     if (k.status === 'draft') out.push(['draft', 'warn']);
     if (!k.is_public) out.push(['private', '']);
@@ -347,6 +350,20 @@
         k.is_public = res.j.is_public; render();
       }).catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); });
     });
+    var heroBtn = art.querySelector('.hero');
+    if (k.photos.length) {
+      heroBtn.hidden = false;
+      var pinned = k.id === featuredId;
+      heroBtn.textContent = pinned ? 'unpin' : '★ register hero';
+      heroBtn.addEventListener('click', function () {
+        json('PATCH', '/settings', { featured_knife_id: pinned ? null : k.id }).then(function (res) {
+          if (!res.ok) { say('✗ ' + (res.j.error || 'could not update'), true); return; }
+          featuredId = res.j.featured_knife_id;
+          say(pinned ? k.tag + ' unpinned' : '★ ' + k.tag + ' is now your register hero');
+          render();
+        }).catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); });
+      });
+    }
     var form = art.querySelector('.form');
     art.querySelector('.edit').addEventListener('click', function () {
       if (form.classList.contains('hidden')) { buildForm(form, k); form.classList.remove('hidden'); form.scrollIntoView({ block: 'nearest' }); }
@@ -432,6 +449,7 @@
     return api('/settings').then(function (res) {
       if (!res.ok) { say('✗ could not load settings', true); return; }
       var s = res.j;
+      featuredId = s.featured_knife_id || null;
       $('publink').href = s.public_url;
       $('publink').textContent = s.public_url;
       $('hideday').checked = !!s.hide_born_day;
@@ -475,7 +493,8 @@
 
   api('/auth/me').then(function (res) {
     $('handle').textContent = '@' + (res.j.handle || '');
-    loadSettings();
+    return loadSettings();
+  }).then(function () {
     return reload();
   }).catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); });
 })();

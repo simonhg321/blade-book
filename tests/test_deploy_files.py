@@ -254,6 +254,13 @@ def test_register_page_wiring():
     assert 'fonts.googleapis.com' not in html
 
 
+def test_register_page_hero_pin_wiring():
+    html = _read('html/me/index.html')
+    for needle in ('featured_knife_id', 'register hero', '★ HERO', "'/settings'"):
+        assert needle in html, needle
+    assert 'innerHTML' not in html
+
+
 def test_register_page_has_public_section():
     html = open(os.path.join(ROOT, 'html', 'me', 'index.html')).read()
     for needle in ("'/settings'", 'id="pubsec"', 'id="publink"', 'id="hideday"',
