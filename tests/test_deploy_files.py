@@ -73,7 +73,8 @@ def test_env_doc_lists_every_key_the_code_reads():
     for key in ('SESSION_KEY', 'BASE_URL', 'RESEND_API_KEY', 'MAIL_FROM',
                 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'APPLE_CLIENT_ID',
                 'APPLE_TEAM_ID', 'APPLE_KEY_ID', 'APPLE_PRIVATE_KEY',
-                'ANTHROPIC_API_KEY', 'DECODER_MODEL'):
+                'ANTHROPIC_API_KEY', 'DECODER_MODEL',
+                'BLADEBOOK_PRICE_TEXT', 'BLADEBOOK_CONTACT_EMAIL'):
         assert key in doc, key
 
 

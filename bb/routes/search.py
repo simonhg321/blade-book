@@ -2,7 +2,8 @@
 """GET /blade-book/api/search — public, auth optional (spec §9).
 Free: text search + card-lite results + aggregate counts.
 Paid (sub_status 'active' or admin): year range, damascus smith/pattern,
-special edition, who-has-≥N. The ONLY read gate in the product (spec §10)."""
+special edition, who-has-≥N. The ONLY read gate in the product (spec §10).
+The write gate is bb/billing.can_add at save."""
 import logging
 
 from flask import Blueprint, jsonify, request

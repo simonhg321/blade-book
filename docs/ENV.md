@@ -19,3 +19,5 @@ Paths and the port are NOT here — `BLADEBOOK_*_DIR` / `BLADEBOOK_PORT` are rea
 | `ANTHROPIC_API_KEY` | 04 | console.anthropic.com. **Unset → decode disabled**: `POST …/decode` answers 503 and the app still boots. |
 | `DECODER_MODEL` | 04 | Exact model id, e.g. `claude-sonnet-5` (default), `claude-haiku-4-5`, `claude-opus-5`. Choose from `scripts/eval_decode.py`'s table, not taste. |
 | `BLADEBOOK_PUBLISH_DEBOUNCE_S` | 06 | Optional, default `30` — seconds the public-bundle rebuild waits after the last save before it fires (`bb/publish.py`'s per-process timer, plus the cron sweep's quiet window). Tests set this to a tiny value; production leaves it at the default. |
+| `BLADEBOOK_PRICE_TEXT` | 10 | Optional, default `$4/mo or $36/yr` — the one price line (spec §10), shown by `GET /api/billing` on the intake and search early-access cards. Change it here, restart, done. |
+| `BLADEBOOK_CONTACT_EMAIL` | 10 | Optional, default `hello@` at MAIL_FROM's domain — the early-access "email us" address the intake dialog and the search card link to. Must be a mailbox someone reads. |

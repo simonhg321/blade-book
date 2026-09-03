@@ -14,13 +14,12 @@ Small items that don't warrant a plan. Bigger work lives in the plan roadmap
 - [ ] Vhost `Permissions-Policy: camera=()` → `camera=(self)` if iPhone capture is blocked
   on `/blade-book/me/add/` (sudo; unverified).
 - [ ] /me: photo re-order / replace from the register (today: only via /me/add before save, or re-upload by slot through the API).
-- [ ] account deletion (plan 10/11) MUST remove /var/www/html/blade-book/@handle, its .tmp, and its DATA_DIR publish lock — otherwise a deleted user's public page serves forever (final review, plan 06).
-- [ ] search: paid-filter UI unlock rides plan 10 (ManualBilling scripts/sub.py)
+- [ ] account deletion (plan 11) MUST remove /var/www/html/blade-book/@handle, its .tmp, and its DATA_DIR publish lock — otherwise a deleted user's public page serves forever (final review, plan 06).
 - [ ] board: contact / report buttons on the static `/@handle/K07` permalink pages (they're
   static bundles; today both live on `/blade-book/board/` only — plan 09 ruling).
 - [ ] board: `listed_at` is a UTC ISO stamp shown as a date; localise if anyone asks.
-- [ ] admin: plan 10 grows `/blade-book/admin/` with users + subs; report resolutions are
-  only visible via sqlite3 until then (`SELECT * FROM reports WHERE resolved_at IS NOT NULL`).
+- [ ] admin: report resolutions are only visible via sqlite3
+  (`SELECT * FROM reports WHERE resolved_at IS NOT NULL`).
 - [ ] rulings to revisit with real traffic: 10 board intros/day/buyer; 10 open reports/reporter;
   auto-hide counts only reporters who own a live knife.
 - [ ] moderation loop (final review, plan 09): (a) auto-hide has no terminal state after an admin
@@ -32,3 +31,13 @@ Small items that don't warrant a plan. Bigger work lives in the plan roadmap
   (`row[0] != SCHEMA_VERSION` → migrate-nothing → UPDATE to the old number). Harmless today
   (next cron re-runs the idempotent migration) but: always merge → restart in the same minute,
   and change the check to `<` so old workers read-as-is.
+- [ ] billing (plan 10 deferrals): (a) "your account turns one next month" mail (spec §10 Mail) — first
+  account turns one 2027-08-29; a daily cron over users where created ∈ [335, 336) days ago, one send
+  ever (needs a `turns_one_sent_at` column). (b) `sign_in_by_email` must consult `deleted_users`
+  (email hash) so a re-created account gets no fresh free_old_used allowance — lands with plan 11's
+  delete, which is what writes that table. (c) free_old_used TOCTOU: two concurrent saves of the 3rd
+  and 4th old knife can both pass `< 3` (over-by-one, same shape as the plan-09 caps; not worth a
+  transaction at this scale). (d) the early-access mailto defaults to `hello@` at MAIL_FROM's domain
+  (`BLADEBOOK_CONTACT_EMAIL` overrides) — make that mailbox real or set the env before the first outside 402.
+- [ ] `account_days` uses users.created; an account whose created stamp predates the gate (all three
+  live users: 08-29 → 09-02) gets its full first year from that date — intended, no backfill.
