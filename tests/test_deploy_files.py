@@ -409,3 +409,19 @@ def test_about_page_wiring():
     assert '$4' not in html and '$36' not in html and 'hello@' not in html   # price + contact come from the API
     for rel in ('index.html', 'how/index.html'):
         assert 'href="/blade-book/about/"' in _read('html/' + rel), rel
+
+
+def test_terms_page_wiring():
+    html = _read('html/terms/index.html')
+    for needle in ('TERMS', 'A record, not a certificate', 'No money', 'Your photos stay yours', 'Takedown',
+                   'Delete is real', 'Your data', 'What we store', 'Early access', '24 hours',
+                   'class="contact"', "'/blade-book/api/billing'", 'href="/blade-book/about/"',
+                   'property="og:title"', 'href="/blade-book/vibe.css"', 'bbmark'):
+        assert needle in html, needle
+    assert 'innerHTML' not in html and 'fonts.googleapis.com' not in html
+    assert '<!-- Copyright (c) 2026 Simon SGH' in html
+    assert 'hello@' not in html
+    prose = re.sub(r'<(style|script)[\s\S]*?</\1>', ' ', html)
+    assert len(re.findall(r'\w+', re.sub(r'<[^>]+>', ' ', prose))) < 900   # plain English, short
+    landing = _read('html/index.html')
+    assert 'By signing in you agree to the <a href="/blade-book/terms/"' in landing

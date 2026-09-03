@@ -1,0 +1,80 @@
+<!doctype html>
+<!-- Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>blade-book — terms</title>
+<meta property="og:title" content="blade-book terms">
+<meta property="og:description" content="The whole policy in plain English: a record, not a certificate; no money; your photos stay yours; delete is real.">
+<link rel="icon" type="image/svg+xml" href="/blade-book/mark.svg">
+<link rel="apple-touch-icon" href="/blade-book/apple-touch-icon.png">
+<link rel="stylesheet" href="/blade-book/vibe.css">
+<style>
+  body{max-width:560px;margin:0 auto;padding:16px 16px 60px}
+  header{text-align:center;margin-bottom:8px}
+  header .bbmark{margin-top:8px}
+  h1{font-family:'Bebas Neue',Impact,sans-serif;font-weight:400;font-size:2.6rem;letter-spacing:.06em;margin:.2rem 0 0}
+  .lede{color:var(--muted);text-align:center;margin:0 0 22px}
+  h2{font-size:.8rem;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin:28px 0 10px;border-bottom:2px solid var(--ink);padding-bottom:6px}
+  p{font-size:.95rem;margin:0 0 10px}
+  ul.check{list-style:none;padding:0;margin:0;display:grid;gap:6px;font-size:.92rem}
+  ul.check li{background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 12px}
+  ul.check li::before{content:'✓ ';color:var(--ok);font-weight:700}
+  ul.check li.no::before{content:'✕ ';color:var(--accent)}
+  footer{margin-top:34px;text-align:center;font-size:.78rem;color:var(--muted)}
+  footer img{vertical-align:-4px}
+</style>
+
+<header>
+  <a href="/blade-book/"><img class="bbmark" src="/blade-book/mark.svg" alt="blade-book" width="72"></a>
+  <h1>TERMS</h1>
+</header>
+<p class="lede">Plain English. If something here surprises you, email us.</p>
+
+<h2>A record, not a certificate</h2>
+<p>blade-book is a collector's register. A page here proves that someone photographed a birth card and filed it; it does not prove that a knife is genuine, where it has been, or what it is worth. Do your own checking before you buy.</p>
+
+<h2>No money</h2>
+<p>We don't sell knives, take payment for them, or stand between buyer and seller. Wants, intros and the board pass an email address along, with both people's consent. The deal, the shipping and the trust are between you.</p>
+
+<h2>Your photos stay yours</h2>
+<p>You keep every right to your photos and your records. You give blade-book permission to show them on your public page and in the search index for as long as the knife is public. Make a knife private, or delete it, and that permission ends with it.</p>
+
+<h2>Takedown</h2>
+<p>If a page shows something that is yours and shouldn't be here, email <a class="contact" href="#">us</a> with the link. We act within 24 hours.</p>
+
+<h2>Delete is real</h2>
+<p>Deleting your account removes your knives, photos, wants, intros and your public page immediately, not on a schedule. We keep one thing: a one-way hash of your email address, so a new account on the same address doesn't restart the free tier.</p>
+
+<h2>Your data</h2>
+<p>You can download everything you've put here — original photos, every record, private notes and prices included — as one ZIP, any time, subscribed or not. It's yours.</p>
+
+<h2>What we store</h2>
+<p>Your email address, your handle, the knife records and photos you add, the notes you write, and a sign-in cookie. Nothing else. No ads, no trackers, no analytics scripts.</p>
+
+<h2>Early access</h2>
+<p>blade-book is new. Prices and features may change while we find our feet; when they do, <a href="/blade-book/about/">about</a> says so first. Questions: <a class="contact" href="#">email us</a>.</p>
+
+<footer><img src="/blade-book/mark.svg" alt="" width="16"> blade-book · <a href="/blade-book/about/">about</a> · <a href="/blade-book/how/">how it works</a> · <a href="/blade-book/search/">search all registers</a></footer>
+
+<script>
+(function () {
+  var as = document.querySelectorAll('a.contact');
+  function fallback() {
+    Array.prototype.forEach.call(as, function (a) {
+      a.href = '/blade-book/about/';
+      a.style.color = 'var(--muted)';
+    });
+  }
+  fetch('/blade-book/api/billing', { credentials: 'same-origin', cache: 'no-store' })
+    .then(function (r) { if (!r.ok) throw new Error('billing ' + r.status); return r.json(); })
+    .then(function (b) {
+      if (b.contact) {
+        var href = 'mailto:' + b.contact + '?subject=blade-book';
+        Array.prototype.forEach.call(as, function (a) { a.href = href; });
+      } else {
+        fallback();
+      }
+    })
+    .catch(fallback);
+})();
+</script>
