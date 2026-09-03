@@ -76,17 +76,24 @@ def build_schema(ext_props):
 _DATE = re.compile(r'^(\d{4})(?:-(\d{2}))?(?:-(\d{2}))?$')
 
 
-def age_months(born_on, today=None):
-    """Whole months between born_on (YYYY[-MM[-DD]]) and today; None if unparsable."""
+def born_date(born_on):
+    """YYYY[-MM[-DD]] → date (missing month/day → 1); None if absent or unparsable."""
     m = _DATE.match(born_on or '')
     if not m:
         return None
-    today = today or dt.date.today()
     y, mo, d = int(m.group(1)), int(m.group(2) or 1), int(m.group(3) or 1)
     try:
-        born = dt.date(y, mo, d)
+        return dt.date(y, mo, d)
     except ValueError:
         return None
+
+
+def age_months(born_on, today=None):
+    """Whole months between born_on (YYYY[-MM[-DD]]) and today; None if unparsable."""
+    born = born_date(born_on)
+    if born is None:
+        return None
+    today = today or dt.date.today()
     months = (today.year - born.year) * 12 + (today.month - born.month)
     if today.day < born.day:
         months -= 1

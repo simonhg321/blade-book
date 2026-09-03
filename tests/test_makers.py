@@ -104,3 +104,13 @@ def test_flags_today_parameter():
     assert any('future' in x for x in f)
     f = crk.flags({'model': 'Sebenza', 'born_on': '2027-01-01'}, {}, today=dt.date(2027, 6, 1))
     assert not any('future' in x for x in f)
+
+
+def test_core_born_date_precisions():
+    import datetime as dt
+    from bb.makers import core
+    assert core.born_date('2008-03-14') == dt.date(2008, 3, 14)
+    assert core.born_date('2008-03') == dt.date(2008, 3, 1)
+    assert core.born_date('2008') == dt.date(2008, 1, 1)
+    assert core.born_date(None) is None and core.born_date('') is None
+    assert core.born_date('2008-13-40') is None and core.born_date('March 2008') is None
