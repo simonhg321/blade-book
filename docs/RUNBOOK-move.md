@@ -38,3 +38,4 @@ supervisor program; nothing imports from billboard.
    /blade-book/admin/ (is_admin=1 in users — flip with sqlite3 until plan 10's scripts/sub.py).
    Upgrades: the live checkout is the code the crons run, so merge and `scripts/restart.sh`
    back-to-back, then confirm `SELECT version FROM schema_version` matches bb/db.py.
+   v8 = users.featured_knife_id, the pinned register hero.
