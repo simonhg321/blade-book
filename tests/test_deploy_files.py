@@ -274,7 +274,8 @@ def test_how_page_wiring():
                    'href="/blade-book/vibe.css"'):
         assert needle in html, needle
     assert 'innerHTML' not in html and 'fonts.googleapis.com' not in html
-    for rel in ('index.html', 'me/index.html', 'me/add/index.html'):
+    # me/index.html's shared app header row deliberately has no 'how' link (plan 13)
+    for rel in ('index.html', 'me/add/index.html'):
         assert '/blade-book/how/' in open(os.path.join(ROOT, 'html', rel)).read(), rel
 
 
