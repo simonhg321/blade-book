@@ -1,10 +1,15 @@
 # Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+import csv
 import hashlib
+import io
+import json
 import os
+import zipfile
 
 import pytest
 
 from bb import account, db, publish, search
+from bb.store import LocalFSStore
 
 
 def _user(con, email='sam@example.com', handle='sam', **cols):
@@ -123,3 +128,55 @@ def test_change_handle_taken(con):
 
 def test_remove_public_surface_tolerates_absence(env):
     account.remove_public_surface('nobody')     # nothing there — no raise
+
+
+def _knife_with_photo(con, store, u, tag_photo=b'JPEGBYTES'):
+    k = db.create_draft_knife(con, u['id'])
+    con.execute("UPDATE knives SET model = 'Sebenza', born_on = '2025-09-29', price_paid = 475, "
+                "notes_private = 'gift from Dad', confidence = '{}' WHERE id = ?", (k['id'],))
+    con.commit()
+    key = f"{u['id']}/{k['id']}/1.jpg"
+    store.put(key, tag_photo)
+    db.add_photo(con, u['id'], k['id'], 1, key, hashlib.sha256(tag_photo).hexdigest(), 800, 600)
+    db.publish_knife(con, u['id'], k['id'])
+    return db.get_knife(con, u['id'], k['id'])
+
+
+def test_export_zip_contents(env, con, tmp_path):
+    store = LocalFSStore(str(tmp_path / 'store'))
+    u = _user(con)
+    k = _knife_with_photo(con, store, u)
+    out = account.export_zip(con, store, u, str(tmp_path / 'exports'))
+    assert os.path.basename(out).startswith('sam-') and out.endswith('.zip')
+    with zipfile.ZipFile(out) as z:
+        names = set(z.namelist())
+        assert names == {'knives.json', 'knives.csv', f"photos/{k['tag']}-1.jpg"}
+        j = json.loads(z.read('knives.json'))
+        assert j['handle'] == 'sam' and j['count'] == 1 and j['missing_photos'] == []
+        row = j['knives'][0]
+        assert row['tag'] == k['tag'] and row['price_paid'] == 475 and row['notes_private'] == 'gift from Dad'
+        assert row['photos'][0]['file'] == f"photos/{k['tag']}-1.jpg"
+        assert 'events' in row
+        rows = list(csv.DictReader(io.StringIO(z.read('knives.csv').decode())))
+        assert rows[0]['tag'] == k['tag'] and rows[0]['price_paid'] == '475.0' and rows[0]['photo_count'] == '1'
+        assert list(rows[0].keys()) == list(account.EXPORT_CSV_COLUMNS)
+        assert z.read(f"photos/{k['tag']}-1.jpg") == b'JPEGBYTES'
+        assert z.getinfo(f"photos/{k['tag']}-1.jpg").compress_type == zipfile.ZIP_STORED
+
+
+def test_export_zip_lists_missing_photos(env, con, tmp_path):
+    store = LocalFSStore(str(tmp_path / 'store'))
+    u = _user(con)
+    k = _knife_with_photo(con, store, u)
+    store.delete(k['photos'][0]['store_key'])
+    out = account.export_zip(con, store, u, str(tmp_path / 'exports'))
+    with zipfile.ZipFile(out) as z:
+        assert 'photos/' not in ' '.join(z.namelist())
+        assert json.loads(z.read('knives.json'))['missing_photos'] == [f"{k['tag']}-1"]
+
+
+def test_export_csv_columns_cover_private_and_skip_ids():
+    cols = account.EXPORT_CSV_COLUMNS
+    assert 'id' not in cols and 'owner_id' not in cols
+    assert set(db.PRIVATE_COLUMNS) - {'events'} <= set(cols)
+    assert cols[-1] == 'photo_count' and cols[0] == 'tag'

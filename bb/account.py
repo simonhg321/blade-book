@@ -65,3 +65,69 @@ def change_handle(con, user, new):
     search.deindex_user(con, user['id'])
     log.info('handle changed: @%s -> @%s (user %s)', old, new, user['id'])
     return fresh
+
+
+# --- export ------------------------------------------------------------------------
+
+# The knives table in DDL order minus id/owner_id, plus photo_count. ext and
+# confidence are JSON text in their cells. Never derived from PRAGMA at run
+# time: the header is a contract with whoever opens the CSV in a spreadsheet.
+EXPORT_CSV_COLUMNS = (
+    'tag', 'maker', 'status',
+    'model', 'variant', 'blade_steel', 'blade_shape', 'blade_length_in', 'handle_material', 'lock_type',
+    'born_on', 'born_on_precision', 'born_on_source', 'condition',
+    'has_box', 'has_card', 'has_papers', 'has_pouch', 'has_lanyard', 'has_spare_hardware',
+    'ext',
+    'price_paid', 'acquired_from', 'acquired_date', 'location', 'notes_private', 'condition_note',
+    'confidence', 'card_text', 'decode_note',
+    'notes_public', 'is_public', 'sale_status', 'asking_price', 'seller_note', 'listed_at',
+    'hidden_at', 'hidden_by', 'hidden_note', 'hero_photo', 'created', 'updated',
+    'photo_count',
+)
+
+
+def _csv_cell(v):
+    if v is None:
+        return ''
+    if isinstance(v, (dict, list)):
+        return json.dumps(v, sort_keys=True)
+    return v
+
+
+def export_zip(con, store, user, out_dir):
+    """Everything the owner has, as one ZIP: knives.json (every column,
+    private ones included — it is their data), knives.csv, and the original
+    photos as photos/<TAG>-<seq>.jpg (stored, not deflated: JPEG). A photo the
+    store no longer has is skipped and named in missing_photos."""
+    os.makedirs(out_dir, exist_ok=True)
+    stamp = datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')
+    path = os.path.join(out_dir, f"{user['handle']}-{stamp}.zip")
+    knives = db.full_register(con, user['id'])
+    missing = []
+    with zipfile.ZipFile(path, 'w', compression=zipfile.ZIP_DEFLATED) as z:
+        for k in knives:
+            for p in k['photos']:
+                name = f"{k['tag']}-{p['seq']}"
+                try:
+                    data = store.get(p['store_key'])
+                except KeyError:
+                    missing.append(name)
+                    p['file'] = None
+                    continue
+                p['file'] = f'photos/{name}.jpg'
+                z.writestr(zipfile.ZipInfo(p['file'], date_time=(1980, 1, 1, 0, 0, 0)), data,
+                           compress_type=zipfile.ZIP_STORED)
+        z.writestr('knives.json', json.dumps({
+            'generated': datetime.now(timezone.utc).isoformat(), 'handle': user['handle'],
+            'count': len(knives), 'missing_photos': missing, 'knives': knives}, indent=1, default=str))
+        buf = io.StringIO()
+        w = csv.DictWriter(buf, fieldnames=EXPORT_CSV_COLUMNS, extrasaction='ignore')
+        w.writeheader()
+        for k in knives:
+            row = {c: _csv_cell(k.get(c)) for c in EXPORT_CSV_COLUMNS}
+            row['photo_count'] = len(k['photos'])
+            w.writerow(row)
+        z.writestr('knives.csv', buf.getvalue())
+    log.info('export for @%s: %d knives, %d missing photos, %d bytes',
+             user['handle'], len(knives), len(missing), os.path.getsize(path))
+    return path
