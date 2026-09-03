@@ -481,7 +481,7 @@ def test_register_nav_links_settings():
 def test_nav_js_shape():
     js = _read('html/nav.js')
     assert js.startswith('// Copyright (c) 2026 Simon SGH')
-    for needle in ("'/blade-book/api/auth/me'", "'.bb-auth'", "'my register'", 'adminlink', 'is_admin',
+    for needle in ("'/blade-book/api/auth/me'", "'a.bb-auth'", "'my register'", 'adminlink', 'is_admin',
                    'signout', "'/blade-book/api/auth/signout'", "location.href = '/blade-book/'",
                    "credentials: 'same-origin'", "cache: 'no-store'", '.catch('):
         assert needle in js, needle

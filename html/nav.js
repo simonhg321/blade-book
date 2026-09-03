@@ -19,7 +19,7 @@
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (me) {
         if (!me) return;
-        Array.prototype.forEach.call(document.querySelectorAll('a' + '.bb-auth'), function (a) { a.textContent = 'my register'; });
+        Array.prototype.forEach.call(document.querySelectorAll('a.bb-auth'), function (a) { a.textContent = 'my register'; });
         if (me.is_admin) {
           Array.prototype.forEach.call(document.querySelectorAll('#adminlink'), function (a) { a.hidden = false; });
         }
