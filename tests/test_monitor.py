@@ -191,6 +191,10 @@ def test_send_sms_uses_injected_sender_and_never_raises(mon, monkeypatch):
     mon.send_sms('hi', sender=lambda phone, body: got.append((phone, body)))
     assert got[-1][0] == '15550001111'
     assert mon.send_sms('x', sender=lambda p, b: (_ for _ in ()).throw(RuntimeError('boom'))) is False
+    # a sender that returns falsy without raising (billboard's _send_twilio_sms
+    # does this on missing creds / Twilio refusal) must report failure, not
+    # be papered over as success.
+    assert mon.send_sms('x', sender=lambda p, b: False) is False
 
 
 def test_gather_runs_every_check_against_scratch_paths(mon, env, con):
@@ -225,3 +229,85 @@ def test_main_returns_zero_when_mail_setup_raises(mon, env, monkeypatch):
     monkeypatch.setattr(mon, 'gather', lambda now, **k: [mon.Event('errors', 'x', 'y', False)])
     monkeypatch.setenv('BLADEBOOK_ADMIN_EMAIL', 'admin@example.com')
     assert mon.main([]) == 0
+
+
+def test_main_delivers_via_fake_mailer(mon, env, monkeypatch):
+    import bb.mail
+    m = _Mailer()
+    monkeypatch.setattr(bb.mail, 'from_env', lambda: m)
+    monkeypatch.setattr(mon, 'gather', lambda now, **k: [mon.Event('errors', 'x', 'y', False)])
+    # config.get() reads os.environ directly (config.load()'s override=False
+    # never masks it), so monkeypatch.setenv is enough here.
+    monkeypatch.setenv('BLADEBOOK_ADMIN_EMAIL', 'admin@example.com')
+    assert mon.main([]) == 0
+    assert m.sent == [('admin@example.com', '[blade-book] x', 'y')]
+
+
+def test_main_dry_run_saves_no_state(mon, env):
+    assert not os.path.exists(mon.state_path())
+    rc = mon.main(['--dry-run'])
+    assert rc == 0
+    assert not os.path.exists(mon.state_path())
+
+
+def test_main_reports_gather_failure(mon, env, monkeypatch, capsys):
+    def boom(now, **k):
+        raise RuntimeError('db is gone')
+    monkeypatch.setattr(mon, 'gather', boom)
+    assert mon.main([]) == 0
+    assert 'gather FAILED' in capsys.readouterr().out
+    capsys.readouterr()
+    assert mon.main(['--dry-run']) == 0
+    assert 'gather FAILED' in capsys.readouterr().out
+
+
+def test_load_state_treats_os_and_unicode_errors_as_missing(mon, tmp_path):
+    p = tmp_path / 'state.json'
+    p.write_bytes(b'\xff\xfe\x00bad')
+    assert mon.load_state(str(p)) == mon.load_state('/nonexistent')
+    p.write_text('{}')
+    os.chmod(p, 0o000)
+    try:
+        assert mon.load_state(str(p)) == mon.load_state('/nonexistent')
+    finally:
+        os.chmod(p, 0o644)
+
+
+def test_billboard_sender_import_does_not_clobber_shared_env_keys(mon, tmp_path, monkeypatch):
+    """billboard's real sms_alerter does `load_dotenv(..., override=True)` at
+    import time, and both .env files define ANTHROPIC_API_KEY/RESEND_API_KEY —
+    a fake stand-in module reproduces that clobbering side effect so the
+    guard in _billboard_sender is actually exercised."""
+    fake_dir = tmp_path / 'fakebb'
+    fake_dir.mkdir()
+    (fake_dir / 'sms_alerter.py').write_text(
+        "import os\n"
+        "os.environ['ANTHROPIC_API_KEY'] = 'billboard-key'\n"
+        "os.environ['RESEND_API_KEY'] = 'billboard-resend'\n"
+        "def _send_twilio_sms(to, body):\n"
+        "    return True\n"
+    )
+    monkeypatch.setattr(mon, 'BILLBOARD_DIR', str(fake_dir))
+    monkeypatch.setenv('ANTHROPIC_API_KEY', 'blade-book-key')
+    monkeypatch.setenv('RESEND_API_KEY', 'blade-book-resend')
+    sys.modules.pop('sms_alerter', None)
+    try:
+        sender = mon._billboard_sender()
+        assert sender('123', 'hi') is True
+        assert os.environ['ANTHROPIC_API_KEY'] == 'blade-book-key'
+        assert os.environ['RESEND_API_KEY'] == 'blade-book-resend'
+    finally:
+        sys.modules.pop('sms_alerter', None)
+        if str(fake_dir) in sys.path:
+            sys.path.remove(str(fake_dir))
+
+
+def test_gather_logs_but_does_not_raise_when_state_cannot_be_saved(mon, env, monkeypatch, con, caplog):
+    def boom(path, state):
+        raise OSError('disk full')
+    monkeypatch.setattr(mon, 'save_state', boom)
+    with caplog.at_level('ERROR'):
+        events = mon.gather(NOW, fetch=lambda: {'ok': True, 'disk_free_pct': 40}, con=con,
+                            backup_glob=str(env.DATA_DIR) + '/nothing-*.tgz')
+    assert isinstance(events, list)
+    assert any('could not save state' in r.message for r in caplog.records)

@@ -4,15 +4,18 @@
 # box nightly (Simon, 2026-09-03) — no bucket copy. Restore: see RUNBOOK-move.md.
 set -euo pipefail
 DATA=${BLADEBOOK_DATA_DIR:-/var/lib/blade-book}
-OUT=/home/backup/blade-book-$(date +%Y%m%d-%H%M%S).tgz
-STAGE=$(mktemp -d /home/backup/.stage.XXXXXX)
-trap 'rm -rf "$STAGE"' EXIT
+BK=${BLADEBOOK_BACKUP_DIR:-/home/backup}
+OUT=$BK/blade-book-$(date +%Y%m%d-%H%M%S).tgz
+STAGE=$(mktemp -d "$BK/.stage.XXXXXX")
+trap 'rm -rf "$STAGE"; [ "${OK:-}" = 1 ] || rm -f "$OUT"' EXIT
 sqlite3 "$DATA/blade-book.db" ".backup '$STAGE/blade-book.db'"
 NAME=$(basename "$DATA")
 tar czf "$OUT" \
   --exclude="$NAME/blade-book.db*" --exclude="$NAME/exports" --exclude="$NAME/publish-locks" \
   -C "$(dirname "$DATA")" "$NAME" \
   -C "$STAGE" blade-book.db
+gzip -t "$OUT"
+OK=1
 rm -rf "$STAGE"
-ls -1t /home/backup/blade-book-*.tgz | tail -n +15 | xargs -r rm -f
+ls -1t "$BK"/blade-book-*.tgz | tail -n +15 | xargs -r rm -f
 echo "$(date -Is) wrote $OUT ($(du -h "$OUT" | cut -f1))"

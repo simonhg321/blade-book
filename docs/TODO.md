@@ -52,4 +52,8 @@ Small items that don't warrant a plan. Bigger work lives in the plan roadmap
   leaves stark, give blade-book its own `TWILIO_*` keys.
 - [ ] ops: monitor thresholds are constants in scripts/monitor.py (disk 10 %, backup 26 h, decode 20 % over
   ≥5 calls, ERROR mail 1/h) — tune with real traffic.
+- [ ] ops: the health probe (`scripts/monitor.py` HEALTHZ_URL) hits gunicorn on loopback, not
+  Apache/TLS — a future ops pass should also curl the public URL to catch a broken proxy/cert.
+- [ ] pages: /about and /terms fetch the contact address from `/api/billing` at page load, so an
+  API outage loses it from both pages — consider baking it into the bundle at publish time instead.
 - [ ] pages: the "Who" sentence on /about is a placeholder for Simon's own words (mascot line included).

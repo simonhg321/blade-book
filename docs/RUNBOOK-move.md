@@ -25,7 +25,7 @@ supervisor program; nothing imports from billboard.
    `15 4 * * * cd /home/shg/blade-book && python3 scripts/purge_drafts.py >> /var/log/blade-book/purge.log 2>&1`
    `*/5 * * * * /usr/bin/python3 /home/shg/blade-book/scripts/publish_sweep.py >> /var/log/blade-book/publish.log 2>&1`
    `*/15 * * * * cd /home/shg/blade-book && python3 scripts/match_cron.py >> /var/log/blade-book/match.log 2>&1`
-   `*/5 * * * * cd /home/shg/blade-book && python3 scripts/monitor.py >> /var/log/blade-book/monitor.log 2>&1`
+   `*/5 * * * * cd /home/shg/blade-book && python3 /home/shg/blade-book/scripts/monitor.py >> /var/log/blade-book/monitor.log 2>&1`
    Confirm `/home/backup/blade-book-*.tgz` appears on new, check `purge.log` the following morning, monitor
    `publish.log` for publish_sweep activity, monitor `match.log` for match_cron activity (silent unless
    it sends), and check `monitor.log`/mail for `scripts/monitor.py` (needs `BLADEBOOK_ADMIN_EMAIL`, §ENV.md,
@@ -33,10 +33,13 @@ supervisor program; nothing imports from billboard.
    Backups (`scripts/backup.sh`, 03:30 nightly) hold `blade-book/photos/…` plus a top-level
    `blade-book.db` snapshot taken with `sqlite3 .backup` (consistent; the live db is never in the
    tar). Restore: `mkdir -p /tmp/r && tar xzf blade-book-<stamp>.tgz -C /tmp/r && rsync -a /tmp/r/blade-book/ /var/lib/blade-book/
-   && rm -f /var/lib/blade-book/blade-book.db-wal /var/lib/blade-book/blade-book.db-shm && mv /tmp/r/blade-book.db /var/lib/blade-book/blade-book.db`
+   && rm -f /var/lib/blade-book/blade-book.db-wal /var/lib/blade-book/blade-book.db-shm && mv /tmp/r/blade-book.db /var/lib/blade-book/blade-book.db
+   && chown shg:shg /var/lib/blade-book/blade-book.db && chmod 600 /var/lib/blade-book/blade-book.db`
    with `blade_book` stopped. The `-wal`/`-shm` removal matters: the app runs WAL mode, and a stale WAL
    replays over the restored file on first open. `exports/` and `publish-locks/` are not backed up
    (transient). Off-box = the Linode backup service (Simon, 2026-09-03).
+   Run the restore as shg where possible; the app runs as shg and a root-owned db file breaks it. Same for
+   `scripts/monitor.py`: never run it as root — a root-owned `monitor_state.json` disables the monitor.
 8. The search index (`search_cards`/`search_fts`) is derived data, not a
    thing to restore/rsync — after any restore, repair/backfill it the same
    way as the bundles: `python3 scripts/publish_sweep.py --all` as shg.

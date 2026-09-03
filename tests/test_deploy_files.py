@@ -58,8 +58,39 @@ def test_backup_snapshots_the_db_instead_of_tarring_it_live():
     for ex in ('blade-book.db*', 'exports', 'publish-locks'):
         assert f'--exclude=' in bk and ex in bk, ex                    # live db + transient dirs never tarred
     assert 'rm -rf "$STAGE"' in bk                                     # staging dir cleaned on every path
-    assert "trap 'rm -rf \"$STAGE\"' EXIT" in bk
+    assert 'BLADEBOOK_BACKUP_DIR' in bk                                # overridable so a test can execute it
+    assert 'gzip -t "$OUT"' in bk                                      # a truncated/corrupt tarball fails the check
+    assert 'OK=1' in bk
+    assert 'rm -f "$OUT"' in bk                                        # a failed run (set -e, before OK=1) removes the partial tarball
+    assert re.search(r"trap '.*rm -f \"\$OUT\"' EXIT", bk)
     assert 'set -euo pipefail' in bk
+
+
+def test_backup_script_runs_and_removes_partial_on_failure(tmp_path):
+    import subprocess
+    data = tmp_path / 'blade-book'
+    (data / 'photos').mkdir(parents=True)
+    (data / 'exports').mkdir()
+    (data / 'publish-locks').mkdir()
+    (data / 'photos' / 'a.jpg').write_bytes(b'x')
+    subprocess.run(['sqlite3', str(data / 'blade-book.db'), 'create table t(x)'], check=True)
+    bk = tmp_path / 'backup'
+    bk.mkdir()
+    env = dict(os.environ, BLADEBOOK_DATA_DIR=str(data), BLADEBOOK_BACKUP_DIR=str(bk))
+    r = subprocess.run(['bash', os.path.join(ROOT, 'scripts', 'backup.sh')], env=env, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    tgz = list(bk.glob('blade-book-*.tgz'))
+    assert len(tgz) == 1 and not list(bk.glob('.stage.*'))
+    names = subprocess.run(['tar', 'tzf', str(tgz[0])], capture_output=True, text=True, check=True).stdout.split()
+    assert 'blade-book.db' in names and 'blade-book/photos/a.jpg' in names
+    assert not any(n.startswith('blade-book/blade-book.db') or '/exports' in n or '/publish-locks' in n for n in names)
+    # failure path: unreadable data dir → non-zero exit, no tarball left behind, no stage dir
+    for f in tgz:
+        f.unlink()
+    env['BLADEBOOK_DATA_DIR'] = str(tmp_path / 'missing')
+    r = subprocess.run(['bash', os.path.join(ROOT, 'scripts', 'backup.sh')], env=env, capture_output=True, text=True)
+    assert r.returncode != 0
+    assert not list(bk.glob('blade-book-*.tgz')) and not list(bk.glob('.stage.*'))
 
 
 def test_runbook_move_exists_and_names_the_steps():
@@ -388,7 +419,9 @@ def test_admin_page_users_wiring():
 
 def test_install_has_monitor_cron():
     sh = _read('scripts/install.sh')
-    assert 'scripts/monitor.py' in sh and 'monitor.log' in sh and "grep -v 'scripts/monitor.py'" in sh
+    assert 'scripts/monitor.py' in sh and 'monitor.log' in sh
+    assert "grep -v 'blade-book/scripts/monitor.py'" in sh   # anchored: a sibling project's own scripts/monitor.py must not be swept up
+    assert 'python3 /home/shg/blade-book/scripts/monitor.py' in sh   # absolute path, matches the anchored grep
 
 
 def test_env_doc_and_runbook_mention_monitor():

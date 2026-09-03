@@ -7,7 +7,7 @@ it recovers. Pure check functions over inputs + a state file; main() wires
 the real inputs. Never raises out of main(); exit 0 always.
 
   monitor.py            one pass (cron)
-  monitor.py --dry-run  run the checks, print the events, send nothing
+  monitor.py --dry-run  runs the checks, prints, saves nothing
 """
 import argparse
 import glob
@@ -26,7 +26,7 @@ log = logging.getLogger('blade-book.monitor')
 
 Event = namedtuple('Event', 'key subject body sms')
 
-HEALTHZ_URL = 'http://127.0.0.1:5004' + paths.API_PREFIX + '/healthz'
+HEALTHZ_URL = f'http://127.0.0.1:{paths.PORT}' + paths.API_PREFIX + '/healthz'
 BACKUP_GLOB = '/home/backup/blade-book-*.tgz'
 DISK_MIN_PCT = 10
 BACKUP_MAX_H = 26
@@ -49,7 +49,10 @@ def load_state(path):
             data = json.load(f)
         if not isinstance(data, dict):
             raise ValueError('state is not an object')
-    except (FileNotFoundError, ValueError, json.JSONDecodeError):
+    except (ValueError, json.JSONDecodeError, OSError, UnicodeDecodeError):
+        # OSError covers FileNotFoundError/PermissionError; any of these →
+        # defaults, never a crash. A permission or corruption problem is
+        # still visible in the run's log via the caller.
         data = {}
     s = dict(DEFAULT_STATE)
     s['sent'] = {}
@@ -184,22 +187,41 @@ DEFAULT_PHONE = '5550002222'
 PREFIX = '[blade-book] '
 
 
+_ENV_GUARD_KEYS = ('ANTHROPIC_API_KEY', 'RESEND_API_KEY', 'MAIL_FROM', 'SESSION_KEY', 'BASE_URL')
+
+
 def _billboard_sender():
     """billboard's Twilio helper (same box, Simon's phone). Imported lazily so
-    tests and a box without billboard still load this module."""
+    tests and a box without billboard still load this module.
+
+    billboard's sms_alerter runs `load_dotenv(..., override=True)` at import
+    time against /etc/billboard/.env — and both .env files define
+    ANTHROPIC_API_KEY and RESEND_API_KEY. Without a guard, importing this
+    module clobbers blade-book's own keys with billboard's for the rest of
+    the process. Snapshot the shared names first and restore them after."""
     os.environ.setdefault('BB_ENV_FILE', '/etc/billboard/.env')
     if BILLBOARD_DIR not in sys.path:
         sys.path.insert(0, BILLBOARD_DIR)
-    from sms_alerter import _send_twilio_sms  # noqa: PLC0415
-    return _send_twilio_sms
+    saved = {k: os.environ.get(k) for k in _ENV_GUARD_KEYS}
+    try:
+        from sms_alerter import _send_twilio_sms  # noqa: PLC0415
+        return _send_twilio_sms
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
 
 
 def send_sms(body, sender=None):
-    """Best-effort second channel; email is the record. Never raises."""
+    """Best-effort second channel; email is the record. Never raises.
+    Reports what the sender actually returned — billboard's
+    _send_twilio_sms returns False (no raise) when creds are missing or
+    Twilio refuses, and that must not read as success."""
     try:
         sender = sender or _billboard_sender()
-        sender(os.environ.get('BB_ADMIN_PHONE', DEFAULT_PHONE), body)
-        return True
+        return bool(sender(os.environ.get('BB_ADMIN_PHONE', DEFAULT_PHONE), body))
     except Exception as e:  # noqa: BLE001
         log.error('sms failed: %r', e)
         return False
@@ -244,8 +266,9 @@ def _new_users(con, since_iso):
     return [(r[0], r[1], r[2]) for r in rows]
 
 
-def gather(now, fetch=None, con=None, backup_glob=BACKUP_GLOB):
-    """Run every check with real inputs (each overridable), persist state."""
+def gather(now, fetch=None, con=None, backup_glob=BACKUP_GLOB, save=True):
+    """Run every check with real inputs (each overridable), persist state
+    unless save=False (--dry-run: look, don't touch)."""
     from bb import db
     sp = state_path()
     state = load_state(sp)
@@ -271,20 +294,27 @@ def gather(now, fetch=None, con=None, backup_glob=BACKUP_GLOB):
                 c.close()
     except Exception as e:  # noqa: BLE001
         log.exception('check signups failed: %r', e)
-    save_state(sp, state)
+    if save:
+        try:
+            save_state(sp, state)
+        except OSError as e:
+            log.error('could not save state %s: %r', sp, e)
     return events
 
 
 def _run(args):
     config.load()
     now = datetime.now(timezone.utc)
+    gather_ok = True
     try:
-        events = gather(now)
+        events = gather(now, save=not args.dry_run)
     except Exception as e:  # noqa: BLE001
         log.exception('gather failed: %r', e)
         events = []
+        gather_ok = False
+    prefix = f'{now.isoformat()} gather FAILED — ' if not gather_ok else f'{now.isoformat()} '
     if args.dry_run:
-        print(f'{now.isoformat()} dry-run: {len(events)} event(s)')
+        print(f'{prefix}dry-run: {len(events)} event(s)')
         for ev in events:
             print(f'  [{ev.key}] {ev.subject} sms={ev.sms}')
         return 0
@@ -293,13 +323,13 @@ def _run(args):
         log.warning('BLADEBOOK_ADMIN_EMAIL unset — %d event(s) not mailed', len(events))
     from bb import mail
     counts = deliver(events, mail.from_env(), admin)
-    print(f'{now.isoformat()} events={len(events)} {counts} ' + ' '.join(e.key for e in events))
+    print(f'{prefix}events={len(events)} {counts} ' + ' '.join(e.key for e in events))
     return 0
 
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument('--dry-run', action='store_true')
+    ap.add_argument('--dry-run', action='store_true', help='runs the checks, prints, saves nothing')
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
     try:
