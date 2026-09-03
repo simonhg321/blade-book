@@ -220,11 +220,9 @@ _STYLE = '''
           padding:14px; margin:12px 0; }
   .card img { width:100%; border-radius:10px; }
   a { color:var(--accent,#b8452c); font-weight:700; text-decoration:none; }
-  footer { margin-top:26px; font-size:.75rem; color:#888; }
   .signin { position:absolute; top:14px; right:16px; font-size:.78rem;
             letter-spacing:.08em; text-transform:uppercase; }
   main { position:relative; }
-  footer .bbmark { vertical-align:-4px; margin-right:2px; }
   a.cta { display:inline-block; background:var(--accent,#b8452c); color:#fff; font-weight:800;
           border-radius:12px; padding:10px 16px; text-decoration:none; margin:8px 0 4px; }
 '''
@@ -243,6 +241,18 @@ def _mark_svg(px):
             '<path d="M143 30 L169 30 L169 142 L156 178 L143 150 Z" fill="#b8452c"/>'
             '<path d="M156 172 L150 52" stroke="#a8adb0" stroke-width="2.5" '
             'stroke-linecap="round" opacity=".65" fill="none"/></svg>')
+
+
+def _foot():
+    """The shared footer strip (plan 13-nav): identical markup on every
+    generated page, matching html/about/index.html and styled by the
+    `.bb-foot` rules in vibe.css (both pages already link that stylesheet).
+    No collector data — safe on gated pages too."""
+    return ('<footer class="bb-foot">' + _mark_svg(16) + ' <a href="/blade-book/search/">search</a> · '
+            '<a href="/blade-book/board/">board</a> · <a href="/blade-book/how/">how</a> · '
+            '<a href="/blade-book/about/">about</a> · <a href="/blade-book/terms/">terms</a> · '
+            '<a class="bb-auth" href="/blade-book/me/">sign in</a></footer>\n'
+            '<script src="/blade-book/nav.js"></script>\n')
 
 
 def _head(title, desc, og_image, noindex, extra_style=''):
@@ -311,10 +321,7 @@ def _knife_page(row, handle, gated):
         out += f'<div class="card">{e(row["notes_public"])}</div>\n'
     out += (f'<p><a href="../">← @{e(handle)}’s register</a></p>\n'
             '<p><a class="cta" href="/blade-book/how/">Keep a register like this — how it works →</a></p>\n'
-            f'<footer>{_mark_svg(16)} Recorded on <a href="/blade-book/">blade-book</a> — '
-            'a register for knife collectors. <a href="/blade-book/how/">How it works →</a> · '
-            '<a href="/blade-book/search/">search all registers</a> · '
-            '<a href="/blade-book/me/">sign in</a></footer>\n</main>\n')
+            + _foot() + '</main>\n')
     out += _gate_snippet('../') if gated else ''
     return out + '</body>\n</html>\n'
 
@@ -415,7 +422,6 @@ _INDEX_STYLE = """
   dialog#lb { border:0; padding:0; background:#000; border-radius:14px; max-width:94vw; }
   dialog#lb img { max-width:90vw; max-height:82vh; display:block; }
   dialog#lb::backdrop { background:rgba(10,8,4,.75); }
-  main.reg footer { text-align:center; }
   @media (min-width: 700px) {
     .hero { min-height:60vh; padding:28px 40px 52px; }
     .hero h1 { font-size:4.6rem; }
@@ -586,10 +592,8 @@ def _index_html(rows, user, gated, featured_tag=None):
     out += ('</div>\n<p id="empty" class="empty" hidden>nothing matches</p>\n'
             '<p style="text-align:center;margin-top:22px"><a class="cta" href="/blade-book/how/">'
             'Keep a register like this — how it works →</a></p>\n'
-            '<footer>Kept on <a href="/blade-book/">blade-book</a> — '
-            'a register for knife collectors. <a href="/blade-book/how/">How it works →</a> · '
-            '<a href="/blade-book/search/">search all registers</a> · '
-            '<a href="/blade-book/me/">sign in</a></footer>\n</div>\n</main>\n'
+            + _foot() +
+            '</div>\n</main>\n'
             '<dialog id="lb"><img alt=""></dialog>\n'
             f'<script>{_INDEX_SCRIPT}</script>\n')
     out += _gate_snippet('') if gated else ''
