@@ -611,7 +611,8 @@ def set_public(con, owner_id, knife_ids, is_public):
     return n
 
 
-SETTINGS_COLUMNS = frozenset({'hide_born_day', 'profile_private', 'public_key', 'share_email_on_intro'})
+SETTINGS_COLUMNS = frozenset({'hide_born_day', 'profile_private', 'public_key', 'share_email_on_intro',
+                              'featured_knife_id'})
 
 
 def set_user_settings(con, user_id, fields):
@@ -975,13 +976,16 @@ def delete_draft_knife(con, owner_id, knife_id):
 
 def delete_knife(con, owner_id, knife_id):
     """Delete a knife of ANY status (the owner's data; anti-sticky). Photos cascade;
-    events are removed explicitly. Returns the store keys to remove, None if not owned."""
+    events are removed explicitly. Unpins it as the register hero if it was pinned.
+    Returns the store keys to remove, None if not owned."""
     row = con.execute('SELECT id FROM knives WHERE id = ? AND owner_id = ?', (knife_id, owner_id)).fetchone()
     if row is None:
         return None
     keys = _photo_keys(con, knife_id)
     con.execute('DELETE FROM events WHERE knife_id = ? AND owner_id = ?', (knife_id, owner_id))
     con.execute('DELETE FROM knives WHERE id = ? AND owner_id = ?', (knife_id, owner_id))  # photos cascade
+    con.execute('UPDATE users SET featured_knife_id = NULL WHERE id = ? AND featured_knife_id = ?',
+               (owner_id, knife_id))
     con.commit()
     return keys
 

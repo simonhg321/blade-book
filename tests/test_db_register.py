@@ -77,6 +77,17 @@ def test_delete_knife_any_status_returns_keys_and_removes_events(env):
     assert con.execute('SELECT count(*) FROM photos WHERE knife_id = ?', (k['id'],)).fetchone()[0] == 0
 
 
+def test_delete_knife_clears_featured_knife_id_when_it_is_the_pinned_one(env):
+    con = db.connect(); o = _owner(con); k = _knife(con, o); other = _knife(con, o)
+    db.add_photo(con, o, k['id'], 1, 'p/1.jpg', 'a' * 64, 10, 10)
+    db.publish_knife(con, o, k['id'])
+    db.set_user_settings(con, o, {'featured_knife_id': k['id']})
+    db.delete_knife(con, o, other['id'])                              # unrelated delete: untouched
+    assert db.get_user(con, o)['featured_knife_id'] == k['id']
+    db.delete_knife(con, o, k['id'])                                  # deleting the pinned knife clears it
+    assert db.get_user(con, o)['featured_knife_id'] is None
+
+
 def test_full_register_newest_first_with_photos_and_events(env):
     con = db.connect(); o = _owner(con)
     k1, k2 = _knife(con, o), _knife(con, o)
