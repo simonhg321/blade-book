@@ -69,6 +69,30 @@ def test_rebuild_drops_stale_pages(con, tmp_path):
     assert json.load(open(os.path.join(d, 'knives.json')))['count'] == 0
 
 
+def test_build_user_hero_follows_featured_knife_id(con, tmp_path):
+    """hero-pin: settings.featured_knife_id picks the hero + og:image over
+    the first-with-a-photo default, resolved by tag inside build_user."""
+    user, st, k1 = _setup(con, tmp_path)
+    uid = user['id']
+    k2 = db.create_draft_knife(con, uid)
+    con.execute("UPDATE knives SET confidence = '{}', model = 'Mnandi' WHERE id = ?", (k2['id'],))
+    con.commit()
+    key2 = f"{uid}/{k2['id']}/1.jpg"
+    st.put(key2, _jpeg_with_exif(800, 600))
+    db.add_photo(con, uid, k2['id'], 1, key2, hashlib.sha256(b'y').hexdigest(), 800, 600)
+    db.publish_knife(con, uid, k2['id'])
+    db.set_user_settings(con, uid, {'featured_knife_id': k2['id']})
+    user = db.get_user(con, uid)
+
+    publish.build_user(con, user, st)
+    d = publish.bundle_dir('bundle-guy')
+    idx = open(os.path.join(d, 'index.html')).read()
+    assert f'img/{k2["tag"]}.jpg' in idx.split('class="hero-bg"')[1][:60]
+    feat = idx.split('class="feat"')[1][:200]
+    assert f'href="{k2["tag"]}/"' in feat
+    assert f'/@bundle-guy/img/{k2["tag"]}.jpg">' in idx.split('property="og:image"')[1][:120]
+
+
 def test_key_gate_publishes_hashes_only(con, tmp_path):
     user, st, k = _setup(con, tmp_path, public_key='Ozzy Rules')
     publish.build_user(con, user, st)

@@ -236,3 +236,35 @@ def test_index_has_og_image_from_hero_when_not_gated():
     assert '/@simon-collector/img/K01.jpg">' in html.split('property="og:image"')[1][:120]
     assert 'property="og:image"' not in publish._index_html(_rows(), USER, gated=True)
     assert 'property="og:image"' not in publish._index_html(_rows(with_img=False), USER, gated=False)
+
+
+# --- featured_knife_id pins the hero (hero-pin, 2026-09-03) -----------------
+
+def test_index_featured_tag_becomes_hero_and_card():
+    rows = _rows()
+    html = publish._index_html(rows, USER, gated=False, featured_tag='K02')
+    assert 'img/K02.jpg' in html.split('class="hero-bg"')[1][:60]
+    feat = html.split('class="feat"')[1][:200]
+    assert 'href="K02/"' in feat and 'IN THE PHOTO' in feat
+    assert '<meta property="og:image" content="' in html
+    assert '/@simon-collector/img/K02.jpg">' in html.split('property="og:image"')[1][:120]
+
+
+def test_index_unset_featured_falls_back_to_first_with_img():
+    html = publish._index_html(_rows(), USER, gated=False, featured_tag=None)
+    assert 'img/K01.jpg' in html.split('class="hero-bg"')[1][:60]
+
+
+def test_index_featured_without_photo_falls_back():
+    rows = _rows(with_img=False)
+    rows[1]['img'], rows[1]['img_t'] = None, None    # K02 exists but has no photo
+    rows[0]['img'], rows[0]['img_t'] = 'K01.jpg', 'K01_t.jpg'
+    html = publish._index_html(rows, USER, gated=False, featured_tag='K02')
+    assert 'img/K01.jpg' in html.split('class="hero-bg"')[1][:60]
+
+
+def test_index_featured_hidden_or_gone_falls_back():
+    """A hidden/private/draft knife never makes it into `rows` — its tag
+    resolving to nothing must fall back exactly like unset."""
+    html = publish._index_html(_rows(), USER, gated=False, featured_tag='K99')
+    assert 'img/K01.jpg' in html.split('class="hero-bg"')[1][:60]

@@ -487,14 +487,21 @@ _INDEX_SCRIPT = """
 """
 
 
-def _index_html(rows, user, gated):
+def _index_html(rows, user, gated, featured_tag=None):
     e = html_mod.escape
     handle = user['handle']
     n = len(rows)
     count = f'{n} {"knives" if n != 1 else "knife"}'
     title = f'@{handle} — blade-book register'
     desc = '' if gated else f'{count} in a collector’s public register.'
-    hero_row = next((r for r in rows if r.get('img')), None)
+    # Simon picks the hero (settings.featured_knife_id); a hidden/private/draft
+    # or photo-less pin isn't in `rows` (or has no img) and falls back below —
+    # same rule as an unset pin.
+    hero_row = None
+    if featured_tag:
+        hero_row = next((r for r in rows if r.get('tag') == featured_tag and r.get('img')), None)
+    if hero_row is None:
+        hero_row = next((r for r in rows if r.get('img')), None)
     # OG card for a shared register link = the hero photo (watermarked display
     # image, already public); never on a gated register.
     og_image = (f"{_public_base()}/@{handle}/img/{hero_row['img']}" if hero_row and not gated else '')
@@ -603,10 +610,13 @@ def build_user(con, user, store):
             img_dir = os.path.join(tmp, 'img')
             os.makedirs(img_dir, exist_ok=True)
             rows = []
+            featured_tag = None
             for k in db.public_knives(con, user['id']):
                 row = public_row(k, user)
                 hero, thumb = export_hero(store, k, handle, img_dir)
                 row['img'], row['img_t'] = hero, thumb
+                if user.get('featured_knife_id') and k['id'] == user['featured_knife_id']:
+                    featured_tag = row['tag']
                 rows.append(row)
             key = (user.get('public_key') or '').strip()
             gated = bool(key)
@@ -619,7 +629,7 @@ def build_user(con, user, store):
                 with open(os.path.join(page_dir, 'index.html'), 'w') as f:
                     f.write(_knife_page(row, handle, gated))
             with open(os.path.join(tmp, 'index.html'), 'w') as f:
-                f.write(_index_html(rows, user, gated))
+                f.write(_index_html(rows, user, gated, featured_tag=featured_tag))
             with open(os.path.join(tmp, 'knives.json'), 'w') as f:
                 json.dump({'generated': datetime.now(timezone.utc).isoformat(),
                            'handle': handle, 'count': len(rows), 'knives': rows}, f, indent=1)
