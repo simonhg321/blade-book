@@ -335,18 +335,21 @@ _INDEX_STYLE = """
   /* The sharp photo lives INSIDE the hero band (not on the fixed backdrop, whose box is taller
      than the visible band — that hid the bottom of a portrait photo, i.e. the knife). It scrolls
      with the content; only the blurred backdrop parallaxes, which reads as depth. */
-  .hero-photo { position:absolute; inset:2.5vh 4vw 3vh; z-index:0; pointer-events:none;
+  /* Phone: the photo takes the top of the band, the words sit under it. Desktop (≥700px):
+     a split — words left, the whole photo right at band height. Never text over photo. */
+  .hero-photo { position:absolute; inset:2vh 4vw auto; height:38vh; z-index:0; pointer-events:none;
                 background:var(--hero) center/contain no-repeat;
                 filter:drop-shadow(0 12px 28px rgba(0,0,0,.45)); }
   .hero { position:relative; min-height:54vh; display:flex; flex-direction:column; justify-content:flex-end;
-          padding:22px 20px 40px; color:#fff; }
+          padding:42vh 20px 32px; color:#fff; }
   .hero::after { content:""; position:absolute; inset:0; z-index:1; pointer-events:none;
                  background:linear-gradient(180deg, rgba(26,26,26,0) 0%, rgba(26,26,26,.08) 50%, rgba(26,26,26,.78) 100%); }
   .hero > * { position:relative; z-index:2; }
-  .hero > .hero-photo { z-index:0; }
+  .hero > .hero-photo { position:absolute; z-index:0; }   /* must re-assert absolute: the rule above wins on specificity */
   .hero.plain { background:none; color:var(--ink,#141210); min-height:0; padding-bottom:10px; }
   .hero.plain::after { display:none; }
   .hero .tag { color:#f3d5c9; text-shadow:0 1px 8px rgba(0,0,0,.6); }
+  .hero .feat .tag { color:var(--accent,#b8452c); text-shadow:none; }   /* on the cream card, not the photo */
   .hero.plain .tag { color:var(--accent,#b8452c); text-shadow:none; }
   .hero h1 { font-size:3.4rem; line-height:1; margin:.15rem 0 0; text-shadow:0 2px 14px rgba(0,0,0,.55); }
   .hero.plain h1 { text-shadow:none; }
@@ -416,6 +419,8 @@ _INDEX_STYLE = """
   @media (min-width: 700px) {
     .hero { min-height:60vh; padding:28px 40px 52px; }
     .hero h1 { font-size:4.6rem; }
+    .hero-photo { inset:3vh 4vw 3vh auto; height:auto; width:46vw; background-position:right center; }
+    .hero > :not(.hero-photo) { max-width:46vw; }
     #reg.grid { grid-template-columns:repeat(5, 1fr); gap:12px; }
   }
   @media (prefers-reduced-motion: reduce) {

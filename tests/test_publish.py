@@ -289,4 +289,7 @@ def test_index_hero_is_blur_filled_not_cropped():
     assert header.split('>', 1)[1].lstrip().startswith('<div class="hero-photo"></div>')
     photo = html.split('.hero-photo {')[1].split('}')[0]
     assert 'var(--hero)' in photo and 'contain' in photo and 'blur' not in photo and 'position:absolute' in photo
+    # `.hero > *` sets position:relative for stacking — the photo layer must re-assert absolute
+    # or it collapses to nothing (found by screenshot, 2026-09-02)
+    assert 'position:absolute' in html.split('.hero > .hero-photo {')[1].split('}')[0]
     assert '<div class="hero-photo"' not in publish._index_html(_rows(with_img=False), USER, gated=False)
