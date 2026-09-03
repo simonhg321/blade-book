@@ -35,7 +35,9 @@ supervisor program; nothing imports from billboard.
    `knives.hidden_at/hidden_by/hidden_note`. A hidden knife is excluded from the board, the
    owner's bundle, the search index and wants matching by the same column, so after a move a
    `publish_sweep.py --all` regenerates bundles with hidden knives already absent. Admin queue:
-   /blade-book/admin/ (is_admin=1 in users — flip with sqlite3 until plan 10's scripts/sub.py).
+   /blade-book/admin/ (is_admin=1 in users — still a sqlite3 flip; subscriptions flip from the
+   page's USERS table or `python3 scripts/sub.py <handle> active|free|lapsed`, `--list` to see
+   everyone).
    Upgrades: the live checkout is the code the crons run, so merge and `scripts/restart.sh`
    back-to-back, then confirm `SELECT version FROM schema_version` matches bb/db.py.
    v8 = users.featured_knife_id, the pinned register hero.
