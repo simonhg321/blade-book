@@ -419,7 +419,7 @@ _INDEX_STYLE = """
   @media (min-width: 700px) {
     .hero { min-height:60vh; padding:28px 40px 52px; }
     .hero h1 { font-size:4.6rem; }
-    .hero-photo { inset:3vh 4vw 3vh auto; height:auto; width:46vw; background-position:right center; }
+    .hero-photo { inset:3vh 4vw 3vh auto; height:auto; width:50vw; background-position:center; }
     .hero > :not(.hero-photo) { max-width:46vw; }
     #reg.grid { grid-template-columns:repeat(5, 1fr); gap:12px; }
   }
