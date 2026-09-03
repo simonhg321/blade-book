@@ -83,7 +83,7 @@ def _too_large(_e):
     return jsonify({'error': 'photo over 20 MB'}), 413
 
 
-def create_app(mailer=None, store=None, decoder=None):
+def create_app(mailer=None, store=None, decoder=None, billing_impl=None):
     config.load()
     _setup_logging()
     app = Flask(__name__)
@@ -94,7 +94,7 @@ def create_app(mailer=None, store=None, decoder=None):
         secret = secrets.token_hex(32)
         log.warning('SESSION_KEY missing from .env — each gunicorn worker will mint its own '
                     'key and sessions will break across workers/restarts')
-    from bb import auth, decode, mail
+    from bb import auth, billing, decode, mail
     from bb import store as store_mod
     app.config.update(
         SECRET_KEY=secret,
@@ -107,10 +107,11 @@ def create_app(mailer=None, store=None, decoder=None):
         MAILER=mailer or mail.from_env(),
         STORE=store or store_mod.from_paths(),
         DECODER=decoder or decode.from_env(),
+        BILLING=billing_impl or billing.from_env(),
         VERSION=_version(),
     )
 
-    from bb.routes import auth as auth_routes, knives as knife_routes, settings as settings_routes, search as search_routes, wants as wants_routes, board as board_routes, admin as admin_routes
+    from bb.routes import auth as auth_routes, knives as knife_routes, settings as settings_routes, search as search_routes, wants as wants_routes, board as board_routes, admin as admin_routes, billing as billing_routes
     app.register_blueprint(api)
     app.register_blueprint(auth_routes.bp)
     app.register_blueprint(knife_routes.bp)
@@ -119,6 +120,7 @@ def create_app(mailer=None, store=None, decoder=None):
     app.register_blueprint(wants_routes.bp)
     app.register_blueprint(board_routes.bp)
     app.register_blueprint(admin_routes.bp)
+    app.register_blueprint(billing_routes.bp)
     log.info('blade-book app created, version %s, data %s, mailer %s, decoder %s',
              app.config['VERSION'], paths.DATA_DIR, type(app.config['MAILER']).__name__,
              type(app.config['DECODER']).__name__)

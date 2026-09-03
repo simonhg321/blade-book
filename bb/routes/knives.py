@@ -9,7 +9,7 @@ import time
 
 from flask import Blueprint, Response, current_app, g, jsonify, request
 
-from bb import auth, db, decode, edit, makers, paths, photos, publish
+from bb import auth, billing, db, decode, edit, makers, paths, photos, publish
 from bb.makers import core as maker_core
 
 log = logging.getLogger('blade-book.knives')
@@ -194,19 +194,40 @@ def edit_knife(knife_id):
 @bp.post('/<int:knife_id>/save')
 @auth.login_required
 def save_knife(knife_id):
-    """draft → live. Never gated (spec §10); the age travels back for the notice."""
+    """draft → live, through the ONE write gate in the product (spec §10,
+    bb/billing.can_add): first-year account + knife born within 12 months →
+    free; older/undated knife → spends one of 3 free slots; otherwise an
+    active subscription. 402 leaves the draft in place. A live knife never
+    locks — re-saving is a no-op and spends nothing."""
     con = db.connect()
     try:
-        k, err = db.publish_knife(con, g.user['id'], knife_id)
+        k = db.get_knife(con, g.user['id'], knife_id)
+        if k is None:
+            return _not_found()
+        charge = False
+        if k['status'] == 'draft':
+            user = db.get_user(con, g.user['id'])          # fresh counter, not the session's cached row
+            gate = billing.can_add(user, k.get('born_on'))
+            if not gate.ok:
+                log.info('%s save gated for @%s (%s, free_old_used=%s): %s', k['tag'], user['handle'],
+                         user['sub_status'], user['free_old_used'], gate.reason)
+                return jsonify({'error': gate.reason, 'gated': True, 'sub_status': user['sub_status'],
+                                'price': billing.price_text(), 'contact': billing.contact_email()}), 402
+            charge = gate.charge
+        k2, err = db.publish_knife(con, g.user['id'], knife_id)
+        if k2 is None:
+            return _not_found()
+        if err:
+            return jsonify({'error': err}), 400
+        if charge:
+            used = db.increment_free_old(con, g.user['id'])
+            log.info('%s spent free older-knife slot %d/%d for @%s', k2['tag'], used,
+                     billing.FREE_OLD_KNIVES, g.user['handle'])
     finally:
         con.close()
-    if k is None:
-        return _not_found()
-    if err:
-        return jsonify({'error': err}), 400
-    log.info('%s saved to the register by @%s', k['tag'], g.user['handle'])
+    log.info('%s saved to the register by @%s', k2['tag'], g.user['handle'])
     publish.schedule(g.user['id'])
-    return jsonify(_register_view(k, _store()))
+    return jsonify(_register_view(k2, _store()))
 
 
 @bp.post('/<int:knife_id>/sale')
