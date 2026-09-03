@@ -8,9 +8,6 @@
 <link rel="stylesheet" href="/blade-book/vibe.css">
 <style>
   body{max-width:640px;margin:0 auto;padding:14px 14px 60px}
-  header{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:6px}
-  header h1{font-size:2.2rem;margin:0}
-  nav a{color:var(--muted);text-decoration:none;font-size:.9rem;margin-left:12px}
   #status{text-align:center;color:var(--muted);min-height:1.3em;margin:6px 0;font-size:.9rem}
   #status.err{color:var(--accent);font-weight:700}
   .item{background:#fff;border:2px solid var(--ink);border-radius:12px;padding:10px 12px;margin-bottom:10px}
@@ -28,9 +25,9 @@
   .urow .acts .btn[disabled]{opacity:.4}
 </style>
 
-<header>
-  <h1 class="bb-display"><img class="bbmark" src="/blade-book/mark.svg" alt="" width="30" style="vertical-align:-4px;margin-right:6px">ADMIN</h1>
-  <nav><a href="/blade-book/board/">board</a><a href="/blade-book/me/">register</a><a href="/blade-book/">home</a></nav>
+<header class="bb-head">
+  <h1 class="bb-display"><img class="bbmark" src="/blade-book/mark.svg" alt="" width="30">ADMIN</h1>
+  <nav class="bb-nav"><a class="add" href="/blade-book/me/add/">+ add</a><a href="/blade-book/me/">register</a><a href="/blade-book/me/wants/">wants</a><a href="/blade-book/me/settings/">settings</a><a href="/blade-book/board/">board</a><a href="/blade-book/">home</a><a id="adminlink" href="/blade-book/admin/" hidden>admin</a><button id="signout" class="btn link" type="button">sign out</button></nav>
 </header>
 <div id="status" aria-live="polite"></div>
 <h2 class="bb-display" style="margin:18px 0 6px">USERS</h2>
@@ -162,3 +159,4 @@
   }).catch(function () { say('could not reach the server', true); });
 })();
 </script>
+<script src="/blade-book/nav.js" defer></script>

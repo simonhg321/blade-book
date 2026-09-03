@@ -67,8 +67,6 @@
     <small>No passwords. The link works once and expires in 15 minutes.</small>
     <small>By signing in you agree to the <a href="/blade-book/terms/" style="color:var(--muted)">terms</a>.</small>
     <p style="margin-top:1rem"><a href="/blade-book/how/" style="color:var(--accent);font-weight:700">How it works — the one shot →</a></p>
-    <p><a href="/blade-book/search/" style="color:var(--accent);font-weight:700">search the registers →</a></p>
-    <p style="font-size:.85rem"><a href="/blade-book/about/" style="color:var(--muted)">about</a> · <a href="/blade-book/terms/" style="color:var(--muted)">terms</a></p>
   </section>
 
   <section id="sent" class="hidden" aria-live="polite">
@@ -89,9 +87,6 @@
     <a class="big alt" id="publink" target="_blank" rel="noopener" hidden>🌐 &nbsp;MY PUBLIC PAGE</a>
     <div id="regcount" aria-live="polite"></div>
     <div id="drafts" aria-live="polite"></div>
-    <a href="/blade-book/how/" style="color:var(--accent);font-weight:700;font-size:.95rem">how it works — the guide</a>
-    <a href="/blade-book/search/" style="color:var(--accent);font-weight:700;font-size:.95rem">search the registers →</a>
-    <span style="color:var(--muted);font-size:.85rem"><a href="/blade-book/about/" style="color:var(--muted);font-size:.85rem">about</a> · <a href="/blade-book/terms/" style="color:var(--muted);font-size:.85rem">terms</a></span>
     <a id="adminlink" href="/blade-book/admin/" style="color:var(--muted);font-size:.85rem" hidden>admin — report queue</a>
     <button id="signout" type="button">sign out</button>
   </section>
@@ -101,6 +96,8 @@
     <div id="bcards"></div>
     <a class="all" href="/blade-book/board/">see the whole board →</a>
   </section>
+
+  <footer class="bb-foot"><img src="/blade-book/mark.svg" alt="" width="16"> <a href="/blade-book/search/">search</a> · <a href="/blade-book/board/">board</a> · <a href="/blade-book/how/">how</a> · <a href="/blade-book/about/">about</a> · <a href="/blade-book/terms/">terms</a> · <a class="bb-auth" href="/blade-book/me/">sign in</a></footer>
 </main>
 <script>
 (async function () {
@@ -141,8 +138,10 @@
       for (const name of p.providers) {
         const a = document.createElement('a');
         a.href = API + '/' + name;
-        a.innerHTML = '<button type="button" class="alt" style="width:100%">Sign in with ' +
-          name.charAt(0).toUpperCase() + name.slice(1) + '</button>';
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'alt'; b.style.width = '100%';
+        b.textContent = 'Sign in with ' + name.charAt(0).toUpperCase() + name.slice(1);
+        a.appendChild(b);
         box.appendChild(a);
       }
       box.classList.remove('hidden');
@@ -203,11 +202,6 @@
     $('email').focus();
   });
 
-  $('signout').addEventListener('click', async () => {
-    await fetch(API + '/signout', {method: 'POST', credentials: 'same-origin'});
-    location.href = '/blade-book/';
-  });
-
   // the board strip — public, six newest, built with createElement (no HTML-string parsing)
   fetch('/blade-book/api/board?limit=6').then(r => r.json()).then(j => {
     const ks = j.knives || [];
@@ -230,3 +224,4 @@
   }).catch(() => {});
 })();
 </script>
+<script src="/blade-book/nav.js" defer></script>

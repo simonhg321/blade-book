@@ -103,11 +103,12 @@ def test_runbook_move_exists_and_names_the_steps():
 def test_landing_has_sign_in_wiring():
     html = open(os.path.join(ROOT, 'html', 'index.html')).read()
     for needle in ("'/blade-book/api/auth'", "'/magic'", "'/me'", "'/providers'",
-                   "'/signout'", "'expired'", "'failed'", "'unverified'", "'required'", 'type="email"',
+                   "'expired'", "'failed'", "'unverified'", "'required'", 'type="email"',
                    # post-send panel: replaces the form, holds the resend button for 60 s
                    'id="sent"', 'id="sent-to"', 'id="resend"', 'RESEND_WAIT = 60', 'if (sending) return;'):
         assert needle in html, needle
     assert 'fonts.googleapis.com' not in html  # billboard vhost CSP blocks it (plan 05 self-hosts)
+    # sign-out itself moved to nav.js (plan 13, single source) — covered by test_nav_js_shape
 
 
 def test_env_doc_lists_every_key_the_code_reads():
@@ -273,7 +274,8 @@ def test_how_page_wiring():
                    'href="/blade-book/vibe.css"'):
         assert needle in html, needle
     assert 'innerHTML' not in html and 'fonts.googleapis.com' not in html
-    for rel in ('index.html', 'me/index.html', 'me/add/index.html'):
+    # me/index.html's shared app header row deliberately has no 'how' link (plan 13)
+    for rel in ('index.html', 'me/add/index.html'):
         assert '/blade-book/how/' in open(os.path.join(ROOT, 'html', rel)).read(), rel
 
 
@@ -285,7 +287,7 @@ def test_landing_links_the_register():
 
 def test_register_page_wiring():
     html = open(os.path.join(ROOT, 'html', 'me', 'index.html')).read()
-    for needle in ("'/knives/full'", "'/auth/me'", "'/auth/signout'", "'/decode'", "'/sale'", "'/public'", "'/knives/bulk'",
+    for needle in ("'/knives/full'", "'/auth/me'", "'/decode'", "'/sale'", "'/public'", "'/knives/bulk'",
                    "json('PATCH'", "method: 'DELETE'", 'href="/blade-book/vibe.css"', 'href="/blade-book/me/add/"',
                    'id="q"', 'id="cards"', 'id="bulkbar"', 'id="tpl"', 'class="bb-display"',
                    "location.href = '/blade-book/'", 'prompt(', 'FIELDS = [', 'sale_status', 'is_public',
@@ -362,9 +364,7 @@ def test_landing_board_strip_and_admin_link():
                    'ON THE BOARD', 'id="adminlink"', 'is_admin', 'href="/blade-book/admin/"',
                    "fetch('/blade-book/api/board?limit=6')"):
         assert needle in html, needle
-    # the strip renders via createElement — the only innerHTML on the landing page is the
-    # pre-existing OIDC provider button (plan 02), which is a trusted literal
-    assert html.count('innerHTML') == 1
+    assert 'innerHTML' not in html
 
 
 def test_admin_page_wiring():
@@ -461,7 +461,7 @@ def test_terms_page_wiring():
 def test_settings_page_wiring():
     html = _read('html/me/settings/index.html')
     for needle in ('SETTINGS', "'/settings'", 'href="/blade-book/api/settings/export"', "'/settings/delete'",
-                   "'/auth/signout-all'", "'/auth/signout'", "'/billing'", "'/auth/me'",
+                   "'/auth/signout-all'", "'/billing'", "'/auth/me'",
                    'id="handle"', 'id="newhandle"', 'id="changehandle"', 'can_change_handle',
                    'id="email"', 'id="since"', 'id="sub"', 'id="subcard"', 'id="subprice"', 'id="submail"',
                    'id="signoutall"', 'id="export"', 'id="confirm"', 'id="delete"',
@@ -476,3 +476,65 @@ def test_settings_page_wiring():
 def test_register_nav_links_settings():
     html = _read('html/me/index.html')
     assert 'href="/blade-book/me/settings/"' in html
+
+
+def test_nav_js_shape():
+    js = _read('html/nav.js')
+    assert js.startswith('// Copyright (c) 2026 Simon SGH')
+    for needle in ("'/blade-book/api/auth/me'", "'a.bb-auth'", "'my register'", 'adminlink', 'is_admin',
+                   'signout', "'/blade-book/api/auth/signout'", "location.href = '/blade-book/'",
+                   "credentials: 'same-origin'", "cache: 'no-store'", '.catch('):
+        assert needle in js, needle
+    assert 'innerHTML' not in js and 'eval(' not in js
+
+
+def test_vibe_css_has_shared_nav_rules():
+    css = _read('html/vibe.css')
+    for sel in ('.bb-foot{', '.bb-foot a{', '.bb-head{', '.bb-head h1{', '.bb-nav{', '.bb-nav a{', '.bb-nav a.add{'):
+        assert sel in css, sel
+
+
+PUBLIC_PAGES = ('index.html', 'board/index.html', 'search/index.html', 'how/index.html',
+                'about/index.html', 'terms/index.html')
+STRIP_LINKS = ('href="/blade-book/search/">search<', 'href="/blade-book/board/">board<', 'href="/blade-book/how/">how<',
+               'href="/blade-book/about/">about<', 'href="/blade-book/terms/">terms<',
+               'class="bb-auth" href="/blade-book/me/">sign in<')
+
+
+def test_public_pages_share_the_footer_strip():
+    for rel in PUBLIC_PAGES:
+        html = _read('html/' + rel)
+        assert html.count('class="bb-foot"') == 1, rel
+        foot = html[html.index('class="bb-foot"'):html.index('</footer>')]
+        pos = [foot.index(n) for n in STRIP_LINKS]
+        assert pos == sorted(pos), (rel, pos)                              # fixed order
+        assert '<script src="/blade-book/nav.js" defer></script>' in html[html.index('</footer>'):], rel
+        assert html.count('<footer') == 1, rel                              # the strip is the only footer
+        assert 'innerHTML' not in html, rel
+    assert 'the board — knives for sale' not in _read('html/search/index.html')
+    assert 'search the registers' not in _read('html/board/index.html')
+    assert 'search the registers' not in _read('html/index.html')
+    assert 'about</a> · <a' not in _read('html/index.html').split('class="bb-foot"')[0]   # the old about · terms cluster is gone
+    assert "' knives'" in _read('html/search/index.html') and 'knifes' not in _read('html/search/index.html')
+
+
+APP_PAGES = {'me/index.html': 'MY REGISTER', 'me/add/index.html': 'ADD A KNIFE', 'me/wants/index.html': 'YOUR WANTS',
+             'me/settings/index.html': 'SETTINGS', 'admin/index.html': 'ADMIN'}
+ROW_LINKS = ('class="add" href="/blade-book/me/add/">+ add<', 'href="/blade-book/me/">register<', 'href="/blade-book/me/wants/">wants<',
+             'href="/blade-book/me/settings/">settings<', 'href="/blade-book/board/">board<', 'href="/blade-book/">home<',
+             'id="adminlink" href="/blade-book/admin/" hidden>admin<', 'id="signout" class="btn link" type="button">sign out<')
+
+
+def test_app_pages_share_the_header_row():
+    for rel, title in APP_PAGES.items():
+        html = _read('html/' + rel)
+        assert html.count('class="bb-head"') == 1 and html.count('class="bb-nav"') == 1, rel
+        head = html[html.index('class="bb-head"'):html.index('</header>')]
+        assert title in head, (rel, title)
+        pos = [head.index(n) for n in ROW_LINKS]
+        assert pos == sorted(pos), (rel, pos)
+        assert '<script src="/blade-book/nav.js" defer></script>' in html, rel
+        style = html[html.index('<style>'):html.index('</style>')]
+        for local in ('\n  header{', '\n  nav{', '\n  nav a{', 'header h1{'):
+            assert local not in style, (rel, local)                         # shared rules only
+        assert 'innerHTML' not in html, rel

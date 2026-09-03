@@ -33,3 +33,17 @@ a{color:var(--ink)}
 .dot.high{background:var(--ok)} .dot.medium{background:var(--warn)} .dot.low{background:var(--accent)}
 .flags{margin-top:10px;color:var(--accent);font-size:.9rem}
 .flags div::before{content:'⚠ '}
+
+/* shared nav (plan 13): public footer strip + app header row */
+.bb-foot{margin-top:34px;text-align:center;font-size:.78rem;color:var(--muted);line-height:1.8}
+.bb-foot img,.bb-foot svg{vertical-align:-4px;margin-right:2px}
+.bb-foot a{color:var(--muted);text-decoration:underline}
+.bb-foot a.bb-auth{color:var(--accent);font-weight:700;text-decoration:none}
+.bb-head{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:6px 10px;margin-bottom:6px}
+.bb-head h1{font-size:2.2rem;margin:0;white-space:nowrap}
+.bb-head h1 .bbmark{vertical-align:-4px;margin-right:6px}
+.bb-head h1 span{color:var(--accent)}
+.bb-nav{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;font-size:.9rem;justify-content:flex-end}
+.bb-nav a{color:var(--muted);text-decoration:none}
+.bb-nav a.add{color:var(--accent);font-weight:700}
+.bb-nav .btn.link{padding:0}

@@ -12,6 +12,19 @@ from bb import db, paths, publish, store as store_mod
 from tests.test_publish import _jpeg_with_exif  # reuse the EXIF fixture
 
 
+STRIP = ('href="/blade-book/search/">search<', 'href="/blade-book/board/">board<', 'href="/blade-book/how/">how<',
+         'href="/blade-book/about/">about<', 'href="/blade-book/terms/">terms<', 'class="bb-auth" href="/blade-book/me/">sign in<')
+
+
+def _assert_strip(html):
+    assert html.count('class="bb-foot"') == 1
+    foot = html[html.index('class="bb-foot"'):]
+    pos = [foot.index(n) for n in STRIP]
+    assert pos == sorted(pos)
+    assert '<script src="/blade-book/nav.js" defer></script>' in foot
+    assert html.count('<footer') == 1
+
+
 def _setup(con, tmp_path, **user_over):
     uid = db.create_user(con, 'bundle@example.com', 'bundle-guy')
     if user_over:
@@ -43,7 +56,7 @@ def test_build_user_writes_bundle(con, tmp_path):
     assert 'img/' in idx   # hero via img/
     assert 'bbmark' in idx  # the brandmark is inlined on the index
     assert '/blade-book/how/' in idx  # visitor hook: keep a register like this
-    assert '<a href="/blade-book/me/">sign in</a>' in idx  # owner's door back to /me
+    assert 'class="bb-auth" href="/blade-book/me/">sign in</a>' in idx  # owner's door back to /me
     assert 'class="signin"' in idx  # visible at the top, not just the footer
     assert 'knifes' not in idx  # 62 knives, not 62 knifes
     assert '/blade-book/search/' in idx
@@ -57,6 +70,18 @@ def test_build_user_writes_bundle(con, tmp_path):
     assert f"/blade-book/@bundle-guy/img/{k['tag']}.jpg" in page
     assert not os.path.exists(os.path.join(d, 'keys.json'))
     assert 'noindex' not in page
+
+
+def test_generated_pages_share_the_footer_strip(con, tmp_path):
+    user, st, k = _setup(con, tmp_path)
+    publish.build_user(con, user, st)
+    d = publish.bundle_dir('bundle-guy')
+    idx = open(os.path.join(d, 'index.html')).read()
+    page = open(os.path.join(d, k['tag'], 'index.html')).read()
+    _assert_strip(idx)
+    _assert_strip(page)
+    assert '<p class="signin"><a class="bb-auth" href="/blade-book/me/">sign in</a></p>' in idx     # hero sign-in stays
+    assert 'Keep a register like this' in idx and 'Keep a register like this' in page   # CTA stays
 
 
 def test_rebuild_drops_stale_pages(con, tmp_path):
