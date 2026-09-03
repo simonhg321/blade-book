@@ -332,12 +332,20 @@ _INDEX_STYLE = """
              will-change:transform; }
   .hero-bg::before { content:""; position:absolute; inset:-6%; background:var(--hero) center/cover no-repeat;
                      filter:blur(26px) brightness(.55) saturate(1.1); }
-  .hero-bg::after { content:""; position:absolute; inset:3vh 4vw; background:var(--hero) center/contain no-repeat;
-                    filter:drop-shadow(0 12px 28px rgba(0,0,0,.45)); }
+  /* The sharp photo lives INSIDE the hero band (not on the fixed backdrop, whose box is taller
+     than the visible band — that hid the bottom of a portrait photo, i.e. the knife). It scrolls
+     with the content; only the blurred backdrop parallaxes, which reads as depth. */
+  .hero-photo { position:absolute; inset:2.5vh 4vw 3vh; z-index:0; pointer-events:none;
+                background:var(--hero) center/contain no-repeat;
+                filter:drop-shadow(0 12px 28px rgba(0,0,0,.45)); }
   .hero { position:relative; min-height:54vh; display:flex; flex-direction:column; justify-content:flex-end;
-          padding:22px 20px 40px; color:#fff;
-          background:linear-gradient(180deg, rgba(26,26,26,.05) 0%, rgba(26,26,26,.25) 45%, rgba(26,26,26,.82) 100%); }
+          padding:22px 20px 40px; color:#fff; }
+  .hero::after { content:""; position:absolute; inset:0; z-index:1; pointer-events:none;
+                 background:linear-gradient(180deg, rgba(26,26,26,0) 0%, rgba(26,26,26,.08) 50%, rgba(26,26,26,.78) 100%); }
+  .hero > * { position:relative; z-index:2; }
+  .hero > .hero-photo { z-index:0; }
   .hero.plain { background:none; color:var(--ink,#141210); min-height:0; padding-bottom:10px; }
+  .hero.plain::after { display:none; }
   .hero .tag { color:#f3d5c9; text-shadow:0 1px 8px rgba(0,0,0,.6); }
   .hero.plain .tag { color:var(--accent,#b8452c); text-shadow:none; }
   .hero h1 { font-size:3.4rem; line-height:1; margin:.15rem 0 0; text-shadow:0 2px 14px rgba(0,0,0,.55); }
@@ -513,8 +521,10 @@ def _index_html(rows, user, gated, featured_tag=None):
     og_image = (f"{_public_base()}/@{handle}/img/{hero_row['img']}" if hero_row and not gated else '')
     out = _head(title, desc, og_image, noindex=gated, extra_style=_INDEX_STYLE)
     if hero_row:
-        out += (f'<div class="hero-bg" style="--hero:url(img/{e(hero_row["img"])})"></div>\n'
-                '<header class="hero">\n')
+        hero_var = f'--hero:url(img/{e(hero_row["img"])})'
+        out += (f'<div class="hero-bg" style="{hero_var}"></div>\n'
+                f'<header class="hero" style="{hero_var}">\n'
+                '<div class="hero-photo"></div>\n')
     else:
         out += '<header class="hero plain">\n'
     out += ('<p class="signin"><a href="/blade-book/me/">sign in</a></p>\n'

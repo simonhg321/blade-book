@@ -280,6 +280,13 @@ def test_index_hero_is_blur_filled_not_cropped():
     assert '--hero:url(img/K01.jpg)' in html.split('class="hero-bg"')[1][:60]
     assert 'background-image:url(' not in html                       # the old cropping style is gone
     before = html.split('.hero-bg::before')[1].split('}')[0]
-    after = html.split('.hero-bg::after')[1].split('}')[0]
     assert 'var(--hero)' in before and 'cover' in before and 'filter:blur(' in before
-    assert 'var(--hero)' in after and 'contain' in after and 'blur' not in after
+    assert '.hero-bg::after' not in html                               # the sharp layer is NOT on the fixed backdrop
+    # the sharp photo lives INSIDE the hero band (so its bottom — the knife — is never hidden
+    # behind the page) and scrolls with the content; only the blurred backdrop parallaxes
+    header = html.split('<header class="hero"')[1]
+    assert header.startswith(' style="--hero:url(img/K01.jpg)">')
+    assert header.split('>', 1)[1].lstrip().startswith('<div class="hero-photo"></div>')
+    photo = html.split('.hero-photo {')[1].split('}')[0]
+    assert 'var(--hero)' in photo and 'contain' in photo and 'blur' not in photo and 'position:absolute' in photo
+    assert '<div class="hero-photo"' not in publish._index_html(_rows(with_img=False), USER, gated=False)
