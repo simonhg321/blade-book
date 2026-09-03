@@ -196,6 +196,8 @@ def test_send_sms_uses_injected_sender_and_never_raises(mon, monkeypatch):
 def test_gather_runs_every_check_against_scratch_paths(mon, env, con):
     from bb import db
     db.create_user(con, 'fresh@example.com', 'fresh-guy')
+    con.execute("UPDATE users SET created = '2026-09-03T11:50:00+00:00'")
+    con.commit()
     os.makedirs(env.LOG_DIR, exist_ok=True)
     open(os.path.join(env.LOG_DIR, 'app.log'), 'w').write('2026-09-03 ERROR a: b\n')
     events = mon.gather(NOW, fetch=lambda: (_ for _ in ()).throw(ConnectionError('no app')), con=con,

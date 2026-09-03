@@ -265,10 +265,7 @@ def gather(now, fetch=None, con=None, backup_glob=BACKUP_GLOB):
         own = con is None
         c = con or db.connect()
         try:
-            # Watermark against the real clock, not the caller's `now`: db rows
-            # are stamped by db.now() (real wall-clock) regardless of what `now`
-            # this poll was handed for the other checks' throttle windows.
-            events += check_signups(_new_users(c, state['last_users_check']), state, datetime.now(timezone.utc))
+            events += check_signups(_new_users(c, state['last_users_check']), state, now)
         finally:
             if own:
                 c.close()
