@@ -21,6 +21,11 @@
   .item .acts{display:flex;gap:8px}
   .item .acts .btn{padding:.45rem .7rem;font-size:.82rem}
   .empty{text-align:center;color:var(--muted);padding:24px 0}
+  .urow{display:grid;grid-template-columns:1fr auto;gap:6px 10px;align-items:center;background:#fff;border:2px solid var(--ink);border-radius:12px;padding:8px 12px;margin-bottom:8px;font-size:.9rem}
+  .urow .meta{color:var(--muted);font-size:.8rem}
+  .urow .acts{display:flex;gap:6px}
+  .urow .acts .btn{padding:.35rem .6rem;font-size:.78rem}
+  .urow .acts .btn[disabled]{opacity:.4}
 </style>
 
 <header>
@@ -28,6 +33,9 @@
   <nav><a href="/blade-book/board/">board</a><a href="/blade-book/me/">register</a><a href="/blade-book/">home</a></nav>
 </header>
 <div id="status" aria-live="polite"></div>
+<h2 class="bb-display" style="margin:18px 0 6px">USERS</h2>
+<div id="users"></div>
+<h2 class="bb-display" style="margin:18px 0 6px">REPORTS</h2>
 <div id="queue"></div>
 
 <script>
@@ -103,8 +111,51 @@
     }).catch(function (e) { if (e.message !== 'sign in') say('could not reach the server', true); });
   }
 
+  function flip(userId, status, handle) {
+    if (!confirm('set @' + handle + ' → ' + status + '?')) return;
+    post(ADMIN + '/users/' + userId + '/sub', { status: status }).then(function (res) {
+      if (!res.ok) { say('✗ ' + (res.j.error || 'failed'), true); return; }
+      loadUsers('✓ @' + handle + ' → ' + status);
+    }).catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); });
+  }
+
+  function renderUsers(users) {
+    var box = $('users'); clear(box);
+    if (!users.length) { box.appendChild(el('div', 'empty', 'no users')); return; }
+    users.forEach(function (u) {
+      var row = el('div', 'urow');
+      var left = el('div');
+      var a = el('a', null, '@' + u.handle); a.href = '/blade-book/@' + u.handle + '/'; a.target = '_blank'; a.rel = 'noopener';
+      a.style.color = 'var(--ink)'; a.style.fontWeight = '700'; a.style.textDecoration = 'none';
+      left.appendChild(a);
+      left.appendChild(el('span', 'badge ' + (u.sub_status === 'active' ? 'ok' : ''), ' ' + u.sub_status));
+      if (u.is_admin) left.appendChild(el('span', 'badge', 'admin'));
+      left.appendChild(el('div', 'meta', u.email + ' · ' + u.knives + ' knives · free_old_used ' + u.free_old_used +
+        ' · joined ' + String(u.created).slice(0, 10) + (u.verified_at ? '' : ' · UNVERIFIED')));
+      row.appendChild(left);
+      var acts = el('div', 'acts');
+      ['active', 'free', 'lapsed'].forEach(function (s) {
+        var b = el('button', 'btn ' + (s === 'active' ? '' : 'alt'), s); b.type = 'button';
+        b.disabled = u.sub_status === s;
+        b.addEventListener('click', function () { flip(u.id, s, u.handle); });
+        acts.appendChild(b);
+      });
+      row.appendChild(acts);
+      box.appendChild(row);
+    });
+  }
+
+  function loadUsers(keep) {
+    req(ADMIN + '/users').then(function (res) {
+      if (!res.ok) { say(res.j.error || 'failed', true); return; }
+      if (keep) say(keep);
+      renderUsers(res.j.users || []);
+    }).catch(function (e) { if (e.message !== 'sign in') say('could not reach the server', true); });
+  }
+
   req(API + '/auth/me').then(function (res) {
     if (!res.ok || !res.j.is_admin) { location.href = '/blade-book/'; return; }
+    loadUsers();
     load();
   }).catch(function () { say('could not reach the server', true); });
 })();

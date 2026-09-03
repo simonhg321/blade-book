@@ -59,6 +59,12 @@
   #cardtext{white-space:pre-wrap;background:var(--soft);border-radius:8px;padding:10px;font-size:.85rem;margin-top:10px}
   #reason{font-size:.85rem;color:var(--muted);margin-top:8px}
   #cardnote{font-size:.8rem;color:var(--muted);margin-top:10px;text-align:center}
+  dialog{border:2px solid var(--ink);border-radius:14px;padding:16px;max-width:420px;width:92vw;background:#fff;color:var(--ink)}
+  dialog::backdrop{background:rgba(0,0,0,.35)}
+  dialog h2{margin:0 0 6px;font-size:1.1rem;letter-spacing:.08em;text-transform:uppercase;font-weight:800}
+  dialog p{color:var(--muted);margin:0 0 10px;font-size:.9rem}
+  .btn{display:inline-block;font:inherit;font-weight:800;letter-spacing:.06em;padding:.75rem 1rem;border-radius:10px;border:2px solid var(--ink);background:var(--ink);color:#fff;cursor:pointer;text-decoration:none;text-align:center}
+  .btn.alt{background:#fff;color:var(--ink)}
 </style>
 <h1><img class="bbmark" src="/blade-book/mark.svg" alt="" width="20" style="vertical-align:-4px;margin-right:5px">BLADE-<span>BOOK</span> — add a knife <a href="/blade-book/">← home</a></h1>
 
@@ -99,6 +105,14 @@
   <div id="cardnote">Not right? Save, then edit any field in your register.</div>
 </section>
 <button id="discard" type="button">🗑 discard this draft</button>
+
+<dialog id="paywall">
+  <h2 class="bb-display">EARLY ACCESS</h2>
+  <p id="paywall-why"></p>
+  <p>blade-book is <span id="paywall-price"></span>. While we are in early access there is no checkout — email us and we turn it on the same day.</p>
+  <p><a class="btn" id="paywall-mail" href="#">EMAIL US</a></p>
+  <p><button class="btn alt" type="button" id="paywall-close">KEEP THE DRAFT FOR NOW</button></p>
+</dialog>
 
 <script>
 (function () {
@@ -294,8 +308,18 @@
         say('✓ decoded' + (res.j.decoded.flags.length ? ' — ' + res.j.decoded.flags.length + ' flag(s)' : ''));
         renderCard(res.j, res.j.decoded);
         var age = res.j.decoded.age_months;
-        $('agenote').textContent = age != null && age > 12 ? 'Born ' + res.j.born_on + ' — older than 12 months. Free while we are in early access.' : '';
-        $('agenote').style.display = $('agenote').textContent ? 'block' : 'none';
+        var old = age == null || age > 12;
+        $('agenote').textContent = ''; $('agenote').style.display = 'none';
+        if (old) {
+          api('/billing').then(function (b) {
+            if (!b.ok) return;
+            var born = res.j.born_on ? 'Born ' + res.j.born_on + ' — ' : 'No birth date read — ';
+            if (b.j.active) $('agenote').textContent = born + 'older than 12 months. Covered by your subscription.';
+            else if (b.j.free_old_left > 0) $('agenote').textContent = born + 'older than 12 months. Saving uses 1 of your ' + b.j.free_old_allowance + ' free older-knife saves (' + b.j.free_old_left + ' left).';
+            else $('agenote').textContent = born + 'older than 12 months and your free older-knife saves are used — saving needs a subscription.';
+            $('agenote').style.display = $('agenote').textContent ? 'block' : 'none';
+          }).catch(function () {});
+        }
       })
       .catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); })
       .then(function () { $('proc').disabled = photos.length === 0; $('save').disabled = photos.length === 0; });
@@ -305,10 +329,19 @@
     var id = current; if (!id) return;
     $('save').disabled = true; say('saving…');
     api('/knives/' + id + '/save', { method: 'POST' }).then(function (res) {
+      if (res.status === 402) {
+        $('paywall-why').textContent = res.j.error || 'this knife needs a subscription';
+        $('paywall-price').textContent = res.j.price || '';
+        $('paywall-mail').href = 'mailto:' + (res.j.contact || '') + '?subject=blade-book%20subscription';
+        $('paywall').showModal();
+        $('save').disabled = false; say('');
+        return;
+      }
       if (!res.ok) throw new Error(res.j.error || 'save failed');
       location.href = '/blade-book/me/#' + res.j.tag;
     }).catch(function (e) { if (e.message !== 'sign in') { say('✗ ' + e.message, true); $('save').disabled = false; } });
   });
+  $('paywall-close').addEventListener('click', function () { $('paywall').close(); });
 
   $('pick').addEventListener('click', function () { file.value = ''; file.click(); });
   $('prev').addEventListener('click', function () { if (idx > 0) { idx--; show(); } });
@@ -322,7 +355,15 @@
       .catch(function () { say('✗ network error', true); });
   });
 
-  api('/auth/me').then(function () { return loadDrafts(); })
-    .catch(function () { say('✗ could not reach blade-book', true); });
+  api('/auth/me').then(function () {
+    return loadDrafts().then(function () {
+      return api('/billing').then(function (b) {
+        if (b.ok && b.j.account_free_days_left === 0 && !b.j.active) {
+          $('agenote').textContent = 'Your account is over a year old — saving new knives needs a subscription.';
+          $('agenote').style.display = 'block';
+        }
+      }).catch(function () {});
+    });
+  }).catch(function () { say('✗ could not reach blade-book', true); });
 })();
 </script>

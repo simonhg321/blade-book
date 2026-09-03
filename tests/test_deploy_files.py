@@ -346,3 +346,29 @@ def test_runbook_move_mentions_reports_and_hidden():
 def test_landing_says_one_shot():
     html = open(os.path.join(ROOT, 'html', 'index.html')).read()
     assert 'How it works — the one shot →' in html and 'three shots' not in html
+
+
+def test_intake_page_gate_wiring():
+    html = open(os.path.join(ROOT, 'html', 'me', 'add', 'index.html')).read()
+    for needle in ("'/billing'", 'free_old_left', 'account_free_days_left', 'id="paywall"', '<dialog',
+                   'res.status === 402', 'res.j.price', 'res.j.contact', 'EARLY ACCESS', "'mailto:' +",
+                   'older than 12 months', 'free older-knife save', 'needs a subscription'):
+        assert needle in html, needle
+    assert 'Free while we are in early access' not in html
+    assert '@blade-book' not in html          # the address comes from the API, never the page
+    assert 'innerHTML' not in html
+
+
+def test_search_page_shows_the_price_on_402():
+    html = open(os.path.join(ROOT, 'html', 'search', 'index.html')).read()
+    for needle in ("'/blade-book/api/billing'", 'b.price', 'b.contact', 'EARLY ACCESS', "'mailto:' +", '402'):
+        assert needle in html, needle
+    assert '@blade-book' not in html and 'innerHTML' not in html
+
+
+def test_admin_page_users_wiring():
+    html = open(os.path.join(ROOT, 'html', 'admin', 'index.html')).read()
+    for needle in ('USERS', "'/users'", "'/users/' + userId + '/sub'", "'active'", "'free'", "'lapsed'",
+                   'free_old_used', 'sub_status', 'id="users"', 'knives', 'verified_at'):
+        assert needle in html, needle
+    assert 'innerHTML' not in html

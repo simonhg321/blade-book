@@ -187,11 +187,21 @@
       if (my !== seq) return;   // a newer search has already started
       if (res.status === 402) {
         say('');
-        clear($('aggs'));
-        clear($('owners'));
-        clear($('results'));
-        $('results').appendChild(el('div', 'empty',
-          res.j.error || "filters are early-access — email us and we'll turn them on"));
+        clear($('aggs')); clear($('owners')); clear($('results'));
+        var box = el('div', 'empty');
+        box.appendChild(el('div', 'bb-display', 'EARLY ACCESS'));
+        box.appendChild(el('div', null, res.j.error || "filters are early-access — email us and we'll turn them on"));
+        var price = el('div', null, '');
+        box.appendChild(price);
+        var mail = el('a', 'btn', 'EMAIL US'); mail.hidden = true;
+        box.appendChild(mail);
+        $('results').appendChild(box);
+        fetch('/blade-book/api/billing', { credentials: 'same-origin' }).then(function (r) { return r.json(); })
+          .then(function (b) {
+            price.textContent = b.price ? 'Filters come with the subscription — ' + b.price + '.' : '';
+            if (b.contact) { mail.href = 'mailto:' + b.contact + '?subject=blade-book%20search%20filters'; mail.hidden = false; }
+          })
+          .catch(function () {});
         return;
       }
       if (res.status !== 200) {
