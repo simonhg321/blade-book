@@ -252,7 +252,7 @@ def _foot():
             '<a href="/blade-book/board/">board</a> · <a href="/blade-book/how/">how</a> · '
             '<a href="/blade-book/about/">about</a> · <a href="/blade-book/terms/">terms</a> · '
             '<a class="bb-auth" href="/blade-book/me/">sign in</a></footer>\n'
-            '<script src="/blade-book/nav.js"></script>\n')
+            '<script src="/blade-book/nav.js" defer></script>\n')
 
 
 def _head(title, desc, og_image, noindex, extra_style=''):
@@ -538,7 +538,7 @@ def _index_html(rows, user, gated, featured_tag=None):
                 '<div class="hero-photo"></div>\n')
     else:
         out += '<header class="hero plain">\n'
-    out += ('<p class="signin"><a href="/blade-book/me/">sign in</a></p>\n'
+    out += ('<p class="signin"><a class="bb-auth" href="/blade-book/me/">sign in</a></p>\n'
             f'{_mark_svg(46)}\n<p class="tag">BLADE-BOOK REGISTER</p>\n<h1>@{e(handle)}</h1>\n'
             f'<p class="count">{count}</p>\n')
     if hero_row:

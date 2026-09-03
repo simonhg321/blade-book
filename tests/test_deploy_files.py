@@ -505,10 +505,10 @@ def test_public_pages_share_the_footer_strip():
     for rel in PUBLIC_PAGES:
         html = _read('html/' + rel)
         assert html.count('class="bb-foot"') == 1, rel
-        foot = html[html.index('class="bb-foot"'):]
+        foot = html[html.index('class="bb-foot"'):html.index('</footer>')]
         pos = [foot.index(n) for n in STRIP_LINKS]
         assert pos == sorted(pos), (rel, pos)                              # fixed order
-        assert '<script src="/blade-book/nav.js"></script>' in foot, rel
+        assert '<script src="/blade-book/nav.js" defer></script>' in html[html.index('</footer>'):], rel
         assert html.count('<footer') == 1, rel                              # the strip is the only footer
         assert 'innerHTML' not in html, rel
     assert 'the board — knives for sale' not in _read('html/search/index.html')
@@ -533,7 +533,7 @@ def test_app_pages_share_the_header_row():
         assert title in head, (rel, title)
         pos = [head.index(n) for n in ROW_LINKS]
         assert pos == sorted(pos), (rel, pos)
-        assert '<script src="/blade-book/nav.js"></script>' in html, rel
+        assert '<script src="/blade-book/nav.js" defer></script>' in html, rel
         style = html[html.index('<style>'):html.index('</style>')]
         for local in ('\n  header{', '\n  nav{', '\n  nav a{', 'header h1{'):
             assert local not in style, (rel, local)                         # shared rules only

@@ -36,7 +36,7 @@ a{color:var(--ink)}
 
 /* shared nav (plan 13): public footer strip + app header row */
 .bb-foot{margin-top:34px;text-align:center;font-size:.78rem;color:var(--muted);line-height:1.8}
-.bb-foot img{vertical-align:-4px;margin-right:2px}
+.bb-foot img,.bb-foot svg{vertical-align:-4px;margin-right:2px}
 .bb-foot a{color:var(--muted);text-decoration:underline}
 .bb-foot a.bb-auth{color:var(--accent);font-weight:700;text-decoration:none}
 .bb-head{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:6px 10px;margin-bottom:6px}
