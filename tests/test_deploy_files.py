@@ -395,3 +395,17 @@ def test_env_doc_and_runbook_mention_monitor():
     assert 'BLADEBOOK_ADMIN_EMAIL' in _read('docs/ENV.md')
     rb = _read('docs/RUNBOOK-move.md')
     assert 'scripts/monitor.py' in rb and 'monitor_state.json' in rb
+
+
+def test_about_page_wiring():
+    html = _read('html/about/index.html')
+    for needle in ('ABOUT BLADE-BOOK', 'WHAT IT IS', "WHAT IT ISN'T", 'PRICE', 'THE RULES', 'WHO',
+                   'not a certificate of authenticity', 'id="price"', 'id="contact"', "'/blade-book/api/billing'",
+                   'href="/blade-book/terms/"', 'href="/blade-book/how/"', 'href="/blade-book/search/"',
+                   'property="og:title"', 'href="/blade-book/vibe.css"', 'bbmark', '/blade-book/mark.svg'):
+        assert needle in html, needle
+    assert 'innerHTML' not in html and 'fonts.googleapis.com' not in html
+    assert '<!-- Copyright (c) 2026 Simon SGH' in html
+    assert '$4' not in html and '$36' not in html and 'hello@' not in html   # price + contact come from the API
+    for rel in ('index.html', 'how/index.html'):
+        assert 'href="/blade-book/about/"' in _read('html/' + rel), rel
