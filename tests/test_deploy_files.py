@@ -51,6 +51,17 @@ def test_install_and_backup_scripts_are_idempotent_shell():
     assert re.search(r'ls -1t .*\| tail -n \+15 \| xargs', bk)  # keep 14
 
 
+def test_backup_snapshots_the_db_instead_of_tarring_it_live():
+    bk = _read('scripts/backup.sh')
+    assert '.backup' in bk and 'mktemp -d' in bk                      # sqlite3 online backup into a staging dir
+    assert 'wal_checkpoint' not in bk                                  # superseded by .backup
+    for ex in ('blade-book.db*', 'exports', 'publish-locks'):
+        assert f'--exclude=' in bk and ex in bk, ex                    # live db + transient dirs never tarred
+    assert 'rm -rf "$STAGE"' in bk                                     # staging dir cleaned on every path
+    assert "trap 'rm -rf \"$STAGE\"' EXIT" in bk
+    assert 'set -euo pipefail' in bk
+
+
 def test_runbook_move_exists_and_names_the_steps():
     s = _read('docs/RUNBOOK-move.md')
     for word in ('supervisorctl stop blade_book', 'rsync', '/var/lib/blade-book',

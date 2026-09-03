@@ -28,6 +28,11 @@ supervisor program; nothing imports from billboard.
    Confirm `/home/backup/blade-book-*.tgz` appears on new, check `purge.log` the following morning, monitor
    `publish.log` for publish_sweep activity, and monitor `match.log` for match_cron activity (silent unless
    it sends).
+   Backups (`scripts/backup.sh`, 03:30 nightly) hold `blade-book/photos/…` plus a top-level
+   `blade-book.db` snapshot taken with `sqlite3 .backup` (consistent; the live db is never in the
+   tar). Restore: `tar xzf blade-book-<stamp>.tgz -C /tmp/r && rsync -a /tmp/r/blade-book/ /var/lib/blade-book/
+   && mv /tmp/r/blade-book.db /var/lib/blade-book/blade-book.db` with `blade_book` stopped. `exports/` and
+   `publish-locks/` are not backed up (transient). Off-box = the Linode backup service (Simon, 2026-09-03).
 8. The search index (`search_cards`/`search_fts`) is derived data, not a
    thing to restore/rsync — after any restore, repair/backfill it the same
    way as the bundles: `python3 scripts/publish_sweep.py --all` as shg.
