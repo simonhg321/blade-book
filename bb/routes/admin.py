@@ -1,7 +1,7 @@
 # Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
 """bb/routes/admin.py — /blade-book/api/admin/*: the report queue and the
 three moderation verbs (spec §9 abuse: "Admin can hide, restore, or delete
-with a note"). Plan 10 adds users/subs here."""
+with a note"). Plan 10 added users + the ManualBilling flip."""
 import logging
 
 from flask import Blueprint, current_app, g, jsonify, request
@@ -71,3 +71,35 @@ def moderate(knife_id, action):
                     g.user['handle'], action, knife_id, k['tag'], k['owner_id'], note)
     publish.schedule(k['owner_id'])
     return jsonify({'ok': True})
+
+
+# --- users + subs (plan 10, ManualBilling) -----------------------------------
+
+@bp.get('/users', strict_slashes=False)
+@auth.admin_required
+def list_users():
+    con = db.connect()
+    try:
+        rows = db.admin_users(con)
+    finally:
+        con.close()
+    return jsonify({'users': rows})
+
+
+@bp.post('/users/<int:user_id>/sub')
+@auth.admin_required
+def set_sub(user_id):
+    body = request.get_json(silent=True)
+    status = body.get('status') if isinstance(body, dict) else None
+    if status not in db.SUB_STATUSES:
+        return jsonify({'error': 'status must be one of ' + ', '.join(db.SUB_STATUSES)}), 400
+    con = db.connect()
+    try:
+        u = current_app.config['BILLING'].set_status(con, user_id, status)
+        if u is None:
+            return jsonify({'error': 'not found'}), 404
+        row = next(r for r in db.admin_users(con) if r['id'] == user_id)
+    finally:
+        con.close()
+    log.warning('admin @%s set sub_status=%s for @%s (user %d)', g.user['handle'], status, u['handle'], user_id)
+    return jsonify({'ok': True, 'user': row})
