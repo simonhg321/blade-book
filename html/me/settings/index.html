@@ -33,6 +33,7 @@
   .btn.danger{background:var(--accent);border-color:var(--accent);color:#fff}
   .muted{color:var(--muted);font-size:.9rem}
   #export{display:inline-block;margin-top:10px}
+  .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 </style>
 
 <header>
@@ -51,7 +52,7 @@
   </dl>
   <div id="handlebox">
     <p class="muted">Your handle is your public URL. You get <strong>one change, ever</strong> — pick carefully. Lower-case letters, digits and hyphens, 3–24 characters.</p>
-    <div class="row"><input type="text" id="newhandle" maxlength="24" autocomplete="off" spellcheck="false" placeholder="new handle"><button class="btn alt" type="button" id="changehandle">change</button></div>
+    <div class="row"><label class="vh" for="newhandle">new handle</label><input type="text" id="newhandle" maxlength="24" autocomplete="off" spellcheck="false" placeholder="new handle"><button class="btn alt" type="button" id="changehandle">change</button></div>
   </div>
   <p class="muted" id="handledone" hidden>Handle changed — that was the one.</p>
 </section>
@@ -82,7 +83,7 @@
   <h2 class="bb-display">DELETE ACCOUNT</h2>
   <p>This is real and complete: your knives, photos, wants, intros, and your public page are removed now, not queued. There is no undo and no export afterwards — download your ZIP first.</p>
   <p class="muted">Deleting does not reset the free-tier clock: a new account on this email starts with its three free older knives already used.</p>
-  <div class="row"><input type="text" id="confirm" autocomplete="off" spellcheck="false" placeholder="type your handle to confirm"><button class="btn danger" type="button" id="delete" disabled>delete my account</button></div>
+  <div class="row"><label class="vh" for="confirm">type your handle to confirm</label><input type="text" id="confirm" autocomplete="off" spellcheck="false" placeholder="type your handle to confirm"><button class="btn danger" type="button" id="delete" disabled>delete my account</button></div>
 </section>
 
 <script>
@@ -96,7 +97,7 @@
     return fetch(API + path, Object.assign({ credentials: 'same-origin', cache: 'no-store' }, opts || {}))
       .then(function (r) {
         if (r.status === 401) { location.href = '/blade-book/?auth=required'; throw new Error('sign in'); }
-        return r.json().then(function (j) { return { ok: r.ok, status: r.status, j: j }; });
+        return r.json().catch(function () { return {}; }).then(function (j) { return { ok: r.ok, status: r.status, j: j }; });
       });
   }
   function json(method, path, body) {
@@ -153,7 +154,8 @@
       .catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); });
   });
   $('signout').addEventListener('click', function () {
-    api('/auth/signout', { method: 'POST' }).then(function () { location.href = '/blade-book/'; });
+    api('/auth/signout', { method: 'POST' }).then(function () { location.href = '/blade-book/'; })
+      .catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); });
   });
 
   $('export').addEventListener('click', function () { say('building your ZIP…'); setTimeout(function () { say(''); }, 4000); });
