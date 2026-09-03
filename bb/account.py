@@ -131,3 +131,29 @@ def export_zip(con, store, user, out_dir):
     log.info('export for @%s: %d knives, %d missing photos, %d bytes',
              user['handle'], len(knives), len(missing), os.path.getsize(path))
     return path
+
+
+# --- delete --------------------------------------------------------------------------
+
+def delete_account(con, store, user):
+    """Complete and synchronous (spec §6/§11). Order matters: the tombstone
+    first (if anything below fails the email is still barred from a fresh
+    allowance), then the store keys (we need the photo rows to know them),
+    then the static surface and search index, then the users row — whose FK
+    cascade takes knives, photos, events, wants, intros both ways, reports
+    both ways. Unconditional: the ROUTE refuses admin rows, not this."""
+    db.tombstone_email(con, user['email'])
+    keys = db.owner_photo_keys(con, user['id'])
+    removed = 0
+    for key in keys:
+        try:
+            if store.delete(key):
+                removed += 1
+        except Exception as e:  # noqa: BLE001 — one bad key must not strand the deletion
+            log.warning('delete_account: store.delete(%s) failed: %r', key, e)
+    remove_public_surface(user['handle'])
+    search.deindex_user(con, user['id'])
+    counts = db.delete_user(con, user['id'])
+    counts['store_keys'] = removed
+    log.info('account deleted: @%s (user %s) %s', user['handle'], user['id'], counts)
+    return counts

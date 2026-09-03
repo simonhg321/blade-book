@@ -180,3 +180,46 @@ def test_export_csv_columns_cover_private_and_skip_ids():
     assert 'id' not in cols and 'owner_id' not in cols
     assert set(db.PRIVATE_COLUMNS) - {'events'} <= set(cols)
     assert cols[-1] == 'photo_count' and cols[0] == 'tag'
+
+
+def test_delete_account_is_complete(env, con, tmp_path):
+    store = LocalFSStore(str(tmp_path / 'store'))
+    u = _user(con)
+    k = _knife_with_photo(con, store, u)
+    thumb = db.thumb_key(k['photos'][0]['store_key'])
+    store.put(thumb, b'THUMB')
+    _public_surface(env, con, u)
+    # the other side of every relation: a second user who wants, is intro'd to, and reports
+    other = _user(con, 'o@example.com', 'other')
+    ok = _knife_with_photo(con, store, other)
+    w = db.create_want(con, other['id'], {'model': 'Sebenza', 'mode': 'either'})
+    db.claim_intro(con, w['id'], k['id'], other['id'], u['id'])                 # other → sam
+    db.create_want(con, u['id'], {'model': 'Inkosi', 'mode': 'either'})
+    db.claim_intro(con, None, ok['id'], u['id'], other['id'], kind='board', message='hi')  # sam → other
+    db.create_report(con, k['id'], u['id'], other['id'], 'spam')               # other reports sam's knife
+    db.create_report(con, ok['id'], other['id'], u['id'], 'spam')              # sam reports other's knife
+
+    counts = account.delete_account(con, store, u)
+    assert counts == {'knives': 1, 'photos': 1, 'store_keys': 2}
+
+    uid = u['id']
+    assert con.execute('SELECT count(*) FROM users WHERE id = ?', (uid,)).fetchone()[0] == 0
+    for table in ('knives', 'photos', 'events', 'wants', 'search_cards'):
+        assert con.execute(f'SELECT count(*) FROM {table} WHERE owner_id = ?', (uid,)).fetchone()[0] == 0, table
+    assert con.execute('SELECT count(*) FROM intros WHERE from_user = ? OR to_user = ?', (uid, uid)).fetchone()[0] == 0
+    assert con.execute('SELECT count(*) FROM reports WHERE owner_id = ? OR reporter_id = ?', (uid, uid)).fetchone()[0] == 0
+    assert con.execute('SELECT count(*) FROM search_fts WHERE rowid = ?', (uid * 1_000_000 + 1,)).fetchone()[0] == 0
+    assert not store.exists(k['photos'][0]['store_key']) and not store.exists(thumb)
+    _surface_gone(env, con, u)
+    assert db.is_tombstoned(con, 'sam@example.com')
+    # the other user keeps everything that was theirs
+    assert db.get_user(con, other['id']) and db.get_knife(con, other['id'], ok['id'])
+    assert store.exists(ok['photos'][0]['store_key'])
+    assert len(db.list_wants(con, other['id'])) == 1
+
+
+def test_delete_account_without_photos_or_bundle(env, con, tmp_path):
+    store = LocalFSStore(str(tmp_path / 'store'))
+    u = _user(con, 'bare@example.com', 'bare')
+    assert account.delete_account(con, store, u) == {'knives': 0, 'photos': 0, 'store_keys': 0}
+    assert db.get_user_by_email(con, 'bare@example.com') is None and db.is_tombstoned(con, 'bare@example.com')
