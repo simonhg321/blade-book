@@ -51,6 +51,48 @@ def test_install_and_backup_scripts_are_idempotent_shell():
     assert re.search(r'ls -1t .*\| tail -n \+15 \| xargs', bk)  # keep 14
 
 
+def test_backup_snapshots_the_db_instead_of_tarring_it_live():
+    bk = _read('scripts/backup.sh')
+    assert '.backup' in bk and 'mktemp -d' in bk                      # sqlite3 online backup into a staging dir
+    assert 'wal_checkpoint' not in bk                                  # superseded by .backup
+    for ex in ('blade-book.db*', 'exports', 'publish-locks'):
+        assert f'--exclude=' in bk and ex in bk, ex                    # live db + transient dirs never tarred
+    assert 'rm -rf "$STAGE"' in bk                                     # staging dir cleaned on every path
+    assert 'BLADEBOOK_BACKUP_DIR' in bk                                # overridable so a test can execute it
+    assert 'gzip -t "$OUT"' in bk                                      # a truncated/corrupt tarball fails the check
+    assert 'OK=1' in bk
+    assert 'rm -f "$OUT"' in bk                                        # a failed run (set -e, before OK=1) removes the partial tarball
+    assert re.search(r"trap '.*rm -f \"\$OUT\"' EXIT", bk)
+    assert 'set -euo pipefail' in bk
+
+
+def test_backup_script_runs_and_removes_partial_on_failure(tmp_path):
+    import subprocess
+    data = tmp_path / 'blade-book'
+    (data / 'photos').mkdir(parents=True)
+    (data / 'exports').mkdir()
+    (data / 'publish-locks').mkdir()
+    (data / 'photos' / 'a.jpg').write_bytes(b'x')
+    subprocess.run(['sqlite3', str(data / 'blade-book.db'), 'create table t(x)'], check=True)
+    bk = tmp_path / 'backup'
+    bk.mkdir()
+    env = dict(os.environ, BLADEBOOK_DATA_DIR=str(data), BLADEBOOK_BACKUP_DIR=str(bk))
+    r = subprocess.run(['bash', os.path.join(ROOT, 'scripts', 'backup.sh')], env=env, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    tgz = list(bk.glob('blade-book-*.tgz'))
+    assert len(tgz) == 1 and not list(bk.glob('.stage.*'))
+    names = subprocess.run(['tar', 'tzf', str(tgz[0])], capture_output=True, text=True, check=True).stdout.split()
+    assert 'blade-book.db' in names and 'blade-book/photos/a.jpg' in names
+    assert not any(n.startswith('blade-book/blade-book.db') or '/exports' in n or '/publish-locks' in n for n in names)
+    # failure path: unreadable data dir → non-zero exit, no tarball left behind, no stage dir
+    for f in tgz:
+        f.unlink()
+    env['BLADEBOOK_DATA_DIR'] = str(tmp_path / 'missing')
+    r = subprocess.run(['bash', os.path.join(ROOT, 'scripts', 'backup.sh')], env=env, capture_output=True, text=True)
+    assert r.returncode != 0
+    assert not list(bk.glob('blade-book-*.tgz')) and not list(bk.glob('.stage.*'))
+
+
 def test_runbook_move_exists_and_names_the_steps():
     s = _read('docs/RUNBOOK-move.md')
     for word in ('supervisorctl stop blade_book', 'rsync', '/var/lib/blade-book',
@@ -107,14 +149,14 @@ def test_runbook_move_lists_match_cron():
 
 def _cron_dedupe_chain_and_lines():
     """Pull the real `grep -v '...' | grep -v '...' | ...` de-dupe chain and
-    the four `echo '...'` cron lines straight out of install.sh, so this test
+    the five `echo '...'` cron lines straight out of install.sh, so this test
     exercises the actual patterns shipped in the script rather than a
     hand-copied approximation of them."""
     sh = _read('scripts/install.sh')
     m = re.search(r"crontab -u shg -l 2>/dev/null((?: \| grep -v '[^']*')+)", sh)
     assert m, 'could not find the crontab de-dupe grep chain in install.sh'
     lines = re.findall(r"echo '([^']*)'", sh)
-    assert len(lines) == 4, 'expected exactly 4 cron lines (backup/purge/publish/match)'
+    assert len(lines) == 5, 'expected exactly 5 cron lines (backup/purge/publish/match/monitor)'
     return m.group(1), lines
 
 
@@ -125,7 +167,7 @@ def test_install_cron_dedupe_actually_filters_every_added_line():
     `cd /home/shg/blade-book && python3 scripts/purge_drafts.py ...` line,
     which has no 'blade-book/scripts/' substring) makes install.sh append a
     duplicate crontab entry on every rerun. Feed a fake crontab containing
-    exactly the four lines install.sh adds through the REAL grep chain
+    exactly the five lines install.sh adds through the REAL grep chain
     extracted from the script; every line must come out filtered — the
     property being pinned is: for every cron line install.sh adds, its own
     grep -v pattern matches that line."""
@@ -373,3 +415,46 @@ def test_admin_page_users_wiring():
                    'free_old_used', 'sub_status', 'id="users"', 'knives', 'verified_at'):
         assert needle in html, needle
     assert 'innerHTML' not in html
+
+
+def test_install_has_monitor_cron():
+    sh = _read('scripts/install.sh')
+    assert 'scripts/monitor.py' in sh and 'monitor.log' in sh
+    assert "grep -v 'blade-book/scripts/monitor.py'" in sh   # anchored: a sibling project's own scripts/monitor.py must not be swept up
+    assert 'python3 /home/shg/blade-book/scripts/monitor.py' in sh   # absolute path, matches the anchored grep
+
+
+def test_env_doc_and_runbook_mention_monitor():
+    assert 'BLADEBOOK_ADMIN_EMAIL' in _read('docs/ENV.md')
+    rb = _read('docs/RUNBOOK-move.md')
+    assert 'scripts/monitor.py' in rb and 'monitor_state.json' in rb
+
+
+def test_about_page_wiring():
+    html = _read('html/about/index.html')
+    for needle in ('ABOUT BLADE-BOOK', 'WHAT IT IS', "WHAT IT ISN'T", 'PRICE', 'THE RULES', 'WHO',
+                   'certificate of authenticity', 'id="price"', 'id="contact"', "'/blade-book/api/billing'",
+                   'href="/blade-book/terms/"', 'href="/blade-book/how/"', 'href="/blade-book/search/"',
+                   'property="og:title"', 'href="/blade-book/vibe.css"', 'bbmark', '/blade-book/mark.svg'):
+        assert needle in html, needle
+    assert 'innerHTML' not in html and 'fonts.googleapis.com' not in html
+    assert '<!-- Copyright (c) 2026 Simon SGH' in html
+    assert '$4' not in html and '$36' not in html and 'hello@' not in html   # price + contact come from the API
+    for rel in ('index.html', 'how/index.html'):
+        assert 'href="/blade-book/about/"' in _read('html/' + rel), rel
+
+
+def test_terms_page_wiring():
+    html = _read('html/terms/index.html')
+    for needle in ('TERMS', 'A record, not a certificate', 'No money', 'Your photos stay yours', 'Takedown',
+                   'Delete is real', 'Your data', 'What we store', 'Early access', '24 hours',
+                   'class="contact"', "'/blade-book/api/billing'", 'href="/blade-book/about/"',
+                   'property="og:title"', 'href="/blade-book/vibe.css"', 'bbmark'):
+        assert needle in html, needle
+    assert 'innerHTML' not in html and 'fonts.googleapis.com' not in html
+    assert '<!-- Copyright (c) 2026 Simon SGH' in html
+    assert 'hello@' not in html
+    prose = re.sub(r'<(style|script)[\s\S]*?</\1>', ' ', html)
+    assert len(re.findall(r'\w+', re.sub(r'<[^>]+>', ' ', prose))) < 900   # plain English, short
+    landing = _read('html/index.html')
+    assert 'By signing in you agree to the <a href="/blade-book/terms/"' in landing
