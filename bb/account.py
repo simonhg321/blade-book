@@ -7,10 +7,12 @@ Deletion is complete or it is a bug (spec §11: "delete-account is real and
 complete"): DB rows, store keys, the public bundle + its tmp + its lock, the
 search index, and a tombstone. tests/test_account.py enumerates every surface."""
 import csv
+import fcntl
 import io
 import json
 import logging
 import os
+import secrets
 import shutil
 import zipfile
 from datetime import datetime, timezone
@@ -43,15 +45,32 @@ def validate_new_handle(con, user, new):
 
 def remove_public_surface(handle):
     """Take a handle's static bundle off the web: the dir, a stranded .tmp,
-    and the publish lock (DATA_DIR/publish-locks/<handle>.lock). Missing
-    pieces are fine — this runs for handles that never published too."""
+    and the publish lock. Holds the same flock build_user holds for the whole
+    build, so an in-flight build finishes (and is then removed) instead of
+    re-creating the bundle after us. Returns True when nothing is left on
+    disk; False (logged at ERROR) when something survived — the caller
+    reports it, the account row is gone regardless."""
     dest = publish.bundle_dir(handle)
-    shutil.rmtree(dest, ignore_errors=True)
-    shutil.rmtree(dest + '.tmp', ignore_errors=True)
+    lock_path = publish._lock_path(handle)
+    lockf = open(lock_path, 'w')
     try:
-        os.unlink(publish._lock_path(handle))
+        fcntl.flock(lockf, fcntl.LOCK_EX)
+        shutil.rmtree(dest, ignore_errors=True)
+        shutil.rmtree(dest + '.tmp', ignore_errors=True)
+    finally:
+        fcntl.flock(lockf, fcntl.LOCK_UN)
+        lockf.close()
+    try:
+        os.unlink(lock_path)
     except FileNotFoundError:
         pass
+    except OSError as e:
+        log.error('remove_public_surface: could not unlink %s: %r', lock_path, e)
+    left = [p for p in (dest, dest + '.tmp') if os.path.exists(p)]
+    if left:
+        log.error('remove_public_surface: @%s still on disk after removal: %s', handle, left)
+        return False
+    return True
 
 
 def change_handle(con, user, new):
@@ -101,7 +120,7 @@ def export_zip(con, store, user, out_dir):
     store no longer has is skipped and named in missing_photos."""
     os.makedirs(out_dir, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')
-    path = os.path.join(out_dir, f"{user['handle']}-{stamp}.zip")
+    path = os.path.join(out_dir, f"{user['handle']}-{stamp}-{secrets.token_hex(4)}.zip")
     knives = db.full_register(con, user['id'])
     missing = []
     with zipfile.ZipFile(path, 'w', compression=zipfile.ZIP_DEFLATED) as z:
@@ -145,15 +164,22 @@ def delete_account(con, store, user):
     db.tombstone_email(con, user['email'])
     keys = db.owner_photo_keys(con, user['id'])
     removed = 0
+    failed = 0
     for key in keys:
         try:
             if store.delete(key):
                 removed += 1
         except Exception as e:  # noqa: BLE001 — one bad key must not strand the deletion
+            failed += 1
             log.warning('delete_account: store.delete(%s) failed: %r', key, e)
-    remove_public_surface(user['handle'])
+    surface_removed = remove_public_surface(user['handle'])
     search.deindex_user(con, user['id'])
     counts = db.delete_user(con, user['id'])
     counts['store_keys'] = removed
-    log.info('account deleted: @%s (user %s) %s', user['handle'], user['id'], counts)
+    counts['store_failed'] = failed
+    counts['surface_removed'] = surface_removed
+    if failed or not surface_removed:
+        log.error('account deleted: @%s (user %s) with residue %s', user['handle'], user['id'], counts)
+    else:
+        log.info('account deleted: @%s (user %s) %s', user['handle'], user['id'], counts)
     return counts

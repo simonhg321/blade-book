@@ -19,6 +19,22 @@ MAX_KEY = 64
 EXPORT_EVERY_S = 600           # one ZIP per user per 10 minutes; in-process, resets on restart
 _last_export = {}              # user_id -> time.monotonic() of the last export
 
+EXPORT_WAIT_HTML = (
+    '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+    '<meta name="viewport" content="width=device-width,initial-scale=1">'
+    f'<meta http-equiv="refresh" content="8;url={paths.URL_PREFIX}/me/settings/">'
+    '<title>One export every 10 minutes — blade-book</title>'
+    '<style>body{font-family:system-ui,sans-serif;background:#f6f1e7;color:#1a1a1a;margin:0;'
+    'display:flex;min-height:100vh;align-items:center;justify-content:center}'
+    'main{text-align:center;padding:2rem}h1{font-size:1.6rem;margin:0 0 .5rem}'
+    'a{color:#1a1a1a;font-weight:600}p{margin:.4rem 0}</style></head><body><main>'
+    '<h1>One export every 10 minutes</h1>'
+    '<p>one export every 10 minutes — try again shortly</p>'
+    f'<p><a href="{paths.URL_PREFIX}/me/settings/">Back to settings</a></p>'
+    '<p style="color:#666;font-size:.9rem">Taking you there in 8 seconds.</p>'
+    '</main></body></html>'
+)
+
 
 def _view(u):
     return {'handle': u['handle'],
@@ -109,7 +125,10 @@ def export():
     now = time.monotonic()
     last = _last_export.get(uid)
     if last is not None and now - last < EXPORT_EVERY_S:
-        return jsonify({'error': 'one export every 10 minutes — try again shortly'}), 429
+        msg = 'one export every 10 minutes — try again shortly'
+        if auth._wants_html():
+            return (EXPORT_WAIT_HTML, 429, {'Content-Type': 'text/html; charset=utf-8'})
+        return jsonify({'error': msg}), 429
     _last_export[uid] = now
     con = db.connect()
     try:
@@ -148,10 +167,13 @@ def delete():
     confirm = body.get('confirm') if isinstance(body, dict) else None
     if confirm != g.user['handle']:
         return jsonify({'error': 'type your handle exactly to confirm'}), 400
+    handle = g.user['handle']
     con = db.connect()
     try:
         counts = account.delete_account(con, current_app.config['STORE'], g.user)
     finally:
         con.close()
     auth.logout()
+    if counts.get('store_failed') or not counts.get('surface_removed'):
+        log.error('delete for @%s left residue: %s', handle, counts)
     return jsonify({'ok': True, 'deleted': counts})

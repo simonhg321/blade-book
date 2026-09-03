@@ -112,6 +112,7 @@
     $('handlebox').hidden = !s.can_change_handle;
     $('handledone').hidden = !!s.can_change_handle;
     $('confirm').placeholder = 'type ' + s.handle + ' to confirm';
+    $('delete').disabled = $('confirm').value.trim() !== s.handle;
   }
 
   function loadSettings() {

@@ -4,7 +4,7 @@ import json
 import os
 import zipfile
 
-from bb import db
+from bb import db, publish
 from bb.routes import settings as settings_routes
 from tests.conftest import signed_in
 from tests.test_search import _mk_knife
@@ -66,8 +66,27 @@ def test_export_zip_and_rate_limit(client, mailer, app):
     assert os.listdir(os.path.join(paths.DATA_DIR, 'exports')) == []      # unlinked after send
     r = client.get(S + '/export')
     assert r.status_code == 429 and '10 minutes' in r.get_json()['error']
+    r = client.get(S + '/export', headers={'Accept': 'application/json'})
+    assert r.status_code == 429 and '10 minutes' in r.get_json()['error']
     _reset_export_clock()
     assert client.get(S + '/export').status_code == 200
+
+
+def test_export_rate_limit_html_for_browser_navigation(client, mailer, app):
+    _reset_export_clock()
+    me = signed_in(client, mailer)
+    con = db.connect()
+    k = _mk_knife(con, me['id'])
+    app.config['STORE'].put(k['photos'][0]['store_key'], b'JPEG')
+    con.close()
+    r = client.get(S + '/export')
+    assert r.status_code == 200, r.data
+    r.close()
+    r = client.get(S + '/export', headers={'Accept': 'text/html'})
+    assert r.status_code == 429
+    assert r.content_type.startswith('text/html')
+    body = r.get_data(as_text=True)
+    assert '/blade-book/me/settings/' in body
 
 
 def test_export_requires_auth(client):
@@ -79,17 +98,36 @@ def test_delete_account_flow(client, mailer, app):
     con = db.connect()
     k = _mk_knife(con, me['id'])
     app.config['STORE'].put(k['photos'][0]['store_key'], b'JPEG')
+    # a fake public surface, the way tests/test_account.py::_public_surface builds one
+    dest = publish.bundle_dir(me['handle'])
+    os.makedirs(os.path.join(dest, 'K01'), exist_ok=True)
+    open(os.path.join(dest, 'index.html'), 'w').write('x')
+    os.makedirs(dest + '.tmp', exist_ok=True)
+    lock_path = publish._lock_path(me['handle'])
+    open(lock_path, 'w').close()
+    con.execute('INSERT INTO search_cards (knife_id, owner_id, handle, model, generation, size, born_year,'
+                ' damascus_smith, damascus_pattern, special_edition, for_sale, card)'
+                " VALUES (?, ?, ?, 'Sebenza', '31', 'Large', 2025, '', '', '', 0, '{}')",
+                (me['id'] * 1_000_000 + 1, me['id'], me['handle']))
+    con.execute('INSERT INTO search_fts (rowid, text) VALUES (?, ?)', (me['id'] * 1_000_000 + 1, 'sebenza'))
+    con.commit()
     con.close()
     assert client.post(S + '/delete', json={'confirm': 'nope'}).status_code == 400
     assert client.post(S + '/delete', json={}).status_code == 400
     r = client.post(S + '/delete', json={'confirm': me['handle']})
     assert r.status_code == 200, r.data
-    assert r.get_json() == {'ok': True, 'deleted': {'knives': 1, 'photos': 1, 'store_keys': 1}}
+    assert r.get_json() == {'ok': True, 'deleted': {
+        'knives': 1, 'photos': 1, 'store_keys': 1, 'store_failed': 0, 'surface_removed': True}}
     assert client.get('/blade-book/api/auth/me').status_code == 401          # cookie cleared
     con = db.connect()
     assert db.get_user(con, me['id']) is None and db.is_tombstoned(con, 'sam@example.com')
+    assert con.execute('SELECT count(*) FROM search_cards WHERE owner_id = ?', (me['id'],)).fetchone()[0] == 0
+    assert con.execute('SELECT count(*) FROM search_fts WHERE rowid = ?',
+                       (me['id'] * 1_000_000 + 1,)).fetchone()[0] == 0
     con.close()
     assert not app.config['STORE'].exists(k['photos'][0]['store_key'])
+    assert not os.path.exists(dest) and not os.path.exists(dest + '.tmp')
+    assert not os.path.exists(lock_path)
 
 
 def test_delete_refuses_admin(client, mailer):

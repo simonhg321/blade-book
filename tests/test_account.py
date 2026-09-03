@@ -1,9 +1,12 @@
 # Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
 import csv
+import fcntl
 import hashlib
 import io
 import json
 import os
+import threading
+import time
 import zipfile
 
 import pytest
@@ -127,7 +130,36 @@ def test_change_handle_taken(con):
 
 
 def test_remove_public_surface_tolerates_absence(env):
-    account.remove_public_surface('nobody')     # nothing there — no raise
+    assert account.remove_public_surface('nobody') is True     # nothing there — no raise
+
+
+def test_remove_public_surface_waits_for_build_lock(env):
+    dest = publish.bundle_dir('sam')
+    os.makedirs(dest, exist_ok=True)
+    lockf = open(publish._lock_path('sam'), 'w')
+    fcntl.flock(lockf, fcntl.LOCK_EX)
+    result = {}
+    t = threading.Thread(target=lambda: result.__setitem__('ok', account.remove_public_surface('sam')))
+    t.start()
+    try:
+        time.sleep(0.2)
+        assert os.path.exists(dest)
+        assert t.is_alive()
+    finally:
+        fcntl.flock(lockf, fcntl.LOCK_UN)
+        lockf.close()
+    t.join(2)
+    assert not t.is_alive()
+    assert not os.path.exists(dest)
+    assert result['ok'] is True
+
+
+def test_remove_public_surface_reports_leftover(env, monkeypatch):
+    dest = publish.bundle_dir('sam')
+    os.makedirs(dest, exist_ok=True)
+    monkeypatch.setattr('bb.account.shutil.rmtree', lambda *a, **kw: None)
+    assert account.remove_public_surface('sam') is False
+    assert os.path.exists(dest)
 
 
 def _knife_with_photo(con, store, u, tag_photo=b'JPEGBYTES'):
@@ -182,6 +214,12 @@ def test_export_csv_columns_cover_private_and_skip_ids():
     assert cols[-1] == 'photo_count' and cols[0] == 'tag'
 
 
+def test_export_csv_columns_track_the_knives_ddl(con):
+    ddl = [r[1] for r in con.execute('PRAGMA table_info(knives)')]
+    expected = tuple(c for c in ddl if c not in ('id', 'owner_id')) + ('photo_count',)
+    assert account.EXPORT_CSV_COLUMNS == expected
+
+
 def test_delete_account_is_complete(env, con, tmp_path):
     store = LocalFSStore(str(tmp_path / 'store'))
     u = _user(con)
@@ -200,7 +238,7 @@ def test_delete_account_is_complete(env, con, tmp_path):
     db.create_report(con, ok['id'], other['id'], u['id'], 'spam')              # sam reports other's knife
 
     counts = account.delete_account(con, store, u)
-    assert counts == {'knives': 1, 'photos': 1, 'store_keys': 2}
+    assert counts == {'knives': 1, 'photos': 1, 'store_keys': 2, 'store_failed': 0, 'surface_removed': True}
 
     uid = u['id']
     assert con.execute('SELECT count(*) FROM users WHERE id = ?', (uid,)).fetchone()[0] == 0
@@ -221,5 +259,6 @@ def test_delete_account_is_complete(env, con, tmp_path):
 def test_delete_account_without_photos_or_bundle(env, con, tmp_path):
     store = LocalFSStore(str(tmp_path / 'store'))
     u = _user(con, 'bare@example.com', 'bare')
-    assert account.delete_account(con, store, u) == {'knives': 0, 'photos': 0, 'store_keys': 0}
+    assert account.delete_account(con, store, u) == {
+        'knives': 0, 'photos': 0, 'store_keys': 0, 'store_failed': 0, 'surface_removed': True}
     assert db.get_user_by_email(con, 'bare@example.com') is None and db.is_tombstoned(con, 'bare@example.com')
