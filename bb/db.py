@@ -636,6 +636,41 @@ def set_user_settings(con, user_id, fields):
     return get_user(con, user_id)
 
 
+# --- billing (plan 10) --------------------------------------------------------
+
+ADMIN_USER_FIELDS = ('id', 'handle', 'email', 'display_name', 'created', 'verified_at',
+                     'is_admin', 'sub_status', 'sub_source', 'free_old_used', 'knives')
+
+
+def set_sub_status(con, user_id, status, source='manual'):
+    """The Billing write. ValueError on a status outside SUB_STATUSES; None for
+    an unknown user; else the fresh user row."""
+    if status not in SUB_STATUSES:
+        raise ValueError('bad status')
+    ok = con.execute('UPDATE users SET sub_status = ?, sub_source = ? WHERE id = ?',
+                     (status, source, user_id)).rowcount == 1
+    con.commit()
+    return get_user(con, user_id) if ok else None
+
+
+def increment_free_old(con, user_id):
+    """Spend one free older-knife slot (spec §10 rule 3, 'increment on save')."""
+    con.execute('UPDATE users SET free_old_used = free_old_used + 1 WHERE id = ?', (user_id,))
+    con.commit()
+    return con.execute('SELECT free_old_used FROM users WHERE id = ?', (user_id,)).fetchone()[0]
+
+
+def admin_users(con):
+    """Every account for /admin — the ADMIN_USER_FIELDS whitelist and nothing
+    else (no session_secret / auth_subjects / public_key). Newest first."""
+    rows = con.execute(
+        'SELECT u.id, u.handle, u.email, u.display_name, u.created, u.verified_at, u.is_admin, '
+        'u.sub_status, u.sub_source, u.free_old_used, '
+        "(SELECT count(*) FROM knives k WHERE k.owner_id = u.id AND k.status = 'live') AS knives "
+        'FROM users u ORDER BY u.created DESC, u.id DESC').fetchall()
+    return [{f: r[f] for f in ADMIN_USER_FIELDS} for r in rows]
+
+
 # --- wants + intros (user wishlists + knife matches) ---------------------------
 
 def create_want(con, owner_id, fields):
