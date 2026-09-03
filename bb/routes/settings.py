@@ -1,17 +1,23 @@
 # Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
-"""bb/routes/settings.py — the owner's public-page settings. The key is
-write-only: the API reports has_key, never the key itself."""
+"""bb/routes/settings.py — the owner's settings: public-page options (plan 06),
+the register hero pin, and the account operations behind /me/settings (plan
+11: handle once, export, delete). The page key is write-only: the API reports
+has_key, never the key itself."""
 import logging
+import os
+import time
 
-from flask import Blueprint, g, jsonify, request
+from flask import Blueprint, current_app, g, jsonify, request, send_file
 
-from bb import auth, db, paths, publish
+from bb import account, auth, db, paths, publish
 
 log = logging.getLogger('blade-book.settings')
 
 bp = Blueprint('settings', __name__, url_prefix=paths.API_PREFIX + '/settings')
 
 MAX_KEY = 64
+EXPORT_EVERY_S = 600           # one ZIP per user per 10 minutes; in-process, resets on restart
+_last_export = {}              # user_id -> time.monotonic() of the last export
 
 
 def _view(u):
@@ -21,7 +27,12 @@ def _view(u):
             'profile_private': u['profile_private'],
             'share_email_on_intro': u['share_email_on_intro'],
             'has_key': bool(u.get('public_key')),
-            'featured_knife_id': u.get('featured_knife_id')}
+            'featured_knife_id': u.get('featured_knife_id'),
+            'email': u['email'],
+            'created': u['created'],
+            'handle_changed_at': u.get('handle_changed_at'),
+            'can_change_handle': not u.get('handle_changed_at'),
+            'is_admin': u['is_admin']}
 
 
 @bp.get('/', strict_slashes=False)
@@ -50,7 +61,12 @@ def patch_settings():
         if len(key) > MAX_KEY:
             return jsonify({'error': f'public_key over {MAX_KEY} characters'}), 400
         fields['public_key'] = key or None
-    bad = set(body) - db.SETTINGS_COLUMNS
+    new_handle = None
+    if 'handle' in body:
+        if not isinstance(body['handle'], str):
+            return jsonify({'error': 'handle must be a string'}), 400
+        new_handle = body['handle']
+    bad = set(body) - db.SETTINGS_COLUMNS - {'handle'}
     if bad:
         return jsonify({'error': f'unknown setting: {sorted(bad)}'}), 400
     con = db.connect()
@@ -65,10 +81,77 @@ def patch_settings():
                     return jsonify({'error': 'featured_knife_id must be one of your '
                                              'live knives with a photo'}), 400
             fields['featured_knife_id'] = val
+        u = g.user
+        if new_handle is not None:
+            try:
+                u = account.change_handle(con, g.user, new_handle)
+            except ValueError as e:
+                return jsonify({'error': str(e)}), 400
         u = db.set_user_settings(con, g.user['id'], fields)
     finally:
         con.close()
-    if fields:
+    if fields or new_handle is not None:
         publish.schedule(g.user['id'])
-        log.info('settings changed for @%s: %s', u['handle'], sorted(fields))
+        log.info('settings changed for @%s: %s', u['handle'],
+                 sorted(fields) + (['handle'] if new_handle is not None else []))
     return jsonify(_view(u))
+
+
+# --- account operations (plan 11) --------------------------------------------------
+
+@bp.get('/export')
+@auth.login_required
+def export():
+    """Everything the owner has, as a ZIP. Never gated (spec §10). One per 10
+    minutes per user — the ZIP is built on disk in DATA_DIR/exports and
+    unlinked once the response is closed."""
+    uid = g.user['id']
+    now = time.monotonic()
+    last = _last_export.get(uid)
+    if last is not None and now - last < EXPORT_EVERY_S:
+        return jsonify({'error': 'one export every 10 minutes — try again shortly'}), 429
+    _last_export[uid] = now
+    con = db.connect()
+    try:
+        path = account.export_zip(con, current_app.config['STORE'], g.user,
+                                  os.path.join(paths.DATA_DIR, 'exports'))
+    finally:
+        con.close()
+    resp = send_file(path, mimetype='application/zip', as_attachment=True,
+                     download_name=f"blade-book-{g.user['handle']}.zip", max_age=0)
+    # send_file sets direct_passthrough=True, which makes Response.get_app_iter()
+    # hand the WSGI server the raw file wrapper instead of
+    # ClosingIterator(iterable, self.close) — so the server's close() on the
+    # app_iter never reaches this response's own close(), and call_on_close
+    # below would silently never fire (verified against Werkzeug 3.1.8). Turn
+    # passthrough off so our unlink runs when the response is closed.
+    resp.direct_passthrough = False
+    resp.call_on_close(lambda: _unlink_quiet(path))
+    return resp
+
+
+def _unlink_quiet(path):
+    try:
+        os.unlink(path)
+    except FileNotFoundError:
+        pass
+
+
+@bp.post('/delete')
+@auth.login_required
+def delete():
+    """Complete account deletion. Type-the-handle confirm; admin rows refuse
+    (Simon's account is not deletable from the UI); the session is cleared."""
+    if g.user['is_admin']:
+        return jsonify({'error': 'the admin account cannot be deleted here'}), 403
+    body = request.get_json(silent=True)
+    confirm = body.get('confirm') if isinstance(body, dict) else None
+    if confirm != g.user['handle']:
+        return jsonify({'error': 'type your handle exactly to confirm'}), 400
+    con = db.connect()
+    try:
+        counts = account.delete_account(con, current_app.config['STORE'], g.user)
+    finally:
+        con.close()
+    auth.logout()
+    return jsonify({'ok': True, 'deleted': counts})
