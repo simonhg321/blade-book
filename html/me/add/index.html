@@ -108,7 +108,7 @@
 <button id="discard" type="button">🗑 discard this draft</button>
 
 <dialog id="paywall">
-  <h2 class="bb-display">EARLY ACCESS</h2>
+  <h2>EARLY ACCESS</h2>
   <p id="paywall-why"></p>
   <p>blade-book is <span id="paywall-price"></span>. While we are in early access there is no checkout — email us and we turn it on the same day.</p>
   <p><a class="btn" id="paywall-mail" href="#">EMAIL US</a></p>
@@ -320,7 +320,7 @@
         say('✓ decoded' + (res.j.decoded.flags.length ? ' — ' + res.j.decoded.flags.length + ' flag(s)' : ''));
         renderCard(res.j, res.j.decoded);
         var age = res.j.decoded.age_months;
-        var old = age == null || age > 12;
+        var old = age == null || age >= 12;
         $('agenote').textContent = ''; $('agenote').style.display = 'none';
         if (old) {
           api('/billing').then(function (b) {
@@ -336,7 +336,7 @@
             else $('agenote').textContent = born + 'older than 12 months and your free older-knife saves are used — saving needs a subscription.';
             $('agenote').style.display = $('agenote').textContent ? 'block' : 'none';
           }).catch(function () {});
-        }
+        } else applyAccountNote();
       })
       .catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); })
       .then(function () { $('proc').disabled = photos.length === 0; $('save').disabled = photos.length === 0; });

@@ -159,6 +159,7 @@ def main():
                 st.put(db.thumb_key(key), ing.thumb)
         if files:
             db.update_knife(con, user['id'], k['id'], {'hero_photo': 1})
+            # operator-only import: db.publish_knife is deliberately ungated (the gate is bb/routes/knives.py save_knife)
             k2, err = db.publish_knife(con, user['id'], k['id'])
             if err:
                 print(f'  NOT LIVE {r["tag"]} ({k["tag"]}): {err}')

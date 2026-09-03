@@ -27,6 +27,8 @@ def test_price_text_is_one_config_line(monkeypatch):
     assert billing.price_text() == '$4/mo or $36/yr'
     monkeypatch.setenv('BLADEBOOK_PRICE_TEXT', '$5/mo')
     assert billing.price_text() == '$5/mo'
+    monkeypatch.setenv('BLADEBOOK_PRICE_TEXT', '')
+    assert billing.price_text() == '$4/mo or $36/yr'
 
 
 def test_account_days():
@@ -77,9 +79,13 @@ def test_no_admin_bypass_in_the_gate_math():
 
 def test_contact_email_is_one_config_line(monkeypatch):
     monkeypatch.delenv('BLADEBOOK_CONTACT_EMAIL', raising=False)
+    monkeypatch.delenv('MAIL_FROM', raising=False)
     assert billing.contact_email() == 'hello@' + 'blade-book.com'      # derived from mail.DEFAULT_FROM's domain
     monkeypatch.setenv('BLADEBOOK_CONTACT_EMAIL', 'simon@example.com')
     assert billing.contact_email() == 'simon@example.com'
+    monkeypatch.delenv('BLADEBOOK_CONTACT_EMAIL', raising=False)
+    monkeypatch.setenv('MAIL_FROM', 'shop <x@example.com>')
+    assert billing.contact_email() == 'hello@example.com'
 
 
 def test_summary_anonymous(monkeypatch):

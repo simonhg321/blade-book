@@ -38,15 +38,17 @@ REASON_OLD = ('this knife is older than 12 months (or undated) and your 3 free o
 
 
 def price_text():
-    return config.get('BLADEBOOK_PRICE_TEXT', DEFAULT_PRICE_TEXT)
+    return config.get('BLADEBOOK_PRICE_TEXT') or DEFAULT_PRICE_TEXT
 
 
 def contact_email():
-    """The early-access 'email us' address. Default: hello@ at the sender's domain."""
+    """The early-access 'email us' address. Default: hello@ at MAIL_FROM's domain
+    (falling back to mail.DEFAULT_FROM's domain when MAIL_FROM is unset)."""
     env = config.get('BLADEBOOK_CONTACT_EMAIL')
     if env:
         return env
-    domain = mail.DEFAULT_FROM.rsplit('@', 1)[1].rstrip('>').strip()
+    domain = config.get('MAIL_FROM') or mail.DEFAULT_FROM
+    domain = domain.rsplit('@', 1)[1].rstrip('>').strip()
     return 'hello@' + domain
 
 

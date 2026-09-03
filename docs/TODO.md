@@ -37,7 +37,12 @@ Small items that don't warrant a plan. Bigger work lives in the plan roadmap
   (email hash) so a re-created account gets no fresh free_old_used allowance — lands with plan 11's
   delete, which is what writes that table. (c) free_old_used TOCTOU: two concurrent saves of the 3rd
   and 4th old knife can both pass `< 3` (over-by-one, same shape as the plan-09 caps; not worth a
-  transaction at this scale). (d) the early-access mailto defaults to `hello@` at MAIL_FROM's domain
-  (`BLADEBOOK_CONTACT_EMAIL` overrides) — make that mailbox real or set the env before the first outside 402.
+  transaction at this scale); same shape again for two concurrent saves of the SAME draft on
+  different workers — both read status=draft, both charge; hardening = publish_knife's UPDATE
+  `WHERE … AND status='draft'` returning whether a transition happened, charge only then. (d) the
+  early-access mailto defaults to `hello@` at MAIL_FROM's domain (`BLADEBOOK_CONTACT_EMAIL`
+  overrides) — make that mailbox real or set the env before the first outside 402.
+- [ ] billing surfaces still missing from spec §3: `/me/settings` should show the sub row (plan 11)
+  and `/about` should read the price from `/api/billing` like the intake and search cards (plan 12).
 - [ ] `account_days` uses users.created; an account whose created stamp predates the gate (all three
   live users: 08-29 → 09-02) gets its full first year from that date — intended, no backfill.
