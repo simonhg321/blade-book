@@ -118,14 +118,14 @@ def test_runbook_move_lists_match_cron():
 
 def _cron_dedupe_chain_and_lines():
     """Pull the real `grep -v '...' | grep -v '...' | ...` de-dupe chain and
-    the four `echo '...'` cron lines straight out of install.sh, so this test
+    the five `echo '...'` cron lines straight out of install.sh, so this test
     exercises the actual patterns shipped in the script rather than a
     hand-copied approximation of them."""
     sh = _read('scripts/install.sh')
     m = re.search(r"crontab -u shg -l 2>/dev/null((?: \| grep -v '[^']*')+)", sh)
     assert m, 'could not find the crontab de-dupe grep chain in install.sh'
     lines = re.findall(r"echo '([^']*)'", sh)
-    assert len(lines) == 4, 'expected exactly 4 cron lines (backup/purge/publish/match)'
+    assert len(lines) == 5, 'expected exactly 5 cron lines (backup/purge/publish/match/monitor)'
     return m.group(1), lines
 
 
@@ -136,7 +136,7 @@ def test_install_cron_dedupe_actually_filters_every_added_line():
     `cd /home/shg/blade-book && python3 scripts/purge_drafts.py ...` line,
     which has no 'blade-book/scripts/' substring) makes install.sh append a
     duplicate crontab entry on every rerun. Feed a fake crontab containing
-    exactly the four lines install.sh adds through the REAL grep chain
+    exactly the five lines install.sh adds through the REAL grep chain
     extracted from the script; every line must come out filtered — the
     property being pinned is: for every cron line install.sh adds, its own
     grep -v pattern matches that line."""
@@ -384,3 +384,14 @@ def test_admin_page_users_wiring():
                    'free_old_used', 'sub_status', 'id="users"', 'knives', 'verified_at'):
         assert needle in html, needle
     assert 'innerHTML' not in html
+
+
+def test_install_has_monitor_cron():
+    sh = _read('scripts/install.sh')
+    assert 'scripts/monitor.py' in sh and 'monitor.log' in sh and "grep -v 'scripts/monitor.py'" in sh
+
+
+def test_env_doc_and_runbook_mention_monitor():
+    assert 'BLADEBOOK_ADMIN_EMAIL' in _read('docs/ENV.md')
+    rb = _read('docs/RUNBOOK-move.md')
+    assert 'scripts/monitor.py' in rb and 'monitor_state.json' in rb

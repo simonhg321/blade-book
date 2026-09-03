@@ -145,3 +145,71 @@ def test_check_signups(mon):
     ev = mon.check_signups([('new@example.com', 'new-guy', '2026-09-03T11:50:00+00:00')], s, NOW)
     assert len(ev) == 1 and 'new-guy' in ev[0].body and 'new@example.com' in ev[0].body and ev[0].sms is False
     assert '1 new sign-in' in ev[0].subject
+
+
+class _Mailer:
+    def __init__(self):
+        self.sent = []
+
+    def send(self, to, subject, text, html=None, reply_to=None):
+        self.sent.append((to, subject, text))
+        return 'id'
+
+
+def test_deliver_routes_mail_and_sms(mon):
+    m = _Mailer()
+    texts = []
+    ev = [mon.Event('down', 'DOWN — healthz failed', '{}', True), mon.Event('errors', '3 ERROR lines', 'x', False)]
+    counts = mon.deliver(ev, m, 'admin@example.com', sms=lambda body: texts.append(body) or True)
+    assert counts == {'mail': 2, 'sms': 1, 'skipped': 0}
+    assert m.sent[0][0] == 'admin@example.com' and m.sent[0][1] == '[blade-book] DOWN — healthz failed'
+    assert texts == ['[blade-book] DOWN — healthz failed']
+
+
+def test_deliver_without_admin_email_skips_mail_but_texts(mon):
+    m = _Mailer()
+    texts = []
+    ev = [mon.Event('down', 'DOWN', '{}', True)]
+    assert mon.deliver(ev, m, None, sms=lambda b: texts.append(b) or True) == {'mail': 0, 'sms': 1, 'skipped': 1}
+    assert m.sent == []
+
+
+def test_deliver_survives_channel_failures(mon):
+    class Broken:
+        def send(self, *a, **k):
+            raise RuntimeError('resend down')
+    ev = [mon.Event('down', 'DOWN', '{}', True)]
+    counts = mon.deliver(ev, Broken(), 'admin@example.com', sms=lambda b: (_ for _ in ()).throw(RuntimeError('twilio')))
+    assert counts == {'mail': 0, 'sms': 0, 'skipped': 2}
+
+
+def test_send_sms_uses_injected_sender_and_never_raises(mon, monkeypatch):
+    got = []
+    assert mon.send_sms('hello', sender=lambda phone, body: got.append((phone, body)) or {'sid': 'x'}) is True
+    assert got == [('5550002222', 'hello')]
+    monkeypatch.setenv('BB_ADMIN_PHONE', '15550001111')
+    mon.send_sms('hi', sender=lambda phone, body: got.append((phone, body)))
+    assert got[-1][0] == '15550001111'
+    assert mon.send_sms('x', sender=lambda p, b: (_ for _ in ()).throw(RuntimeError('boom'))) is False
+
+
+def test_gather_runs_every_check_against_scratch_paths(mon, env, con):
+    from bb import db
+    db.create_user(con, 'fresh@example.com', 'fresh-guy')
+    os.makedirs(env.LOG_DIR, exist_ok=True)
+    open(os.path.join(env.LOG_DIR, 'app.log'), 'w').write('2026-09-03 ERROR a: b\n')
+    events = mon.gather(NOW, fetch=lambda: (_ for _ in ()).throw(ConnectionError('no app')), con=con,
+                        backup_glob=str(env.DATA_DIR) + '/nothing-*.tgz')
+    keys = sorted(e.key for e in events)
+    assert keys == ['backup', 'down', 'errors', 'signups']
+    assert os.path.exists(mon.state_path())
+    again = mon.gather(NOW + timedelta(minutes=5), fetch=lambda: (_ for _ in ()).throw(ConnectionError('no app')), con=con,
+                       backup_glob=str(env.DATA_DIR) + '/nothing-*.tgz')
+    assert again == []                                                   # all throttled / unchanged
+
+
+def test_main_dry_run_exits_zero_and_sends_nothing(mon, env, capsys):
+    rc = mon.main(['--dry-run'])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert 'dry-run' in out

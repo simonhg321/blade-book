@@ -175,3 +175,134 @@ def check_signups(rows, state, now):
         return []
     body = '\n'.join(f'@{h}  {e}  {c}' for e, h, c in rows)
     return [Event('signups', f'{len(rows)} new sign-in{"s" if len(rows) != 1 else ""}', body, False)]
+
+
+# --- channels -------------------------------------------------------------------------
+
+BILLBOARD_DIR = '/home/shg/billboard'
+DEFAULT_PHONE = '5550002222'
+PREFIX = '[blade-book] '
+
+
+def _billboard_sender():
+    """billboard's Twilio helper (same box, Simon's phone). Imported lazily so
+    tests and a box without billboard still load this module."""
+    os.environ.setdefault('BB_ENV_FILE', '/etc/billboard/.env')
+    if BILLBOARD_DIR not in sys.path:
+        sys.path.insert(0, BILLBOARD_DIR)
+    from sms_alerter import _send_twilio_sms  # noqa: PLC0415
+    return _send_twilio_sms
+
+
+def send_sms(body, sender=None):
+    """Best-effort second channel; email is the record. Never raises."""
+    try:
+        sender = sender or _billboard_sender()
+        sender(os.environ.get('BB_ADMIN_PHONE', DEFAULT_PHONE), body)
+        return True
+    except Exception as e:  # noqa: BLE001
+        log.error('sms failed: %r', e)
+        return False
+
+
+def deliver(events, mailer, admin_email, sms=send_sms):
+    counts = {'mail': 0, 'sms': 0, 'skipped': 0}
+    for ev in events:
+        subject = PREFIX + ev.subject
+        if admin_email:
+            try:
+                mailer.send(admin_email, subject, ev.body)
+                counts['mail'] += 1
+            except Exception as e:  # noqa: BLE001
+                log.error('mail failed for %s: %r', ev.key, e)
+                counts['skipped'] += 1
+        else:
+            counts['skipped'] += 1
+        if ev.sms:
+            try:
+                if sms(subject):
+                    counts['sms'] += 1
+                else:
+                    counts['skipped'] += 1
+            except Exception as e:  # noqa: BLE001
+                log.error('sms failed for %s: %r', ev.key, e)
+                counts['skipped'] += 1
+    return counts
+
+
+# --- wiring ---------------------------------------------------------------------------
+
+def _fetch_healthz():
+    import urllib.request
+    with urllib.request.urlopen(HEALTHZ_URL, timeout=3) as r:  # noqa: S310 — loopback only
+        return json.loads(r.read().decode())
+
+
+def _new_users(con, since_iso):
+    rows = con.execute('SELECT email, handle, created FROM users WHERE created > ? ORDER BY created',
+                       (since_iso or '1970-01-01',)).fetchall()
+    return [(r[0], r[1], r[2]) for r in rows]
+
+
+def gather(now, fetch=None, con=None, backup_glob=BACKUP_GLOB):
+    """Run every check with real inputs (each overridable), persist state."""
+    from bb import db
+    sp = state_path()
+    state = load_state(sp)
+    events = []
+    steps = [
+        ('health', lambda: check_health(fetch or _fetch_healthz, state, now)),
+        ('errors', lambda: check_errors(os.path.join(paths.LOG_DIR, 'app.log'), state, now)),
+        ('decode', lambda: check_decode(paths.ai_log(), state, now)),
+        ('backup', lambda: check_backup(backup_glob, state, now)),
+    ]
+    for name, fn in steps:
+        try:
+            events += fn()
+        except Exception as e:  # noqa: BLE001 — one broken check never hides the others
+            log.exception('check %s failed: %r', name, e)
+    try:
+        own = con is None
+        c = con or db.connect()
+        try:
+            # Watermark against the real clock, not the caller's `now`: db rows
+            # are stamped by db.now() (real wall-clock) regardless of what `now`
+            # this poll was handed for the other checks' throttle windows.
+            events += check_signups(_new_users(c, state['last_users_check']), state, datetime.now(timezone.utc))
+        finally:
+            if own:
+                c.close()
+    except Exception as e:  # noqa: BLE001
+        log.exception('check signups failed: %r', e)
+    save_state(sp, state)
+    return events
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--dry-run', action='store_true')
+    args = ap.parse_args(argv)
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
+    config.load()
+    now = datetime.now(timezone.utc)
+    try:
+        events = gather(now)
+    except Exception as e:  # noqa: BLE001
+        log.exception('gather failed: %r', e)
+        events = []
+    if args.dry_run:
+        print(f'{now.isoformat()} dry-run: {len(events)} event(s)')
+        for ev in events:
+            print(f'  [{ev.key}] {ev.subject} sms={ev.sms}')
+        return 0
+    admin = config.get('BLADEBOOK_ADMIN_EMAIL')
+    if not admin and events:
+        log.warning('BLADEBOOK_ADMIN_EMAIL unset — %d event(s) not mailed', len(events))
+    from bb import mail
+    counts = deliver(events, mail.from_env(), admin)
+    print(f'{now.isoformat()} events={len(events)} {counts} ' + ' '.join(e.key for e in events))
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

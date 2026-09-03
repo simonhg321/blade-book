@@ -20,14 +20,16 @@ supervisor program; nothing imports from billboard.
 5. `curl http://127.0.0.1:5004/blade-book/api/healthz` → ok.
 6. DNS: `blade-book.com` → new box. Leave the stark `/blade-book/` alias as a
    redirect for 30 days, then remove the include + supervisor conf on stark.
-7. Move the crontab — four lines, from `crontab -u shg -l` on stark:
+7. Move the crontab — five lines, from `crontab -u shg -l` on stark:
    `30 3 * * * bash /home/shg/blade-book/scripts/backup.sh >> /var/log/blade-book/backup.log 2>&1`
    `15 4 * * * cd /home/shg/blade-book && python3 scripts/purge_drafts.py >> /var/log/blade-book/purge.log 2>&1`
    `*/5 * * * * /usr/bin/python3 /home/shg/blade-book/scripts/publish_sweep.py >> /var/log/blade-book/publish.log 2>&1`
    `*/15 * * * * cd /home/shg/blade-book && python3 scripts/match_cron.py >> /var/log/blade-book/match.log 2>&1`
+   `*/5 * * * * cd /home/shg/blade-book && python3 scripts/monitor.py >> /var/log/blade-book/monitor.log 2>&1`
    Confirm `/home/backup/blade-book-*.tgz` appears on new, check `purge.log` the following morning, monitor
-   `publish.log` for publish_sweep activity, and monitor `match.log` for match_cron activity (silent unless
-   it sends).
+   `publish.log` for publish_sweep activity, monitor `match.log` for match_cron activity (silent unless
+   it sends), and check `monitor.log`/mail for `scripts/monitor.py` (needs `BLADEBOOK_ADMIN_EMAIL`, §ENV.md,
+   plus billboard's Twilio env for outage SMS).
    Backups (`scripts/backup.sh`, 03:30 nightly) hold `blade-book/photos/…` plus a top-level
    `blade-book.db` snapshot taken with `sqlite3 .backup` (consistent; the live db is never in the
    tar). Restore: `mkdir -p /tmp/r && tar xzf blade-book-<stamp>.tgz -C /tmp/r && rsync -a /tmp/r/blade-book/ /var/lib/blade-book/
@@ -38,6 +40,9 @@ supervisor program; nothing imports from billboard.
 8. The search index (`search_cards`/`search_fts`) is derived data, not a
    thing to restore/rsync — after any restore, repair/backfill it the same
    way as the bundles: `python3 scripts/publish_sweep.py --all` as shg.
+   Also in the data dir but transient: `monitor_state.json` (`scripts/monitor.py`'s
+   throttle/offset bookkeeping) — safe to drop on a move, it re-creates itself
+   on the next `*/5` run.
    Moderation state lives in the DB, not on disk: `reports` (open = resolved_at NULL) and
    `knives.hidden_at/hidden_by/hidden_note`. A hidden knife is excluded from the board, the
    owner's bundle, the search index and wants matching by the same column, so after a move a
