@@ -42,7 +42,14 @@ Small items that don't warrant a plan. Bigger work lives in the plan roadmap
   `WHERE … AND status='draft'` returning whether a transition happened, charge only then. (d) the
   early-access mailto defaults to `hello@` at MAIL_FROM's domain (`BLADEBOOK_CONTACT_EMAIL`
   overrides) — make that mailbox real or set the env before the first outside 402.
-- [ ] billing surfaces still missing from spec §3: `/me/settings` should show the sub row (plan 11)
-  and `/about` should read the price from `/api/billing` like the intake and search cards (plan 12).
+- [ ] billing surfaces still missing from spec §3: `/me/settings` should show the sub row (plan 11).
 - [ ] `account_days` uses users.created; an account whose created stamp predates the gate (all three
   live users: 08-29 → 09-02) gets its full first year from that date — intended, no backfill.
+- [ ] ops: off-box backup copy (spec §11 bucket) is NOT built — Simon 2026-09-03: the Linode backup service
+  covers the box nightly. Revisit only if the box moves off Linode (RUNBOOK-move).
+- [ ] ops: the monitor's SMS leg imports billboard's `sms_alerter` from /home/shg/billboard and reads
+  /etc/billboard/.env — a cross-project dependency by design (same box, same phone). If billboard ever
+  leaves stark, give blade-book its own `TWILIO_*` keys.
+- [ ] ops: monitor thresholds are constants in scripts/monitor.py (disk 10 %, backup 26 h, decode 20 % over
+  ≥5 calls, ERROR mail 1/h) — tune with real traffic.
+- [ ] pages: the "Who" sentence on /about is a placeholder for Simon's own words (mascot line included).
