@@ -271,7 +271,7 @@ def test_how_page_wiring():
     for needle in ('HOW IT WORKS', 'birth card', 'PROCESS', 'The one shot',
                    '/blade-book/me/add/', '/blade-book/@simon-collector/', 'bbmark',
                    '/blade-book/how/example.jpg',  # real flat-lay example (watermarked, EXIF-free)
-                   'href="/blade-book/vibe.css?v=20260903"'):
+                   'href="/blade-book/vibe.css?v=20260904"'):
         assert needle in html, needle
     assert 'innerHTML' not in html and 'fonts.googleapis.com' not in html
     # me/index.html's shared app header row deliberately has no 'how' link (plan 13)
@@ -284,8 +284,8 @@ def test_blank_card_page_wiring():
     repo) lives under the product too, and is linked where a person needs it."""
     html = open(os.path.join(ROOT, 'html', 'card', 'index.html')).read()
     for needle in ('BIRTH CARD', 'not a certificate of authenticity', 'id="print"', 'window.print()',
-                   '@media print', 'class="bb-foot"', 'href="/blade-book/vibe.css?v=20260903"',
-                   'src="/blade-book/nav.js?v=20260903"', 'href="/blade-book/how/"',
+                   '@media print', 'class="bb-foot"', 'href="/blade-book/vibe.css?v=20260904"',
+                   'src="/blade-book/nav.js?v=20260904"', 'href="/blade-book/how/"',
                    'Damascus smith', 'Notes / story'):
         assert needle in html, needle
     assert 'innerHTML' not in html and 'onclick=' not in html and 'fonts.googleapis.com' not in html
@@ -296,14 +296,14 @@ def test_blank_card_page_wiring():
 
 def test_landing_links_the_register():
     html = open(os.path.join(ROOT, 'html', 'index.html')).read()
-    for needle in ('href="/blade-book/vibe.css?v=20260903"', 'href="/blade-book/me/"', "/api/knives/?status=live'", 'id="regcount"'):
+    for needle in ('href="/blade-book/vibe.css?v=20260904"', 'href="/blade-book/me/"', "/api/knives/?status=live'", 'id="regcount"'):
         assert needle in html, needle
 
 
 def test_register_page_wiring():
     html = open(os.path.join(ROOT, 'html', 'me', 'index.html')).read()
     for needle in ("'/knives/full'", "'/auth/me'", "'/decode'", "'/sale'", "'/public'", "'/knives/bulk'",
-                   "json('PATCH'", "method: 'DELETE'", 'href="/blade-book/vibe.css?v=20260903"', 'href="/blade-book/me/add/"',
+                   "json('PATCH'", "method: 'DELETE'", 'href="/blade-book/vibe.css?v=20260904"', 'href="/blade-book/me/add/"',
                    'id="q"', 'id="cards"', 'id="bulkbar"', 'id="tpl"', 'class="bb-display"',
                    "location.href = '/blade-book/'", 'prompt(', 'FIELDS = [', 'sale_status', 'is_public',
                    'window.scrollTo(0, y)',  # re-render must not send the reader back to the top
@@ -341,7 +341,7 @@ def test_search_page_wiring():
     for needle in ('SEARCH THE REGISTERS', "'/blade-book/api/search", 'id="q"',
                    'id="results"', 'id="aggs"', 'id="filters"', 'id="owners"',
                    'early-access', 'bbmark', '/blade-book/mark.svg',
-                   'href="/blade-book/vibe.css?v=20260903"', 'debounce', '402'):
+                   'href="/blade-book/vibe.css?v=20260904"', 'debounce', '402'):
         assert needle in html, needle
     assert 'innerHTML' not in html and 'fonts.googleapis.com' not in html
     for rel in ('index.html', 'how/index.html'):
@@ -353,7 +353,7 @@ def test_wants_page_wiring():
     for needle in ('YOUR WANTS', "'/blade-book/api/wants", "'/auth/me'", 'id="wlist"',
                    'id="wform"', 'trade', 'sale', 'either', 'max_price', 'keyword',
                    'born_from', 'born_to', 'share_email_on_intro', "'/settings'",
-                   'bbmark', '/blade-book/mark.svg', 'href="/blade-book/vibe.css?v=20260903"',
+                   'bbmark', '/blade-book/mark.svg', 'href="/blade-book/vibe.css?v=20260904"',
                    'too many wants', 'href="/blade-book/me/"'):
         assert needle in html, needle
     assert 'innerHTML' not in html and 'fonts.googleapis.com' not in html
@@ -365,7 +365,7 @@ def test_board_page_wiring():
     for needle in ('THE BOARD', "'/blade-book/api/board'", "'/auth/me'", 'id="cards"', 'id="more"',
                    'id="tpl"', 'id="cdlg"', 'id="rdlg"', '/contact', '/report', 'contact seller', 'report',
                    'maxlength="500"', '429', '502', 'sign in to contact', 'bbmark', '/blade-book/mark.svg',
-                   'href="/blade-book/vibe.css?v=20260903"', 'seller_note', 'asking_price', 'listed_at',
+                   'href="/blade-book/vibe.css?v=20260904"', 'seller_note', 'asking_price', 'listed_at',
                    "'/blade-book/@' + k.handle + '/img/' + k.img_t"):
         assert needle in html, needle
     assert 'innerHTML' not in html and 'fonts.googleapis.com' not in html
@@ -386,7 +386,7 @@ def test_admin_page_wiring():
     html = open(os.path.join(ROOT, 'html', 'admin', 'index.html')).read()
     for needle in ('REPORTS', "'/blade-book/api/admin'", "'/auth/me'", 'is_admin', "'hide'", "'restore'", "'delete'",
                    "'/knives/' + knifeId + '/' + action", 'prompt(', 'confirm(', 'id="queue"', 'reporter_handle', 'owner_handle', 'hidden_at', 'bbmark',
-                   'href="/blade-book/vibe.css?v=20260903"', 'noindex'):
+                   'href="/blade-book/vibe.css?v=20260904"', 'noindex'):
         assert needle in html, needle
     assert 'innerHTML' not in html and 'fonts.googleapis.com' not in html
 
@@ -450,7 +450,7 @@ def test_about_page_wiring():
     for needle in ('ABOUT BLADE-BOOK', 'WHAT IT IS', "WHAT IT ISN'T", 'PRICE', 'THE RULES', 'WHO',
                    'certificate of authenticity', 'id="price"', 'id="contact"', "'/blade-book/api/billing'",
                    'href="/blade-book/terms/"', 'href="/blade-book/how/"', 'href="/blade-book/search/"',
-                   'property="og:title"', 'href="/blade-book/vibe.css?v=20260903"', 'bbmark', '/blade-book/mark.svg'):
+                   'property="og:title"', 'href="/blade-book/vibe.css?v=20260904"', 'bbmark', '/blade-book/mark.svg'):
         assert needle in html, needle
     assert 'innerHTML' not in html and 'fonts.googleapis.com' not in html
     assert '<!-- Copyright (c) 2026 Simon SGH' in html
@@ -464,7 +464,7 @@ def test_terms_page_wiring():
     for needle in ('TERMS', 'A record, not a certificate', 'No money', 'Your photos stay yours', 'Takedown',
                    'Delete is real', 'Your data', 'What we store', 'Early access', '24 hours',
                    'class="contact"', "'/blade-book/api/billing'", 'href="/blade-book/about/"',
-                   'property="og:title"', 'href="/blade-book/vibe.css?v=20260903"', 'bbmark'):
+                   'property="og:title"', 'href="/blade-book/vibe.css?v=20260904"', 'bbmark'):
         assert needle in html, needle
     assert 'innerHTML' not in html and 'fonts.googleapis.com' not in html
     assert '<!-- Copyright (c) 2026 Simon SGH' in html
@@ -482,7 +482,7 @@ def test_settings_page_wiring():
                    'id="signoutall"', 'id="export"', 'id="confirm"', 'id="delete"',
                    'one change, ever', 'real and complete', 'type your handle',
                    "location.href = '/blade-book/?deleted=1'", 'href="/blade-book/me/"',
-                   'href="/blade-book/vibe.css?v=20260903"', 'bbmark', '/blade-book/mark.svg', 'class="bb-display"'):
+                   'href="/blade-book/vibe.css?v=20260904"', 'bbmark', '/blade-book/mark.svg', 'class="bb-display"'):
         assert needle in html, needle
     assert 'innerHTML' not in html and 'fonts.googleapis.com' not in html
     assert '<!-- Copyright (c) 2026 Simon SGH' in html
@@ -523,7 +523,7 @@ def test_public_pages_share_the_footer_strip():
         foot = html[html.index('class="bb-foot"'):html.index('</footer>')]
         pos = [foot.index(n) for n in STRIP_LINKS]
         assert pos == sorted(pos), (rel, pos)                              # fixed order
-        assert '<script src="/blade-book/nav.js?v=20260903" defer></script>' in html[html.index('</footer>'):], rel
+        assert '<script src="/blade-book/nav.js?v=20260904" defer></script>' in html[html.index('</footer>'):], rel
         assert html.count('<footer') == 1, rel                              # the strip is the only footer
         assert 'innerHTML' not in html, rel
     assert 'the board — knives for sale' not in _read('html/search/index.html')
@@ -531,6 +531,26 @@ def test_public_pages_share_the_footer_strip():
     assert 'search the registers' not in _read('html/index.html')
     assert 'about</a> · <a' not in _read('html/index.html').split('class="bb-foot"')[0]   # the old about · terms cluster is gone
     assert "' knives'" in _read('html/search/index.html') and 'knifes' not in _read('html/search/index.html')
+
+
+def test_board_carries_a_top_strip_too():
+    """The board is the one public page whose footer sits many screens down
+    (a full-photo card per listing), so it gets the strip at the top as well:
+    same six links, same order, same sign-in hook — and no other public page
+    grows a second nav."""
+    html = _read('html/board/index.html')
+    assert html.count('class="bb-strip"') == 1
+    strip = html[html.index('class="bb-strip"'):html.index('</nav>')]
+    pos = [strip.index(n) for n in STRIP_LINKS]
+    assert pos == sorted(pos), pos
+    assert html.index('class="bb-strip"') < html.index('id="cards"') < html.index('class="bb-foot"')
+    assert html.count('class="bb-auth"') == 2          # nav.js flips both to "my register"
+    for rel in PUBLIC_PAGES:
+        if rel != 'board/index.html':
+            assert 'bb-strip' not in _read('html/' + rel), rel
+    css = _read('html/vibe.css')
+    for sel in ('.bb-strip{', '.bb-strip a{', '.bb-strip a.bb-auth{'):
+        assert sel in css, sel
 
 
 APP_PAGES = {'me/index.html': 'MY REGISTER', 'me/add/index.html': 'ADD A KNIFE', 'me/wants/index.html': 'YOUR WANTS',
@@ -548,14 +568,14 @@ def test_app_pages_share_the_header_row():
         assert title in head, (rel, title)
         pos = [head.index(n) for n in ROW_LINKS]
         assert pos == sorted(pos), (rel, pos)
-        assert '<script src="/blade-book/nav.js?v=20260903" defer></script>' in html, rel
+        assert '<script src="/blade-book/nav.js?v=20260904" defer></script>' in html, rel
         style = html[html.index('<style>'):html.index('</style>')]
         for local in ('\n  header{', '\n  nav{', '\n  nav a{', 'header h1{'):
             assert local not in style, (rel, local)                         # shared rules only
         assert 'innerHTML' not in html, rel
 
 
-ASSET_V = '20260903'   # bump on every vibe.css / nav.js change — Cloudflare caches both at the edge for 4 h
+ASSET_V = '20260904'   # bump on every vibe.css / nav.js change — Cloudflare caches both at the edge for 4 h
 
 
 def test_asset_urls_are_versioned_everywhere():
