@@ -74,12 +74,13 @@ def test_no_private_bytes_in_any_sent_intro_email(con):
 
 
 def test_owner_email_appears_only_in_designated_slots_when_sharing_on(con):
-    """Both users default share_email_on_intro=1: the owner's email may
+    """Both users opted in to share_email_on_intro: the owner's email may
     appear ONLY as the wanter message's reply_to, and as the to/reply_to of
     the owner's own message — never in a subject/text/html body."""
     owner = _u(con, email='o@example.com', handle='o-guy')
     _mk_knife(con, owner['id'], sale_status='for_sale', asking_price=500)
     wanter = _u(con)
+    con.execute('UPDATE users SET share_email_on_intro = 1'); con.commit()   # sharing is opt-in since review H4
     db.create_want(con, wanter['id'], {'model': 'Sebenza', 'mode': 'sale'})
     m = FakeMailer()
     assert match.run(con, m) == 2

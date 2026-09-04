@@ -38,6 +38,7 @@ def test_board_list_empty(client):
 def test_contact_sends_both_sides_and_records_claim(client, mailer, con):
     s, k = _listing(con)
     buyer = signed_in(client, mailer, email='buyer@example.com')
+    con.execute('UPDATE users SET share_email_on_intro = 1'); con.commit()   # sharing is opt-in since review H4
     mailer.sent.clear()
     r = client.post(f"{B}/{k['id']}/contact", json={'message': 'Would you take 450?'})
     assert r.status_code == 200 and r.get_json() == {'ok': True}
@@ -47,7 +48,7 @@ def test_contact_sends_both_sides_and_records_claim(client, mailer, con):
     assert k['tag'] in to_seller['subject'] and 'Would you take 450?' in to_seller['text']
     assert f"@{buyer['handle']}" in to_seller['text'] and '/@s-guy/' in to_seller['text']
     assert 'Would you take 450?' in to_buyer['text'] and '@s-guy' in to_buyer['subject']
-    assert to_seller['reply_to'] == 'buyer@example.com' and to_buyer['reply_to'] == 's@example.com'   # both share by default
+    assert to_seller['reply_to'] == 'buyer@example.com' and to_buyer['reply_to'] == 's@example.com'   # both opted in above
     rows = [dict(r) for r in con.execute("SELECT * FROM intros WHERE kind = 'board'")]
     assert len(rows) == 1 and rows[0]['want_id'] is None and rows[0]['message'] == 'Would you take 450?'
     assert rows[0]['from_user'] == buyer['id'] and rows[0]['to_user'] == s['id'] and rows[0]['sent_at']

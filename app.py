@@ -11,7 +11,7 @@ import subprocess
 from datetime import timedelta
 from logging.handlers import RotatingFileHandler
 
-from flask import Blueprint, Flask, current_app, jsonify
+from flask import Blueprint, Flask, current_app, jsonify, request
 
 from bb import config, db, paths
 
@@ -71,6 +71,45 @@ def healthz():
             'disk_free_pct': int(usage.free * 100 / usage.total),
             'version': current_app.config['VERSION']}
     return jsonify(body), (200 if ok_db else 503)
+
+
+_MUTATING = frozenset({'POST', 'PUT', 'PATCH', 'DELETE'})
+
+
+def _origin_of(url):
+    from urllib.parse import urlsplit
+    u = urlsplit(url)
+    return f'{u.scheme}://{u.netloc}'.lower()
+
+
+@api.before_app_request
+def _same_origin_only():
+    """CSRF backstop (review M1). SameSite=Lax stops cross-SITE posts but not
+    same-site ones (another host under the same registrable domain) and not a
+    same-origin script. A browser sends `Origin` on every POST/PUT/PATCH/DELETE
+    it makes, so a mutating API call whose Origin is not ours is refused;
+    `Sec-Fetch-Site` is checked the same way when present. Requests carrying
+    neither header are non-browser clients (curl, tests) and CSRF does not
+    apply to them. The OIDC callbacks are cross-site by design (Apple form_post)
+    and carry their own state check."""
+    if request.method not in _MUTATING or not request.path.startswith(paths.API_PREFIX):
+        return None
+    if request.path.startswith(paths.API_PREFIX + '/auth/') and request.path.endswith('/callback'):
+        return None
+    from bb import auth as auth_mod
+    # behind Apache the WSGI scheme is plain http, so build the request-host
+    # origin from BASE_URL's scheme (alias + apex both work across the switch)
+    base = _origin_of(auth_mod.base_url())
+    ours = {base, f"{base.split('://', 1)[0]}://{request.host}".lower()}   # same scheme as BASE_URL, any of our hosts
+    origin = request.headers.get('Origin')
+    if origin is not None and origin.strip().lower() not in ours:
+        log.warning('cross-origin %s %s refused: origin=%r', request.method, request.path, origin[:100])
+        return jsonify({'error': 'cross-origin request refused'}), 403
+    site = request.headers.get('Sec-Fetch-Site')
+    if site is not None and site.strip().lower() not in ('same-origin', 'none'):
+        log.warning('cross-site %s %s refused: sec-fetch-site=%r', request.method, request.path, site[:40])
+        return jsonify({'error': 'cross-origin request refused'}), 403
+    return None
 
 
 @api.app_errorhandler(404)

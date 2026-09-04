@@ -74,7 +74,7 @@ def test_v5_migration_repairs_old_wants_intros_shape(env):
     intro_cols = {r[1] for r in con.execute('PRAGMA table_info(intros)')}
     assert 'created' in intro_cols
     wanter = _u(con)
-    w = db.create_want(con, wanter['id'], {'born_from': 2005})
+    w = db.create_want(con, wanter['id'], {'born_from': 2005, 'born_to': 2010})
     assert w['born_from'] == 2005 and isinstance(w['born_from'], int)
 
     # (b) a full matching pass runs clean end to end (this is exactly what
@@ -177,13 +177,13 @@ def _build_v7_db():
 def test_v7_to_v8_adds_featured_knife_id(env):
     _build_v7_db()
     con = db.connect()
-    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION == 9
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION == 10
     ucols = {r[1] for r in con.execute('PRAGMA table_info(users)')}
     assert 'featured_knife_id' in ucols
     assert con.execute('SELECT featured_knife_id FROM users WHERE id = 1').fetchone()[0] is None
     con.close()
     con = db.connect()                                   # idempotent second open
-    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == 9
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION
 
 
 # Verbatim `users` at schema v8 (v7 + featured_knife_id) — before plan 11's
@@ -210,11 +210,11 @@ def _build_v8_db():
 def test_v8_to_v9_adds_handle_changed_at(env):
     _build_v8_db()
     con = db.connect()
-    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION == 9
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION == 10
     assert 'handle_changed_at' in {r[1] for r in con.execute('PRAGMA table_info(users)')}
     assert con.execute('SELECT handle_changed_at FROM users WHERE id = 1').fetchone()[0] is None
     con.close()
     con = db.connect()                                   # idempotent second open
-    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == 9
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION
     con.close()
     con.close()

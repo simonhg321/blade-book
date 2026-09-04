@@ -15,9 +15,11 @@ def _target(con):
 
 
 def _reporter_with_knife(client, mailer, con, email):
-    """Sign a reporter in and give them a live knife so their report COUNTS."""
+    """Sign a reporter in as a board-eligible collector (verified, a knife live
+    for the board age) so their report COUNTS — review H5."""
     u = signed_in(client, mailer, email=email)
-    _mk_knife(con, u['id'])
+    con.execute('UPDATE users SET verified_at = ? WHERE id = ?', (db.now(), u['id'])); con.commit()
+    _old_knife(con, u['id'])
     return u
 
 
@@ -40,7 +42,7 @@ def test_report_validation(client, mailer, con):
 
 def test_report_own_knife_is_400(client, mailer, con):
     me = signed_in(client, mailer, email='own@example.com')
-    k = _mk_knife(con, me['id'])
+    k = _mk_knife(con, me['id'], sale_status='for_sale', asking_price=100)
     r = client.post(f"{B}/{k['id']}/report", json={'reason': 'testing'})
     assert r.status_code == 400 and 'your own' in r.get_json()['error']
 
@@ -95,7 +97,7 @@ def test_three_counting_reports_auto_hide_and_republish(client, mailer, con, mon
 
 def test_reporter_open_report_cap(client, mailer, con):
     s = _seller(con); _old_knife(con, s['id'])
-    ks = [_mk_knife(con, s['id']) for _ in range(db.MAX_OPEN_REPORTS_PER_REPORTER + 1)]
+    ks = [_mk_knife(con, s['id'], sale_status='for_sale', asking_price=100) for _ in range(db.MAX_OPEN_REPORTS_PER_REPORTER + 1)]
     signed_in(client, mailer, email='spam@example.com')
     for k in ks[:-1]:
         assert client.post(f"{B}/{k['id']}/report", json={'reason': 'meh meh'}).status_code == 200

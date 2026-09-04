@@ -45,6 +45,7 @@ def test_board_json_has_no_private_bytes(client, con):
 def test_contact_emails_have_no_private_bytes(client, mailer, con):
     p = _eligible_poisoned(con)
     signed_in(client, mailer, email='buyer@example.com')
+    con.execute('UPDATE users SET share_email_on_intro = 1'); con.commit()   # sharing is opt-in since review H4
     mailer.sent.clear()
     assert client.post(f"{B}/{p['knife_id']}/contact", json={'message': 'interested'}).status_code == 200
     assert len(mailer.sent) == 2
@@ -60,7 +61,7 @@ def test_contact_emails_have_no_private_bytes(client, mailer, con):
         for field in ('subject', 'text', 'html'):
             val = str(msg.get(field) or '')
             assert EMAIL_SENTINEL not in val and 'buyer@example.com' not in val, (field, msg)
-    assert to_buyer['reply_to'] == EMAIL_SENTINEL            # both share by default → designated slot only
+    assert to_buyer['reply_to'] == EMAIL_SENTINEL            # both opted in → designated slot only
     assert to_owner['reply_to'] == 'buyer@example.com'
 
 

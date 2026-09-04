@@ -48,7 +48,9 @@ def test_settings_change_schedules_publish(client, mailer, monkeypatch):
 def test_share_email_on_intro_roundtrip(client, mailer):
     signed_in(client, mailer)
     r = client.get(S)
-    assert r.get_json()['share_email_on_intro'] == 1
+    assert r.get_json()['share_email_on_intro'] == 0          # opt-in since review H4
+    r = client.patch(S, json={'share_email_on_intro': True})
+    assert r.status_code == 200 and r.get_json()['share_email_on_intro'] == 1
     r = client.patch(S, json={'share_email_on_intro': False})
     assert r.status_code == 200 and r.get_json()['share_email_on_intro'] == 0
     r = client.get(S)

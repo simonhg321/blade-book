@@ -341,9 +341,12 @@ def decode_knife(knife_id):
         cap = PAID_DECODES_PER_DAY if g.user.get('sub_status') == 'active' else FREE_DECODES_PER_DAY
         if db.decodes_today(con, owner) >= cap:
             return jsonify({'error': f'{cap} decodes today already — try again tomorrow'}), 429
+        if db.decodes_last_minute(con, owner) >= db.DECODES_PER_MINUTE:
+            return jsonify({'error': 'slow down — a few decodes a minute is plenty'}), 429
         jpegs = decode.images_for(store, k)
         if not jpegs:
             return jsonify({'error': 'none of the photos are decodable — re-shoot as JPEG/HEIC'}), 400
+        db.record_decode_call(con, owner, knife_id)   # counted before the call: failures are billed too
         note = k.get('notes_private') or ''
     finally:
         con.close()

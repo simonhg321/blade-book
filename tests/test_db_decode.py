@@ -84,14 +84,16 @@ def test_decodes_today_counts_only_today_and_only_decoded(env):
     u = _user(con)
     k = db.create_draft_knife(con, u['id'])
     assert db.decodes_today(con, u['id']) == 0
-    db.add_event(con, u['id'], k['id'], 'decoded', detail='x')
-    db.add_event(con, u['id'], k['id'], 'photographed')
+    db.record_decode_call(con, u['id'], k['id'])
+    db.add_event(con, u['id'], k['id'], 'decoded', detail='x')      # events no longer feed the cap
     assert db.decodes_today(con, u['id']) == 1
     yesterday = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=1)).isoformat()
-    con.execute("INSERT INTO events (knife_id, owner_id, date, type) VALUES (?, ?, ?, 'decoded')",
-                (k['id'], u['id'], yesterday))
+    con.execute('INSERT INTO decode_calls (owner_id, knife_id, ts) VALUES (?, ?, ?)',
+                (u['id'], k['id'], yesterday))
     con.commit()
     assert db.decodes_today(con, u['id']) == 1
+    db.delete_knife(con, u['id'], k['id'])
+    assert db.decodes_today(con, u['id']) == 1                       # review H1: deleting the knife is no refund
     other = _user(con, 'b@example.com')
     assert db.decodes_today(con, other['id']) == 0
 

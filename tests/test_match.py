@@ -68,6 +68,7 @@ def test_run_sends_both_sides_once(con):
     wanter = _u(con)
     owner = _u(con, email='o@example.com', handle='o-guy')
     k = _sale_knife(con, owner['id'])
+    con.execute('UPDATE users SET share_email_on_intro = 1'); con.commit()   # sharing is opt-in since review H4
     db.create_want(con, wanter['id'], {'model': 'Sebenza', 'mode': 'sale'})
     m = FakeMailer()
     assert match.run(con, m) == 2
@@ -78,7 +79,7 @@ def test_run_sends_both_sides_once(con):
     assert f"/blade-book/@o-guy/{k['tag']}/" in wanter_mail['text']
     owner_mail = next(x for x in m.sent if x['to'] == 'o@example.com')
     assert k['tag'] in owner_mail['text'] and '@want-guy' in owner_mail['text']
-    # both default share_email_on_intro=1 -> reply_to carries the other party
+    # both opted in above -> reply_to carries the other party
     assert wanter_mail['reply_to'] == 'o@example.com'
     assert owner_mail['reply_to'] == 'w@example.com'
     assert match.run(con, m) == 0          # never re-fires
@@ -142,7 +143,7 @@ def test_overlapping_wants_collapse_to_one_claim_per_knife(con):
     owner = _u(con, email='o@example.com', handle='o-guy')
     _sale_knife(con, owner['id'])
     db.create_want(con, wanter['id'], {'model': 'Sebenza', 'mode': 'sale'})
-    db.create_want(con, wanter['id'], {'maker': 'crk', 'mode': 'either'})  # broader, also matches
+    db.create_want(con, wanter['id'], {'size': 'Large', 'mode': 'either'})  # broader, also matches
     m = FakeMailer()
     assert match.run(con, m) == 2                   # not 4
     assert con.execute("SELECT COUNT(*) FROM intros WHERE kind='match'").fetchone()[0] == 1
@@ -171,7 +172,7 @@ def test_send_cap_drains_over_multiple_runs(con, monkeypatch):
     later runs."""
     monkeypatch.setattr(match, 'MAX_EMAILS_PER_RUN', 4)
     wanter = _u(con)
-    db.create_want(con, wanter['id'], {'maker': 'crk', 'mode': 'either'})
+    db.create_want(con, wanter['id'], {'size': 'Large', 'mode': 'either'})
     for i in range(4):
         owner = _u(con, email=f'o{i}@example.com', handle=f'o-guy-{i}')
         _sale_knife(con, owner['id'])
