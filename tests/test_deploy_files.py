@@ -279,6 +279,21 @@ def test_how_page_wiring():
         assert '/blade-book/how/' in open(os.path.join(ROOT, 'html', rel)).read(), rel
 
 
+def test_blank_card_page_wiring():
+    """Simon 2026-09-03: the printable blank birth card (from the OSS bladebook
+    repo) lives under the product too, and is linked where a person needs it."""
+    html = open(os.path.join(ROOT, 'html', 'card', 'index.html')).read()
+    for needle in ('BIRTH CARD', 'not a certificate of authenticity', 'id="print"', 'window.print()',
+                   '@media print', 'class="bb-foot"', 'href="/blade-book/vibe.css?v=20260903"',
+                   'src="/blade-book/nav.js?v=20260903"', 'href="/blade-book/how/"',
+                   'Damascus smith', 'Notes / story'):
+        assert needle in html, needle
+    assert 'innerHTML' not in html and 'onclick=' not in html and 'fonts.googleapis.com' not in html
+    for rel in ('how/index.html', 'me/add/index.html', 'about/index.html'):
+        page = open(os.path.join(ROOT, 'html', rel)).read()
+        assert 'href="/blade-book/card/"' in page, rel
+
+
 def test_landing_links_the_register():
     html = open(os.path.join(ROOT, 'html', 'index.html')).read()
     for needle in ('href="/blade-book/vibe.css?v=20260903"', 'href="/blade-book/me/"', "/api/knives/?status=live'", 'id="regcount"'):
