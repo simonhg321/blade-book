@@ -58,6 +58,21 @@ Smoke test: request a magic link from `https://blade-book.com/`, click it,
 land signed in on blade-book.com; open `/@simon-collector/K75/` and check the
 `og:url`; `/api/billing` answers at `/api/` and `/blade-book/api/` alike.
 
+## 3b. Lock the origin to Cloudflare (sudo, Simon — only once the switch is confirmed)
+
+Security review 2026-09-04 M6: today the box answers 80/443 to anyone, so
+Cloudflare's WAF and rate rules can be walked around. Once BOTH hosts are
+proxied through Cloudflare and working:
+
+```
+! sudo bash /home/shg/blade-book/scripts/cf_only_firewall.sh          # prints the plan, changes nothing
+! sudo bash /home/shg/blade-book/scripts/cf_only_firewall.sh --apply  # allows SSH first, then CF ranges on 80/443, then denies the rest
+```
+
+Undo: `sudo ufw delete deny 80/tcp && sudo ufw delete deny 443/tcp`.
+Certbot renewals keep working (HTTP-01 arrives through the proxy). Re-run
+the script quarterly — Cloudflare's ranges change rarely, but they change.
+
 ## 4. Later
 
 - `.net`: add `ServerAlias blade-book.net www.blade-book.net` to the vhost and
@@ -66,5 +81,6 @@ land signed in on blade-book.com; open `/@simon-collector/K75/` and check the
 - Consider a 301 from `billboard.instockornot.club/blade-book/` to
   `blade-book.com/` once search engines have moved (keep the alias for the
   API either way — the pages call `/blade-book/api/`).
-- The `.com` vhost CSP still allowlists `fonts.googleapis.com`/`fonts.gstatic.com`
-  from before fonts were self-hosted — tighten to `'self'` when convenient.
+- Google/Apple sign-in, when wired: register BOTH callback URLs per provider
+  (`https://blade-book.com/blade-book/api/auth/<name>/callback` and the alias
+  host's), or the alias-era users lose OIDC.

@@ -33,12 +33,27 @@ def test_apache_confs_cache_control():
     # bundles regenerate ~30 s after a save; stale-cached HTML looks like a bug
     for conf in ('deploy/apache-blade-book.conf', 'deploy/apache-blade-book.com.conf'):
         s = _read(conf)
-        assert 'Cache-Control "no-cache"' in s, conf
+        assert re.search(r'Cache-Control "no-cache(, no-store, must-revalidate)?"', s), conf
         assert 'max-age=300' in s, conf
     for f in ('deploy/apache-blade-book.conf', 'deploy/apache-blade-book.com.conf'):
         conf = _read(f)
         assert r'\.tmp(/|$)' in conf, f     # stranded build tmp dirs never served
         assert 'Require all denied' in conf, f
+
+
+def test_dotcom_vhost_has_header_parity_with_the_alias():
+    """Security review 2026-09-04 M4/L18: the .com vhost goes live on domain
+    night with the same hardening the alias already sends, no Google Fonts
+    hosts (fonts are self-hosted), no-store HTML, and www → apex."""
+    s = _read('deploy/apache-blade-book.com.conf')
+    for h in ('Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"',
+              'X-Content-Type-Options "nosniff"', 'X-Frame-Options "DENY"',
+              'Permissions-Policy "camera=(), microphone=(), geolocation=()"', 'X-XSS-Protection "0"',
+              'Referrer-Policy "strict-origin-when-cross-origin"', "frame-ancestors 'none'",
+              'no-cache, no-store, must-revalidate', 'RewriteCond %{HTTP_HOST} ^www\\.', 'https://blade-book.com%{REQUEST_URI}'):
+        assert h in s, h
+    assert 'fonts.googleapis.com' not in s and 'fonts.gstatic.com' not in s
+    assert '127.0.0.1:5003' not in s
 
 
 def test_install_and_backup_scripts_are_idempotent_shell():
