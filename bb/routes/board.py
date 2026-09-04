@@ -125,13 +125,15 @@ def report_knife(knife_id):
         # the board is the only place a stranger can see them (review H5/L7)
         if k is None or k['status'] != 'live' or not k['is_public'] or k['sale_status'] != 'for_sale':
             return jsonify({'error': 'not found'}), 404
+        if k['owner_id'] == g.user['id']:
+            return jsonify({'error': "that's your own knife"}), 400
+        if not k['hidden_at'] and db.board_knife(con, knife_id) is None:
+            return jsonify({'error': 'not found'}), 404          # for sale but never on the board (owner ineligible)
         owner = db.get_user(con, k['owner_id'])
         # private or key-gated owners never appear on the board — a reporter
         # could not legitimately see such a knife, so treat it as not found.
         if owner.get('profile_private') or (owner.get('public_key') or '').strip():
             return jsonify({'error': 'not found'}), 404
-        if k['owner_id'] == g.user['id']:
-            return jsonify({'error': "that's your own knife"}), 400
         try:
             rid = db.create_report(con, knife_id, k['owner_id'], g.user['id'], reason)
         except ValueError as e:

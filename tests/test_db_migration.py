@@ -74,7 +74,7 @@ def test_v5_migration_repairs_old_wants_intros_shape(env):
     intro_cols = {r[1] for r in con.execute('PRAGMA table_info(intros)')}
     assert 'created' in intro_cols
     wanter = _u(con)
-    w = db.create_want(con, wanter['id'], {'born_from': 2005})
+    w = db.create_want(con, wanter['id'], {'born_from': 2005, 'born_to': 2010})
     assert w['born_from'] == 2005 and isinstance(w['born_from'], int)
 
     # (b) a full matching pass runs clean end to end (this is exactly what

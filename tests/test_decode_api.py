@@ -66,8 +66,9 @@ def test_decode_unauth_is_401(client):
     assert client.post(f'{K}/1/decode').status_code == 401
 
 
-def test_decode_daily_cap_free_vs_paid(client, mailer, decoder):
+def test_decode_daily_cap_free_vs_paid(client, mailer, decoder, monkeypatch):
     from bb.routes import knives as kr
+    monkeypatch.setattr(db, 'DECODES_PER_MINUTE', 10 ** 6)             # daily cap under test, not the burst limiter
     kid = _draft_with_photo(client, mailer)
     con = db.connect()
     for _ in range(kr.FREE_DECODES_PER_DAY):

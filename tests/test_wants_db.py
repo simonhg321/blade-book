@@ -30,7 +30,7 @@ def test_want_validation(con):
         db.create_want(con, u['id'], {'born_from': 'x'})
     with pytest.raises(ValueError):
         db.create_want(con, u['id'], {'model': ['x']})
-    w = db.create_want(con, u['id'], {'born_from': 1990.7})
+    w = db.create_want(con, u['id'], {'born_from': 1990.7, 'born_to': 2000})
     assert w['born_from'] == 1990
 
 

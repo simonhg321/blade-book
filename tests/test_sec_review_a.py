@@ -18,7 +18,8 @@ W = '/blade-book/api/wants'
 
 # --- H1: decode quota counts ATTEMPTS and survives knife deletion ---------------
 
-def test_decode_cap_survives_knife_deletion(client, mailer, decoder):
+def test_decode_cap_survives_knife_deletion(client, mailer, decoder, monkeypatch):
+    monkeypatch.setattr(db, 'DECODES_PER_MINUTE', 10 ** 6)          # the daily cap is what's under test
     kid = _draft_with_photo(client, mailer)
     for _ in range(kr.FREE_DECODES_PER_DAY):
         assert client.post(f'{K}/{kid}/decode').status_code == 200
@@ -29,7 +30,8 @@ def test_decode_cap_survives_knife_deletion(client, mailer, decoder):
     assert len(decoder.calls) == kr.FREE_DECODES_PER_DAY
 
 
-def test_failed_decodes_count_toward_cap(client, mailer, app):
+def test_failed_decodes_count_toward_cap(client, mailer, app, monkeypatch):
+    monkeypatch.setattr(db, 'DECODES_PER_MINUTE', 10 ** 6)
     app.config['DECODER'] = decode.FakeDecoder(decode.DecodeError('model refused'))
     kid = _draft_with_photo(client, mailer)
     for _ in range(kr.FREE_DECODES_PER_DAY):
@@ -129,7 +131,7 @@ def test_foreign_origin_post_is_403(client, mailer):
     assert client.post(K + '/', headers={'Origin': 'http://localhost', 'Sec-Fetch-Site': 'same-origin'}).status_code == 201
     # the alias host keeps working after BASE_URL moves to the apex (and vice versa)
     # (401 not 403: the host-bound test cookie stays home, but the origin gate let it through)
-    assert client.post(K + '/', headers={'Origin': 'https://alias.example', 'Host': 'alias.example'}).status_code == 401
+    assert client.post(K + '/', headers={'Origin': 'http://alias.example', 'Host': 'alias.example'}).status_code == 401
     from bb import auth
     assert client.post(K + '/', headers={'Origin': auth.base_url()}).status_code == 409   # BASE_URL itself: past the gate, into the one-draft rule
     assert client.get(K + '/', headers={'Origin': 'https://instockornot.club'}).status_code == 200   # reads are fine
@@ -155,3 +157,58 @@ def test_want_ints_and_text_are_bounded(client, mailer):
     assert client.post(W + '/', json={'model': 'Sebenza', 'max_price': -1}).status_code == 400
     assert client.post(W + '/', json={'keyword': 'x' * 201}).status_code == 400
     assert client.post(W + '/', json={'model': 'Sebenza', 'born_from': 1990, 'born_to': 2030}).status_code == 200
+
+
+# --- second-opinion review of batch A: the gaps it found ------------------------
+
+def test_new_user_on_live_shaped_db_does_not_share_email(env):
+    """The live users table was created with DEFAULT 1; CREATE TABLE IF NOT
+    EXISTS never changes that, so create_user must set the column itself."""
+    from tests.test_db_migration import _build_v8_db
+    _build_v8_db()
+    con = db.connect()
+    uid = db.create_user(con, 'new@example.com', 'new-guy')
+    assert db.get_user(con, uid)['share_email_on_intro'] == 0
+    con.close()
+
+
+def test_migration_v10_runs_once_even_if_the_stamp_flip_flops(env):
+    con = db.connect()
+    uid = db.create_user(con, 'me@example.com', 'me-guy')
+    con.execute('UPDATE schema_version SET version = 9'); con.commit(); con.close()
+    con = db.connect()                                                   # migrates 9→10 once
+    con.execute('UPDATE users SET share_email_on_intro = 1 WHERE id = ?', (uid,))   # user opts in
+    con.execute('UPDATE schema_version SET version = 9'); con.commit(); con.close()  # an old worker re-stamps 9
+    con = db.connect()                                                   # new code sees 9 again
+    assert db.get_user(con, uid)['share_email_on_intro'] == 1            # the opt-in survives
+    con.close()
+
+
+def test_want_criteria_must_be_real(client, mailer):
+    signed_in(client, mailer)
+    assert client.post(W + '/', json={'model': '​'}).status_code == 400          # zero-width space
+    assert client.post(W + '/', json={'born_from': 1000}).status_code == 400           # half a range
+    assert client.post(W + '/', json={'born_from': 1000, 'born_to': 3000}).status_code == 400   # everything ever made
+    assert client.post(W + '/', json={'born_from': 2000, 'born_to': 2010}).status_code == 200
+
+
+def test_decodes_are_rate_limited_per_minute(client, mailer, decoder):
+    kid = _draft_with_photo(client, mailer)
+    for _ in range(db.DECODES_PER_MINUTE):
+        assert client.post(f'{K}/{kid}/decode').status_code == 200
+    r = client.post(f'{K}/{kid}/decode')
+    assert r.status_code == 429 and 'slow down' in r.get_json()['error']
+
+
+def test_report_needs_a_knife_that_is_actually_on_the_board(client, mailer, con):
+    owner = _mk_user(con, email='unv@example.com', handle='unv-guy')     # unverified: never board-eligible
+    k = _mk_knife(con, owner['id'], sale_status='for_sale', asking_price=100)
+    signed_in(client, mailer, email='r@example.com')
+    assert client.post(f"{B}/{k['id']}/report", json={'reason': 'not even listed'}).status_code == 404
+
+
+def test_origin_gate_uses_base_url_scheme(client, mailer, monkeypatch):
+    signed_in(client, mailer)
+    monkeypatch.setattr('bb.auth.base_url', lambda: 'https://secure.example')
+    assert client.post(K + '/', headers={'Origin': 'http://localhost'}).status_code == 403     # plain scheme refused
+    assert client.post(K + '/', headers={'Origin': 'https://localhost'}).status_code != 403

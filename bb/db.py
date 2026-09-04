@@ -7,6 +7,7 @@ later plans has a single source of truth.
 import hashlib
 import json
 import os
+import re
 import secrets
 import sqlite3
 from datetime import datetime, timedelta, timezone
@@ -26,6 +27,8 @@ WANT_FIELDS = ('maker', 'model', 'generation', 'size', 'blade_shape', 'blade_ste
 MAX_ACTIVE_WANTS = 20
 WANT_CRITERIA = ('model', 'generation', 'size', 'blade_shape', 'blade_steel', 'keyword', 'born_from', 'born_to')
 WANT_TEXT_MAX = 200
+WANT_MAX_YEAR_SPAN = 25          # born_from..born_to alone counts only when it is a real window
+DECODES_PER_MINUTE = 3
 MAX_BOARD_OFFSET = 10_000
 HIDDEN_BY = ('reports', 'admin')
 
@@ -273,7 +276,13 @@ MIGRATIONS = {
     8: ['ALTER TABLE users ADD COLUMN featured_knife_id INTEGER'],
     9: ['ALTER TABLE users ADD COLUMN handle_changed_at TEXT'],
     # security review 2026-09-04 H4: intro email sharing becomes opt-in for everyone
-    10: ['UPDATE users SET share_email_on_intro = 0'],
+    # Runs ONCE: old workers still on v9 re-stamp 9 on every connect until the
+    # restart, so without the mark this would re-run every few minutes and wipe
+    # any opt-in made in the window.
+    10: ['CREATE TABLE IF NOT EXISTS migration_marks (v INTEGER PRIMARY KEY)',
+         'UPDATE users SET share_email_on_intro = 0 '
+         'WHERE NOT EXISTS (SELECT 1 FROM migration_marks WHERE v = 10)',
+         'INSERT OR IGNORE INTO migration_marks (v) VALUES (10)'],
 }
 
 
@@ -320,8 +329,8 @@ def create_user(con, email, handle, display_name=None, auth_subjects=None, free_
     """free_old_used > 0 only for a re-created account whose email is tombstoned
     (plan 11): the free older-knife allowance is spent before it starts."""
     cur = con.execute(
-        'INSERT INTO users (email, handle, display_name, auth_subjects, created, free_old_used) '
-        'VALUES (?, ?, ?, ?, ?, ?)',
+        'INSERT INTO users (email, handle, display_name, auth_subjects, created, free_old_used, '
+        'share_email_on_intro) VALUES (?, ?, ?, ?, ?, ?, 0)',   # explicit: the LIVE table was born DEFAULT 1
         (email.strip().lower(), handle, display_name,
          json.dumps(auth_subjects or {}), now(), int(free_old_used)))
     con.commit()
@@ -729,8 +738,15 @@ def create_want(con, owner_id, fields):
             raise ValueError(f'{field} is longer than {WANT_TEXT_MAX} characters')
     # a want must say WHAT is wanted: maker/mode/price alone would match every
     # knife on the platform and mail the wanter every seller's address (review H4)
-    if not any(str(fields.get(c) or '').strip() for c in WANT_CRITERIA):
-        raise ValueError('say what you want — a model, size, steel, keyword or years')
+    def _real(c):
+        v = fields.get(c)
+        if c.startswith('born'):
+            return False                      # judged as a pair below
+        return bool(v) and re.search(r'\w', str(v)) is not None   # zero-width junk is not a criterion
+    bf, bt = fields.get('born_from'), fields.get('born_to')
+    year_span_ok = bf is not None and bt is not None and 0 <= int(bt) - int(bf) <= WANT_MAX_YEAR_SPAN
+    if not (any(_real(c) for c in WANT_CRITERIA) or year_span_ok):
+        raise ValueError('say what you want — a model, size, steel, keyword, or a span of years')
     count = con.execute('SELECT count(*) FROM wants WHERE owner_id = ? AND active = 1',
                         (owner_id,)).fetchone()[0]
     if count >= MAX_ACTIVE_WANTS:
@@ -990,6 +1006,12 @@ def decodes_today(con, owner_id):
     return con.execute(
         'SELECT count(*) FROM decode_calls WHERE owner_id = ? AND ts >= ?',
         (owner_id, start)).fetchone()[0]
+
+
+def decodes_last_minute(con, owner_id):
+    since = (datetime.now(timezone.utc) - timedelta(seconds=60)).isoformat()
+    return con.execute('SELECT count(*) FROM decode_calls WHERE owner_id = ? AND ts >= ?',
+                       (owner_id, since)).fetchone()[0]
 
 
 def record_decode_call(con, owner_id, knife_id):
