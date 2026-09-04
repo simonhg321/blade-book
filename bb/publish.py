@@ -42,10 +42,13 @@ def _fmt_born(d, precision):
     y = parts[0]
     if precision == 'year' or len(parts) == 1:
         return f'circa {y}'
-    m = _MONTHS[int(parts[1]) - 1]
-    if precision == 'month' or len(parts) == 2:
-        return f'{m} {y}'
-    return f'{m} {int(parts[2])}, {y}'
+    try:
+        m = _MONTHS[int(parts[1]) - 1]
+        if precision == 'month' or len(parts) == 2:
+            return f'{m} {y}'
+        return f'{m} {int(parts[2])}, {y}'
+    except (ValueError, IndexError):
+        return d          # never let one bad stored value 500 the board (review H2)
 
 
 def public_row(k, user):

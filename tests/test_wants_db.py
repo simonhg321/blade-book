@@ -64,7 +64,7 @@ def test_all_public_knives_exclusions(con):
     rows = db.all_public_knives(con)
     assert [r['owner_handle'] for r in rows] == ['ok-guy']
     assert rows[0]['owner_email'] == 'ok@example.com'
-    assert rows[0]['owner_share_email'] == 1
+    assert rows[0]['owner_share_email'] == 0            # opt-in default (review H4)
     assert 'ext' in rows[0] and 'photos' in rows[0]
 
 

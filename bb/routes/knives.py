@@ -344,6 +344,7 @@ def decode_knife(knife_id):
         jpegs = decode.images_for(store, k)
         if not jpegs:
             return jsonify({'error': 'none of the photos are decodable — re-shoot as JPEG/HEIC'}), 400
+        db.record_decode_call(con, owner, knife_id)   # counted before the call: failures are billed too
         note = k.get('notes_private') or ''
     finally:
         con.close()

@@ -32,7 +32,7 @@ def _int_arg(name, default):
 def list_board():
     try:
         limit = max(1, min(_int_arg('limit', DEFAULT_LIMIT), MAX_LIMIT))   # clamp, never 400
-        offset = _int_arg('offset', 0)
+        offset = min(_int_arg('offset', 0), db.MAX_BOARD_OFFSET)          # clamp: 10**23 was a sqlite 500
         if offset < 0:
             raise ValueError('offset must be 0 or more')
     except ValueError as e:
@@ -121,7 +121,9 @@ def report_knife(knife_id):
     con = db.connect()
     try:
         k = db.get_knife_any(con, knife_id)
-        if k is None or k['status'] != 'live' or not k['is_public']:
+        # only knives that are (or were, until hidden) ON the board are reportable —
+        # the board is the only place a stranger can see them (review H5/L7)
+        if k is None or k['status'] != 'live' or not k['is_public'] or k['sale_status'] != 'for_sale':
             return jsonify({'error': 'not found'}), 404
         owner = db.get_user(con, k['owner_id'])
         # private or key-gated owners never appear on the board — a reporter

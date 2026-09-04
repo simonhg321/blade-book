@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 
 from bb import paths
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 SALE_STATUSES = ('keeping', 'for_trade', 'for_sale', 'consigned', 'sold')
 KNIFE_STATUSES = ('draft', 'live')
@@ -24,6 +24,9 @@ WANT_MODES = ('trade', 'sale', 'either')
 WANT_FIELDS = ('maker', 'model', 'generation', 'size', 'blade_shape', 'blade_steel',
                'keyword', 'born_from', 'born_to', 'mode', 'max_price')
 MAX_ACTIVE_WANTS = 20
+WANT_CRITERIA = ('model', 'generation', 'size', 'blade_shape', 'blade_steel', 'keyword', 'born_from', 'born_to')
+WANT_TEXT_MAX = 200
+MAX_BOARD_OFFSET = 10_000
 HIDDEN_BY = ('reports', 'admin')
 
 # never leaves the private register — see spec §5 invariant
@@ -92,7 +95,7 @@ CREATE TABLE IF NOT EXISTS users (
   sub_source TEXT NOT NULL DEFAULT 'manual',
   stripe_customer_id TEXT,
   free_old_used INTEGER NOT NULL DEFAULT 0,
-  share_email_on_intro INTEGER NOT NULL DEFAULT 1,
+  share_email_on_intro INTEGER NOT NULL DEFAULT 0,
   hide_born_day INTEGER NOT NULL DEFAULT 0,
   profile_private INTEGER NOT NULL DEFAULT 0,
   public_key TEXT,
@@ -102,6 +105,16 @@ CREATE TABLE IF NOT EXISTS users (
   featured_knife_id INTEGER,
   handle_changed_at TEXT
 );
+
+-- one row per decode ATTEMPT (billed whether or not the model answered);
+-- deliberately no FK to knives, so deleting the knife does not refund the day
+CREATE TABLE IF NOT EXISTS decode_calls (
+  id INTEGER PRIMARY KEY,
+  owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  knife_id INTEGER,
+  ts TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_decode_calls_owner_ts ON decode_calls(owner_id, ts);
 
 CREATE TABLE IF NOT EXISTS knives (
   id INTEGER PRIMARY KEY,
@@ -259,6 +272,8 @@ MIGRATIONS = {
     # hero-pin: pin one live knife with a photo as the register's hero image.
     8: ['ALTER TABLE users ADD COLUMN featured_knife_id INTEGER'],
     9: ['ALTER TABLE users ADD COLUMN handle_changed_at TEXT'],
+    # security review 2026-09-04 H4: intro email sharing becomes opt-in for everyone
+    10: ['UPDATE users SET share_email_on_intro = 0'],
 }
 
 
@@ -702,9 +717,20 @@ def create_want(con, owner_id, fields):
     for field in ('born_from', 'born_to', 'max_price'):
         if field in fields and fields[field] is not None:
             try:
-                int(fields[field])
+                n = int(fields[field])
             except (ValueError, TypeError):
                 raise ValueError('bad field')
+            lo, hi = (1000, 3000) if field.startswith('born') else (0, 10_000_000)
+            if isinstance(fields[field], bool) or not lo <= n <= hi:
+                raise ValueError(f'{field} out of range')
+    for field in text_fields:
+        v = fields.get(field)
+        if isinstance(v, str) and len(v) > WANT_TEXT_MAX:
+            raise ValueError(f'{field} is longer than {WANT_TEXT_MAX} characters')
+    # a want must say WHAT is wanted: maker/mode/price alone would match every
+    # knife on the platform and mail the wanter every seller's address (review H4)
+    if not any(str(fields.get(c) or '').strip() for c in WANT_CRITERIA):
+        raise ValueError('say what you want — a model, size, steel, keyword or years')
     count = con.execute('SELECT count(*) FROM wants WHERE owner_id = ? AND active = 1',
                         (owner_id,)).fetchone()[0]
     if count >= MAX_ACTIVE_WANTS:
@@ -962,8 +988,16 @@ def decodes_today(con, owner_id):
     start = datetime.now(timezone.utc).replace(
         hour=0, minute=0, second=0, microsecond=0).isoformat()   # same '+00:00' form as now()
     return con.execute(
-        "SELECT count(*) FROM events WHERE owner_id = ? AND type = 'decoded' AND date >= ?",
+        'SELECT count(*) FROM decode_calls WHERE owner_id = ? AND ts >= ?',
         (owner_id, start)).fetchone()[0]
+
+
+def record_decode_call(con, owner_id, knife_id):
+    """Count a decode ATTEMPT against today's cap before the model is called.
+    Failures cost money too, and the row outlives the knife (review H1)."""
+    con.execute('INSERT INTO decode_calls (owner_id, knife_id, ts) VALUES (?, ?, ?)',
+                (owner_id, knife_id, now()))
+    con.commit()
 
 
 _DECODE_COLUMNS = ('model', 'variant', 'blade_steel', 'blade_shape', 'blade_length_in',
@@ -978,15 +1012,30 @@ def apply_decode(con, owner_id, knife_id, d):
     NULL; booleans become 0/1. Status is untouched — decode never publishes."""
     if get_knife(con, owner_id, knife_id) is None:
         return None
-    vals = {}
+    from bb import edit   # local: edit imports makers, never db
+    from bb.makers import core as maker_core
+    vals, dropped = {}, []
     for c in _DECODE_COLUMNS:
         v = d.core.get(c)
         if c.startswith('has_'):
             v = 1 if v else 0
         elif v == '':
             v = None
+        elif v is not None and c in maker_core.CORE_PROPS:
+            # the model is schema-constrained but not calendar- or range-aware:
+            # a card that reads '2025-13-' must not reach the board (review H3)
+            try:
+                v = edit._core(c, maker_core.CORE_PROPS[c], v)
+            except edit.EditError as e:
+                dropped.append(f'{c} {v!r} dropped: {e}')
+                v = None
         vals[c] = v
+    if vals.get('born_on') is None:
+        vals['born_on_precision'] = None
+        vals['born_on_source'] = None
     note = d.reasoning.strip()
+    if dropped:
+        note += '\nDROPPED: ' + '; '.join(dropped)
     if d.flags:
         note += '\nFLAGS: ' + '; '.join(d.flags)
     sets = ', '.join(f'{c} = ?' for c in vals)
@@ -1171,13 +1220,16 @@ def create_report(con, knife_id, owner_id, reporter_id, reason):
 
 
 def counting_open_reports(con, knife_id):
-    """Open reports that count toward auto-hide: one per reporter who owns
-    at least one LIVE knife (ruling: skin in the game — three fresh
-    sock-puppet accounts must not be able to hide anyone)."""
+    """Open reports that count toward auto-hide: one per reporter who is
+    board-eligible themselves — verified email AND a knife live for
+    BOARD_MIN_KNIFE_AGE_DAYS (review H5: a free account with one fresh knife
+    is not skin in the game; three of them hid anyone)."""
     return con.execute(
-        'SELECT count(*) FROM reports r WHERE r.knife_id = ? AND r.resolved_at IS NULL '
-        "AND EXISTS (SELECT 1 FROM knives k WHERE k.owner_id = r.reporter_id AND k.status = 'live')",
-        (knife_id,)).fetchone()[0]
+        'SELECT count(*) FROM reports r JOIN users u ON u.id = r.reporter_id '
+        'WHERE r.knife_id = ? AND r.resolved_at IS NULL AND u.verified_at IS NOT NULL '
+        "AND EXISTS (SELECT 1 FROM knives k WHERE k.owner_id = r.reporter_id AND k.status = 'live' "
+        '            AND k.created <= ?)',
+        (knife_id, _board_cutoff())).fetchone()[0]
 
 
 def open_reports(con):

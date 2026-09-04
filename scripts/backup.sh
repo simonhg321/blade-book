@@ -3,6 +3,7 @@
 # file) → /home/backup, keep 14. Off-box: the Linode backup service covers the
 # box nightly (Simon, 2026-09-03) — no bucket copy. Restore: see RUNBOOK-move.md.
 set -euo pipefail
+umask 077   # the tarball holds the whole DB + every photo — owner-only from birth
 DATA=${BLADEBOOK_DATA_DIR:-/var/lib/blade-book}
 BK=${BLADEBOOK_BACKUP_DIR:-/home/backup}
 OUT=$BK/blade-book-$(date +%Y%m%d-%H%M%S).tgz

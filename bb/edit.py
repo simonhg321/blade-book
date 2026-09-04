@@ -73,6 +73,8 @@ def _core(key, prop, v):
     if key == 'born_on':
         if s and not _BORN.match(s):
             raise EditError('born_on must be YYYY, YYYY-MM or YYYY-MM-DD')
+        if s and core.born_date(s) is None:
+            raise EditError('born_on is not a real date')
         return s or None
     enum = _enum(prop)
     if enum is not None and s not in enum:

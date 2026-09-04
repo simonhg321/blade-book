@@ -71,7 +71,7 @@ def test_decode_daily_cap_free_vs_paid(client, mailer, decoder):
     kid = _draft_with_photo(client, mailer)
     con = db.connect()
     for _ in range(kr.FREE_DECODES_PER_DAY):
-        db.add_event(con, 1, kid, 'decoded')
+        db.record_decode_call(con, 1, kid)
     con.close()
     r = client.post(f'{K}/{kid}/decode')
     assert r.status_code == 429 and 'today' in r.get_json()['error']
@@ -88,7 +88,7 @@ def test_decode_failure_is_502_and_logged(client, mailer, app):
     line = json.loads(open(paths.ai_log()).read().splitlines()[-1])
     assert line['ok'] is False and 'refused' in line['error']
     assert isinstance(line['ms'], int) and line['ms'] >= 0             # failure ledger carries real timing
-    assert db.decodes_today(db.connect(), 1) == 0                      # failures don't count against the cap
+    assert db.decodes_today(db.connect(), 1) == 1                      # review H1: a failed call was still billed
 
 
 def test_decode_unknown_maker_is_400(client, mailer, decoder):
