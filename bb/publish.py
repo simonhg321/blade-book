@@ -252,7 +252,7 @@ def _foot():
             '<a href="/blade-book/board/">board</a> · <a href="/blade-book/how/">how</a> · '
             '<a href="/blade-book/about/">about</a> · <a href="/blade-book/terms/">terms</a> · '
             '<a class="bb-auth" href="/blade-book/me/">sign in</a></footer>\n'
-            '<script src="/blade-book/nav.js?v=20260903" defer></script>\n')
+            '<script src="/blade-book/nav.js?v=20260904" defer></script>\n')
 
 
 def _head(title, desc, og_image, noindex, extra_style=''):
@@ -269,7 +269,7 @@ def _head(title, desc, og_image, noindex, extra_style=''):
             f'{og_img}<meta property="og:type" content="website">\n'
             f'<link rel="icon" type="image/svg+xml" href="/blade-book/mark.svg">\n'
             f'<link rel="apple-touch-icon" href="/blade-book/apple-touch-icon.png">\n'
-            f'<link rel="stylesheet" href="/blade-book/vibe.css?v=20260903">\n'
+            f'<link rel="stylesheet" href="/blade-book/vibe.css?v=20260904">\n'
             f'<style>{_STYLE}{extra_style}</style>\n</head>\n<body>\n')
 
 
