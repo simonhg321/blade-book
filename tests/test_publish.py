@@ -175,6 +175,17 @@ def test_index_hero_uses_first_display_photo():
     assert 'prefers-reduced-motion' in html
 
 
+def test_index_hero_mark_links_home():
+    """Simon 2026-09-03: the register mark top-left should click back to /blade-book/."""
+    for gated in (False, True):
+        html = publish._index_html(_rows(), USER, gated=gated)
+        home = html.split('<header class="hero')[1].split('<p class="tag">')[0]
+        assert '<a class="home" href="/blade-book/"' in home
+        link = home.split('<a class="home"')[1].split('</a>')[0]
+        assert '<svg class="bbmark"' in link
+    assert '.hero .home' in publish._INDEX_STYLE
+
+
 def test_index_without_photos_has_no_hero_image():
     html = publish._index_html(_rows(with_img=False), USER, gated=False)
     assert 'class="hero-bg"' not in html and 'img/K01.jpg' not in html and 'class="hero plain"' in html
