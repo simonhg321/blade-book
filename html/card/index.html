@@ -1,0 +1,94 @@
+<!doctype html>
+<!-- Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>blade-book — blank birth card</title>
+<meta property="og:title" content="Blank birth card — print, write, photograph">
+<meta property="og:description" content="For a knife with no maker's card: print this, fill it in by hand, and shoot it with the knife. blade-book reads your handwriting like a maker's card.">
+<link rel="icon" type="image/svg+xml" href="/blade-book/mark.svg">
+<link rel="apple-touch-icon" href="/blade-book/apple-touch-icon.png">
+<link rel="stylesheet" href="/blade-book/vibe.css?v=20260903">
+<style>
+  body{max-width:760px;margin:0 auto;padding:16px 16px 60px}
+  header{text-align:center;margin-bottom:8px}
+  header .bbmark{margin-top:8px}
+  h1{font-family:'Bebas Neue',Impact,sans-serif;font-weight:400;font-size:2.6rem;letter-spacing:.06em;margin:.2rem 0 0}
+  h1 span{color:var(--accent)}
+  .lede{color:var(--muted);text-align:center;margin:0 0 18px}
+  .intro p{margin:8px 0;font-size:.95rem}
+  .intro .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:14px 0 18px}
+  .bc{background:#fff;border:2.5px solid var(--ink);border-radius:14px;padding:18px 20px}
+  /* no float here: a full-width float at phone width makes the grid below (its own
+     formatting context) shrink to zero beside it — flex + wrap instead */
+  .bc h2{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:2px 12px;
+         font-size:1.05rem;letter-spacing:.1em;text-transform:uppercase;border-bottom:2px solid var(--ink);padding-bottom:6px;margin:0 0 4px}
+  .bc h2 small{font-size:.62rem;letter-spacing:.08em;color:#777;font-weight:600}
+  .grid{display:grid;grid-template-columns:1fr 1fr;column-gap:22px}
+  .field{display:flex;align-items:baseline;gap:8px;padding:7px 0}
+  .field.full{grid-column:1 / -1}
+  .field label{font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;color:#555;white-space:nowrap}
+  .line{flex:1;border-bottom:1px solid #999;min-height:1.25em}
+  .tall .line{min-height:2.6em}
+  .circle{font-size:.8rem;color:#333}
+  .boxes{display:flex;flex-wrap:wrap;gap:14px;font-size:.85rem;padding:6px 0 2px}
+  .boxes span::before{content:'☐ ';font-size:1rem}
+  .foot{margin-top:12px;padding-top:8px;border-top:1px solid var(--soft);font-size:.7rem;color:#777;line-height:1.35}
+  @media (max-width:560px){.grid{grid-template-columns:1fr}}
+  @media print{
+    body{background:#fff;max-width:none;padding:0}
+    header,.lede,.intro,.bb-foot,.bb-strip{display:none!important}
+    .bc{border-color:#000;border-radius:10px;page-break-inside:avoid}
+  }
+</style>
+<header>
+  <a href="/blade-book/"><img class="bbmark" src="/blade-book/mark.svg" alt="blade-book" width="72"></a>
+  <h1>BLANK <span>BIRTH CARD</span></h1>
+</header>
+<p class="lede">Print it, write it, shoot it with the knife.</p>
+
+<div class="intro">
+  <p>For a knife with no maker's card, or a lost one. Print this, fill it in by hand, and
+     photograph it alongside the knife. blade-book reads your handwriting the same way it reads
+     a maker's birth card. Every field is optional — write what you know, leave the rest blank.</p>
+  <div class="row">
+    <button id="print" class="btn accent" type="button">🖨 &nbsp;PRINT THE CARD</button>
+    <a href="/blade-book/how/">How the photo should look →</a>
+  </div>
+</div>
+
+<div class="bc">
+  <h2>Knife Record <small>Collector's own record — not a certificate of authenticity</small></h2>
+  <div class="grid">
+    <div class="field"><label>Maker / brand</label><span class="line"></span></div>
+    <div class="field"><label>Model</label><span class="line"></span></div>
+    <div class="field"><label>Generation</label><span class="line"></span></div>
+    <div class="field"><label>Size</label><span class="line"></span></div>
+    <div class="field"><label>Blade shape</label><span class="line"></span></div>
+    <div class="field"><label>Maker's SKU</label><span class="line"></span></div>
+    <div class="field"><label>Born on / made</label><span class="line"></span></div>
+    <div class="field"><label>Date is</label>
+      <span class="circle">exact · month · year · guess</span></div>
+    <div class="field"><label>Steel</label><span class="line"></span></div>
+    <div class="field"><label>Hardness</label><span class="line"></span></div>
+    <div class="field"><label>Finish</label><span class="line"></span></div>
+    <div class="field"><label>Hand</label>
+      <span class="circle">right · left</span></div>
+    <div class="field"><label>Damascus smith</label><span class="line"></span></div>
+    <div class="field"><label>Damascus pattern</label><span class="line"></span></div>
+    <div class="field"><label>Handle / inlay</label><span class="line"></span></div>
+    <div class="field"><label>Edition / graphic</label><span class="line"></span></div>
+    <div class="field"><label>Edition #</label><span class="line"></span></div>
+    <div class="field"><label>Condition</label><span class="line"></span></div>
+    <div class="field full"><label>Comes with</label>
+      <span class="boxes"><span>box</span><span>card</span><span>papers</span>
+        <span>pouch</span><span>lanyard</span></span></div>
+    <div class="field full tall"><label>Notes / story</label><span class="line"></span></div>
+  </div>
+  <div class="foot">Filled in by the knife's owner from their own knowledge.
+    This card documents a collector's record — it proves nothing about origin
+    and is not a maker's document. · blade-book.com</div>
+</div>
+
+<footer class="bb-foot"><img src="/blade-book/mark.svg" alt="" width="16"> <a href="/blade-book/search/">search</a> · <a href="/blade-book/board/">board</a> · <a href="/blade-book/how/">how</a> · <a href="/blade-book/about/">about</a> · <a href="/blade-book/terms/">terms</a> · <a class="bb-auth" href="/blade-book/me/">sign in</a></footer>
+<script>document.getElementById('print').addEventListener('click', function () { window.print(); });</script>
+<script src="/blade-book/nav.js?v=20260903" defer></script>
