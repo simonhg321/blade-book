@@ -127,6 +127,11 @@ def test_foreign_origin_post_is_403(client, mailer):
     r = client.post(K + '/', headers={'Sec-Fetch-Site': 'same-site'})
     assert r.status_code == 403
     assert client.post(K + '/', headers={'Origin': 'http://localhost', 'Sec-Fetch-Site': 'same-origin'}).status_code == 201
+    # the alias host keeps working after BASE_URL moves to the apex (and vice versa)
+    # (401 not 403: the host-bound test cookie stays home, but the origin gate let it through)
+    assert client.post(K + '/', headers={'Origin': 'https://alias.example', 'Host': 'alias.example'}).status_code == 401
+    from bb import auth
+    assert client.post(K + '/', headers={'Origin': auth.base_url()}).status_code == 409   # BASE_URL itself: past the gate, into the one-draft rule
     assert client.get(K + '/', headers={'Origin': 'https://instockornot.club'}).status_code == 200   # reads are fine
 
 

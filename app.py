@@ -97,7 +97,10 @@ def _same_origin_only():
     if request.path.startswith(paths.API_PREFIX + '/auth/') and request.path.endswith('/callback'):
         return None
     from bb import auth as auth_mod
-    ours = {_origin_of(auth_mod.base_url()), _origin_of(request.host_url)}
+    # behind Apache the WSGI scheme is plain http, so accept the request's own
+    # host under either scheme as well as BASE_URL (alias + apex both work
+    # across the domain switch)
+    ours = {_origin_of(auth_mod.base_url()), f'https://{request.host}'.lower(), f'http://{request.host}'.lower()}
     origin = request.headers.get('Origin')
     if origin is not None and origin.strip().lower() not in ours:
         log.warning('cross-origin %s %s refused: origin=%r', request.method, request.path, origin[:100])
