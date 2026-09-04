@@ -190,6 +190,36 @@ def test_index_rows_carry_sort_data_and_view_toggle():
         assert needle in html, needle
 
 
+def test_index_rows_carry_searchable_public_descriptors():
+    """Simon 2026-09-03: register search only hit name + born. 'annual' /
+    'damascus' live in special_edition, blade_steel, smith/pattern — every
+    public descriptor rides a data-q attribute the filter reads; nothing new
+    is rendered, and nothing outside public_row() reaches it."""
+    k = _knife(blade_steel='Damascus', variant='Annual 2024 (Galactic Bacon)',
+               notes_public='left-handed sibling',
+               ext={'generation': '31', 'size': 'Small', 'handle_treatment': 'inlay',
+                    'inlay_material': 'leopardwood', 'graphic_name': 'Night Sky',
+                    'damascus_smith': 'Chad Nichols', 'damascus_pattern': 'Stainless Ladder',
+                    'special_edition': 'Annual 2024'})
+    row = publish.public_row(k, USER)
+    row['for_sale'], row['asking_price'] = 1, 500
+    html = publish._index_html([row], USER, gated=False)
+    q = html.split('data-q="')[1].split('"')[0].lower()
+    for needle in ('annual 2024', 'damascus', 'galactic bacon', 'chad nichols', 'stainless ladder',
+                   'leopardwood', 'night sky', 'inlay', 'small', 'left-handed sibling', 'for sale',
+                   'drop point', '2023-02-20'):
+        assert needle in q, needle
+    for secret in ('1337', 'secret', 'keeping'):
+        assert secret not in q, secret
+    assert "getAttribute('data-q')" in publish._INDEX_SCRIPT
+
+
+def test_index_search_data_omits_trade_when_keeping():
+    html = publish._index_html(_rows(1), USER, gated=False)
+    q = html.split('data-q="')[1].split('"')[0].lower()
+    assert 'for sale' not in q and 'for trade' not in q and 'sebenza' in q
+
+
 def test_index_escapes_data_attributes():
     row = _rows(1)[0]
     row['model'] = '<b>x</b>"'

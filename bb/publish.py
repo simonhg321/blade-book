@@ -455,10 +455,15 @@ _INDEX_SCRIPT = """
     var b = ev.target.closest('button'); if (b) setView(b.getAttribute('data-view'));
   });
   var empty = document.getElementById('empty');
+  // haystack = visible text + every public descriptor (data-q), lowercased once;
+  // stored on the element because the sort below reorders `rows` in place
+  rows.forEach(function (r) {
+    r.bbHay = ((r.getAttribute('data-q') || '') + ' ' + r.textContent).toLowerCase();
+  });
   q.addEventListener('input', function () {
     var t = q.value.trim().toLowerCase(), shown = 0;
     rows.forEach(function (r) {
-      var hit = !t || r.textContent.toLowerCase().indexOf(t) >= 0;
+      var hit = !t || r.bbHay.indexOf(t) >= 0;
       r.hidden = !hit; if (hit) shown++;
     });
     empty.hidden = shown > 0;
@@ -510,6 +515,24 @@ _INDEX_SCRIPT = """
   }
 })();
 """
+
+
+# Register-page search haystack: every public text descriptor of a knife
+# (same whitelist the knife page renders and the /search FTS indexes), so
+# "annual" / "damascus" / "leopardwood" hit even though the row only SHOWS
+# tag + name + born. Built from public_row() output only — the leak test
+# scans the whole page, so nothing outside the whitelist can ride along.
+_Q_FIELDS = tuple(f for f in PUBLIC_FIELDS if f != 'born_on_precision') + PUBLIC_EXT
+
+
+def _row_q(row):
+    parts = [str(row.get(f) or '') for f in _Q_FIELDS]
+    parts.append(display_name(row))
+    if row.get('for_sale'):
+        parts.append('for sale')
+    elif row.get('for_trade'):
+        parts.append('for trade')
+    return ' '.join(p for p in parts if p)
 
 
 def _index_html(rows, user, gated, featured_tag=None):
@@ -586,7 +609,7 @@ def _index_html(rows, user, gated, featured_tag=None):
             img = '<span class="t"></span>'
         born = e(row['born']) if row.get('born') else ''
         out += (f'<article class="k" data-tag="{e(row["tag"])}" data-name="{e(name)}" '
-                f'data-born="{e(row.get("born_on") or "")}">{img}'
+                f'data-born="{e(row.get("born_on") or "")}" data-q="{e(_row_q(row))}">{img}'
                 f'<a class="name" href="{e(row["tag"])}/"><span class="tag">{e(row["tag"])}</span>{e(name)}</a>'
                 f'<span class="born">{born}</span>{badge}</article>\n')
     out += ('</div>\n<p id="empty" class="empty" hidden>nothing matches</p>\n'
