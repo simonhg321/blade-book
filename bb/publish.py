@@ -364,6 +364,11 @@ _INDEX_STYLE = """
   .hero.plain .count { color:#555; text-shadow:none; }
   .hero .signin { color:#fff; }
   .hero.plain .signin { color:var(--accent,#b8452c); }
+  /* the mark is the way home — a flex child, so pin it to its own width or the
+     whole row becomes the click target */
+  .hero .home { display:inline-block; align-self:flex-start; line-height:0; border-radius:8px; }
+  .hero .home:hover svg, .hero .home:focus-visible svg { transform:translateY(-2px); }
+  .hero .home svg { transition:transform .15s ease; }
   .feat { display:inline-flex; flex-direction:column; gap:2px; align-self:flex-start; margin-top:16px;
           background:var(--cream,#f6f1e7); color:var(--ink,#141210); border:2px solid var(--ink,#141210);
           border-radius:14px; padding:10px 14px; text-decoration:none; text-shadow:none;
@@ -562,7 +567,8 @@ def _index_html(rows, user, gated, featured_tag=None):
     else:
         out += '<header class="hero plain">\n'
     out += ('<p class="signin"><a class="bb-auth" href="/blade-book/me/">sign in</a></p>\n'
-            f'{_mark_svg(46)}\n<p class="tag">BLADE-BOOK REGISTER</p>\n<h1>@{e(handle)}</h1>\n'
+            f'<a class="home" href="/blade-book/" aria-label="blade-book home" title="blade-book">'
+            f'{_mark_svg(46)}</a>\n<p class="tag">BLADE-BOOK REGISTER</p>\n<h1>@{e(handle)}</h1>\n'
             f'<p class="count">{count}</p>\n')
     if hero_row:
         fname = display_name(hero_row)
