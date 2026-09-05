@@ -112,6 +112,16 @@ def _same_origin_only():
     return None
 
 
+@api.after_app_request
+def _api_json_no_store(resp):
+    """Review L10: authed JSON (register rows, settings, /me) must never sit in
+    a shared or back/forward cache. Only API JSON — photo bytes keep their own
+    caching, HTML is Apache's business."""
+    if request.path.startswith(paths.API_PREFIX) and resp.mimetype == 'application/json':
+        resp.headers['Cache-Control'] = 'no-store'
+    return resp
+
+
 @api.app_errorhandler(404)
 def _not_found(_e):
     return jsonify({'error': 'not found'}), 404
