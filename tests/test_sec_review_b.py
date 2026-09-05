@@ -298,6 +298,86 @@ def test_dead_token_still_says_expired(client, mailer):
         .headers['Location'].endswith('?auth=expired')
 
 
+# --- M2c: under https the flow cookies carry the __Host- prefix ----------------
+# The app also answers on the alias vhost billboard.instockornot.club, so any
+# sibling on *.instockornot.club could set bb_magic/bb_oidc with
+# Domain=.instockornot.club and force the silent "bound" path with a link the
+# attacker minted. A browser refuses a __Host- cookie that carries a Domain,
+# which closes that door.
+
+HTTPS_BASE = 'https://blade-book.com'
+
+
+def _https_client(mailer, monkeypatch):
+    monkeypatch.setenv('SESSION_KEY', 'k')
+    monkeypatch.setenv('BASE_URL', HTTPS_BASE)
+    from app import create_app
+    return create_app(mailer=mailer).test_client()
+
+
+def _set_cookie(resp, prefix):
+    return next(sc for sc in resp.headers.get_all('Set-Cookie') if sc.startswith(prefix))
+
+
+def _attrs(set_cookie):
+    """The attribute list of a Set-Cookie header, minus the name=value pair."""
+    return [p.strip() for p in set_cookie.split(';')[1:]]
+
+
+def _assert_host_prefixed(set_cookie):
+    attrs = _attrs(set_cookie)
+    assert 'Secure' in attrs, set_cookie
+    assert 'HttpOnly' in attrs, set_cookie
+    assert 'Path=/' in attrs, set_cookie
+    assert 'SameSite=None' in attrs, set_cookie
+    assert not any(a.lower().startswith('domain=') for a in attrs), set_cookie
+
+
+def test_magic_flow_cookie_is_host_prefixed_under_https(mailer, monkeypatch):
+    c = _https_client(mailer, monkeypatch)
+    r = c.post(A + '/magic', json={'email': 'sam@example.com'}, base_url=HTTPS_BASE)
+    assert r.status_code == 202
+    _assert_host_prefixed(_set_cookie(r, '__Host-bb_magic='))
+    assert not any(sc.startswith('bb_magic=') for sc in r.headers.get_all('Set-Cookie'))
+    # the bound (silent) path still works on the browser that asked
+    link = magic_link_from(mailer)
+    r = c.get(link.replace(HTTPS_BASE, ''), base_url=HTTPS_BASE)
+    assert r.status_code == 302 and r.headers['Location'].endswith('/blade-book/')
+    assert c.get(A + '/me', base_url=HTTPS_BASE).status_code == 200
+
+
+def test_oidc_flow_cookie_is_host_prefixed_under_https(mailer, monkeypatch, both):
+    c = _https_client(mailer, monkeypatch)
+    r = c.get(A + '/google', base_url=HTTPS_BASE)
+    assert r.status_code == 302
+    _assert_host_prefixed(_set_cookie(r, '__Host-bb_oidc='))
+    assert not any(sc.startswith('bb_oidc=') for sc in r.headers.get_all('Set-Cookie'))
+
+
+def test_duplicate_flow_cookies_are_never_bound(client, mailer, app):
+    """Two bb_magic cookies = something is shadowing the real one (a sibling
+    host planting a Domain cookie). Treat the flow as unbound: confirm page."""
+    client.post(A + '/magic', json={'email': 'sam@example.com'})
+    flow = client.get_cookie('bb_magic', path='/blade-book/api/auth').value
+    link = magic_link_from(mailer)
+    # use_cookies=False: an empty test-client jar would strip our Cookie header
+    other = app.test_client(use_cookies=False)
+    r = other.get(link, headers={'Cookie': f'bb_magic={flow}; bb_magic=planted'})
+    assert r.status_code == 200 and r.mimetype == 'text/html'
+    assert 'confirm sign-in' in r.get_data(as_text=True)
+    assert not any(sc.startswith('bb_session=') for sc in r.headers.get_all('Set-Cookie'))
+    assert r.headers.get('X-Frame-Options') == 'DENY'
+
+
+def test_non_ascii_state_is_refused_not_a_500(client, both):
+    """The constant-time compare must not blow up on a state the attacker
+    picked: compare_digest raises TypeError on non-ASCII str."""
+    _start(client, 'google')                                              # this browser has bb_oidc
+    r = client.get('/blade-book/api/auth/google/callback?code=c0de&state=%C3%A9vil')
+    assert r.status_code == 302 and r.headers['Location'].endswith('?auth=failed')
+    assert client.get(A + '/me').status_code == 401
+
+
 from bb import cdn
 
 
@@ -309,7 +389,7 @@ def test_remove_public_surface_purges_every_file(env, monkeypatch):
     open(os.path.join(dest, 'index.html'), 'w').close()
     open(os.path.join(dest, 'img', 'K01.jpg'), 'w').close()
     purged = []
-    monkeypatch.setattr(cdn, 'purge_urls', lambda urls: purged.extend(urls) or len(urls))
+    monkeypatch.setattr(cdn, 'purge_later', lambda urls: purged.extend(urls) or len(urls))
     assert account.remove_public_surface('sam') is True
     assert sorted(purged) == [cdn.public_url('sam', 'img/K01.jpg'), cdn.public_url('sam', 'index.html')]
 
@@ -323,7 +403,7 @@ def test_rebuild_purges_files_that_vanished(env, con, monkeypatch):
     publish.build_user(con, u, store)
     hero = cdn.public_url('sam', f"img/{k['tag']}.jpg")
     purged = []
-    monkeypatch.setattr(cdn, 'purge_urls', lambda urls: purged.extend(urls) or len(urls))
+    monkeypatch.setattr(cdn, 'purge_later', lambda urls: purged.extend(urls) or len(urls))
     db.set_public(con, u['id'], [k['id']], False)                          # bb/db.py:639
     publish.build_user(con, db.get_user(con, u['id']), store)
     assert hero in purged and cdn.public_url('sam', f"{k['tag']}/index.html") in purged

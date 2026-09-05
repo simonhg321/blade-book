@@ -61,7 +61,7 @@ def remove_public_surface(handle):
     finally:
         fcntl.flock(lockf, fcntl.LOCK_UN)
         lockf.close()
-    cdn.purge_urls([cdn.public_url(handle, rel) for rel in gone])
+    cdn.purge_later([cdn.public_url(handle, rel) for rel in gone])
     try:
         os.unlink(lock_path)
     except FileNotFoundError:

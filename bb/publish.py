@@ -124,6 +124,11 @@ def export_hero(store, k, handle, img_dir):
         img = photos._open(store.get(p['store_key']))     # vetted decoders + declared-size cap (review M7)
         if img is None:
             return None, None
+        if img.format in photos._CHEAP_FORMATS:
+            # DCT-reduced decode for JPEG/MPO (photos._decode does the same): an
+            # 80 Mpx phone JPEG never lands in memory at full size. Nothing here
+            # needs the original dimensions — both outputs go through thumbnail().
+            img.draft('RGB', (DISPLAY_EDGE * 2, DISPLAY_EDGE * 2))
         img.load()
         img = ImageOps.exif_transpose(img)
         img = img.convert('RGB')          # re-encode: EXIF/XMP/GPS dropped ...
@@ -655,13 +660,18 @@ def build_user(con, user, store):
     WWW_DIR — Apache must never be able to serve the lock file) — two gunicorn
     workers' debounce timers and the cron sweep can all try to build the same
     handle at once, and without this lock their overlapping tmp/rmtree/replace
-    calls interleave into a corrupt or incomplete bundle."""
-    # Import inside build_user to avoid circular dependency (search/cdn import publish)
+    calls interleave into a corrupt or incomplete bundle.
+
+    The edge purge is collected inside the lock but fired AFTER it is released
+    (and off-thread): Cloudflare must never be able to hold this flock."""
+    # Deferred import: bb.search imports bb.publish, so importing it at module
+    # level would be circular. cdn has no cycle — it just rides the same line.
     from bb import cdn, search
 
     handle = user['handle']
     dest = bundle_dir(handle)               # validates the handle
     tmp = dest + '.tmp'
+    gone = []                               # public files that vanished (review L3)
     lockf = open(_lock_path(handle), 'w')
     try:
         fcntl.flock(lockf, fcntl.LOCK_EX)
@@ -670,50 +680,52 @@ def build_user(con, user, store):
             search.deindex_user(con, user['id'])
             shutil.rmtree(dest, ignore_errors=True)
             shutil.rmtree(tmp, ignore_errors=True)
-            cdn.purge_urls([cdn.public_url(handle, rel) for rel in gone])
-            return -1
-        before = set(cdn.bundle_files(dest))
-        shutil.rmtree(tmp, ignore_errors=True)
-        try:
-            img_dir = os.path.join(tmp, 'img')
-            os.makedirs(img_dir, exist_ok=True)
-            rows = []
-            featured_tag = None
-            for k in db.public_knives(con, user['id']):
-                row = public_row(k, user)
-                hero, thumb = export_hero(store, k, handle, img_dir)
-                row['img'], row['img_t'] = hero, thumb
-                if user.get('featured_knife_id') and k['id'] == user['featured_knife_id']:
-                    featured_tag = row['tag']
-                rows.append(row)
-            key = (user.get('public_key') or '').strip()
-            gated = bool(key)
-            if gated:
-                with open(os.path.join(tmp, 'keys.json'), 'w') as f:
-                    json.dump({'hashes': [hashlib.sha256(key.lower().encode()).hexdigest()]}, f)
-            for row in rows:
-                page_dir = os.path.join(tmp, row['tag'])
-                os.makedirs(page_dir)
-                with open(os.path.join(page_dir, 'index.html'), 'w') as f:
-                    f.write(_knife_page(row, handle, gated))
-            with open(os.path.join(tmp, 'index.html'), 'w') as f:
-                f.write(_index_html(rows, user, gated, featured_tag=featured_tag))
-            with open(os.path.join(tmp, 'knives.json'), 'w') as f:
-                json.dump({'generated': datetime.now(timezone.utc).isoformat(),
-                           'handle': handle, 'count': len(rows), 'knives': rows}, f, indent=1)
-            shutil.rmtree(dest, ignore_errors=True)
-            os.replace(tmp, dest)
-            after = set(cdn.bundle_files(dest))
-            cdn.purge_urls([cdn.public_url(handle, rel) for rel in sorted(before - after)])
-            search.reindex_user(con, user, rows)
-            return len(rows)
-        finally:
-            # no-op after a successful os.replace (tmp no longer exists); on any
-            # raise above, removes the partial bundle so it never gets served
+            built = -1
+        else:
+            before = set(cdn.bundle_files(dest))
             shutil.rmtree(tmp, ignore_errors=True)
+            try:
+                img_dir = os.path.join(tmp, 'img')
+                os.makedirs(img_dir, exist_ok=True)
+                rows = []
+                featured_tag = None
+                for k in db.public_knives(con, user['id']):
+                    row = public_row(k, user)
+                    hero, thumb = export_hero(store, k, handle, img_dir)
+                    row['img'], row['img_t'] = hero, thumb
+                    if user.get('featured_knife_id') and k['id'] == user['featured_knife_id']:
+                        featured_tag = row['tag']
+                    rows.append(row)
+                key = (user.get('public_key') or '').strip()
+                gated = bool(key)
+                if gated:
+                    with open(os.path.join(tmp, 'keys.json'), 'w') as f:
+                        json.dump({'hashes': [hashlib.sha256(key.lower().encode()).hexdigest()]}, f)
+                for row in rows:
+                    page_dir = os.path.join(tmp, row['tag'])
+                    os.makedirs(page_dir)
+                    with open(os.path.join(page_dir, 'index.html'), 'w') as f:
+                        f.write(_knife_page(row, handle, gated))
+                with open(os.path.join(tmp, 'index.html'), 'w') as f:
+                    f.write(_index_html(rows, user, gated, featured_tag=featured_tag))
+                with open(os.path.join(tmp, 'knives.json'), 'w') as f:
+                    json.dump({'generated': datetime.now(timezone.utc).isoformat(),
+                               'handle': handle, 'count': len(rows), 'knives': rows}, f, indent=1)
+                shutil.rmtree(dest, ignore_errors=True)
+                os.replace(tmp, dest)
+                after = set(cdn.bundle_files(dest))
+                gone = sorted(before - after)   # only after the swap: a failed build purges nothing
+                search.reindex_user(con, user, rows)
+                built = len(rows)
+            finally:
+                # no-op after a successful os.replace (tmp no longer exists); on any
+                # raise above, removes the partial bundle so it never gets served
+                shutil.rmtree(tmp, ignore_errors=True)
     finally:
         fcntl.flock(lockf, fcntl.LOCK_UN)
         lockf.close()
+    cdn.purge_later([cdn.public_url(handle, rel) for rel in gone])
+    return built
 
 
 DEBOUNCE_S = float(os.environ.get('BLADEBOOK_PUBLISH_DEBOUNCE_S', '30'))

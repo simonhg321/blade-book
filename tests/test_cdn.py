@@ -57,6 +57,41 @@ def test_failures_are_logged_not_raised(monkeypatch, caplog):
     assert '403' in caplog.text
 
 
+def test_purge_later_starts_no_thread_when_disabled(monkeypatch):
+    monkeypatch.delenv('CF_API_TOKEN', raising=False)
+    monkeypatch.delenv('CF_ZONE_ID', raising=False)
+
+    def no_threads(*a, **kw):
+        raise AssertionError('purge_later must not start a thread when disabled')
+    monkeypatch.setattr(cdn.threading, 'Thread', no_threads)
+    calls = _capture(monkeypatch)
+    assert cdn.purge_later(['https://blade-book.com/blade-book/@sam/index.html']) == 0
+    assert cdn.purge_later([]) == 0
+    assert calls == []
+
+
+def test_purge_later_runs_purge_urls_on_a_thread(monkeypatch):
+    monkeypatch.setenv('CF_API_TOKEN', 't')
+    monkeypatch.setenv('CF_ZONE_ID', 'z')
+    calls = _capture(monkeypatch)                     # the thread makes no network call
+    started = []
+    real_thread = cdn.threading.Thread
+
+    def spy(*a, **kw):
+        t = real_thread(*a, **kw)
+        started.append((kw.get('target'), kw.get('args'), t))
+        return t
+    monkeypatch.setattr(cdn.threading, 'Thread', spy)
+    urls = ['https://blade-book.com/blade-book/@sam/img/K01.jpg']
+    assert cdn.purge_later(urls) == 1                 # returns before the purge finishes
+    assert len(started) == 1
+    target, args, thread = started[0]
+    assert target is cdn.purge_urls and args == (urls,) and thread.daemon
+    thread.join(10)
+    assert not thread.is_alive()
+    assert [c['json']['files'] for c in calls] == [urls]
+
+
 def test_public_url_and_bundle_files(tmp_path, monkeypatch):
     monkeypatch.setenv('BASE_URL', 'https://blade-book.com')
     from bb import config
