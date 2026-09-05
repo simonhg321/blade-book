@@ -119,6 +119,20 @@ def test_decode_refuses_undecodable_photo_at_upload(client, mailer, decoder):
     assert decoder.calls == []
 
 
+def test_decode_400s_when_stored_photos_are_undecodable(client, mailer, decoder, monkeypatch):
+    # The knife HAS photos (unlike the case above) but none of them decode —
+    # still reachable in production for photos stored before this deploy, or
+    # written by scripts/add_photo.py / import_crkinv.py, which bypass the
+    # upload route's ingest() gate entirely. decode.images_for's own
+    # skip-undecodable logic (bb/decode.py) is what has to catch this.
+    kid = _draft_with_photo(client, mailer)
+    monkeypatch.setattr(decode, 'images_for', lambda store, k: [])
+    r = client.post(f'{K}/{kid}/decode')
+    assert r.status_code == 400
+    assert r.get_json()['error'] == 'none of the photos are decodable — re-shoot as JPEG/HEIC'
+    assert decoder.calls == []
+
+
 def test_decode_result_appears_in_get_and_private_fields_stay_owner_only(client, mailer, decoder):
     kid = _draft_with_photo(client, mailer)
     client.post(f'{K}/{kid}/decode')

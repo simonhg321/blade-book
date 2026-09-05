@@ -147,7 +147,7 @@ def main():
                 data = f.read()
             try:
                 ing = photos.ingest(data, os.path.basename(path))
-            except (photos.TooBig, photos.BadType) as e:
+            except (photos.TooBig, photos.BadType, photos.Undecodable) as e:
                 print(f'  photo skip {r["tag"]}/{os.path.basename(path)}: {e}')
                 photo_fails += 1
                 continue

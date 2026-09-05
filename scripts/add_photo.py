@@ -29,7 +29,10 @@ def main(argv=None):
     config.load()
     with open(a.file, 'rb') as f:
         data = f.read()
-    ing = photos.ingest(data, a.file)
+    try:
+        ing = photos.ingest(data, a.file)
+    except (photos.TooBig, photos.BadType, photos.Undecodable) as e:
+        sys.exit(f'{a.file}: {e}')
     store = store_mod.from_paths()
     con = db.connect()
     try:
