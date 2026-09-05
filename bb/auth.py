@@ -3,8 +3,10 @@
 bb/auth.py — handles, sessions, and the login_required gate.
 
 Session = Flask's signed cookie (SECRET_KEY = SESSION_KEY from .env), scoped
-to /blade-book, carrying {'uid', 'ssh'} where ssh is a hash of the user's
-session_secret. Rotating that secret invalidates every device at once.
+to /blade-book, carrying {'uid', 'ssh', 'sid'} where ssh is a hash of the
+user's session_secret and sid names a row in the `sessions` table, deleted
+on sign-out (review L1). Rotating the secret invalidates every device at
+once; deleting one session row revokes just that cookie.
 """
 import hashlib
 import logging
@@ -90,17 +92,29 @@ def login(con, user):
     session.permanent = True
     session['uid'] = user['id']
     session['ssh'] = _secret_hash(user['session_secret'])
+    session['sid'] = db.create_session(con, user['id'])
     g.user = user
 
 
 def logout():
+    """Revoke THIS cookie's session row (review L1), then clear the cookie.
+    Opens its own connection: the callers are routes without one."""
+    sid = session.get('sid')
+    if sid:
+        con = db.connect()
+        try:
+            db.delete_session(con, sid)
+        finally:
+            con.close()
     session.clear()
     g.user = None
 
 
 def logout_everywhere(con, user_id):
+    db.delete_user_sessions(con, user_id)
     db.rotate_session_secret(con, user_id)
-    logout()
+    session.clear()
+    g.user = None
 
 
 def current_user(con):
@@ -108,10 +122,11 @@ def current_user(con):
     if 'user' in g:
         return g.user
     g.user = None
-    uid, ssh = session.get('uid'), session.get('ssh')
-    if uid and ssh:
+    uid, ssh, sid = session.get('uid'), session.get('ssh'), session.get('sid')
+    if uid and ssh and sid:
         user = db.get_user(con, uid)
-        if user and user['session_secret'] and _secret_hash(user['session_secret']) == ssh:
+        if (user and user['session_secret'] and _secret_hash(user['session_secret']) == ssh
+                and db.session_alive(con, uid, sid)):
             g.user = user
     return g.user
 

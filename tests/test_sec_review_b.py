@@ -154,3 +154,44 @@ def test_tombstone_expires_after_90_days(con):
 def test_schema_is_v11(con):
     assert con.execute('SELECT version FROM schema_version').fetchone()[0] == 11
     assert db.SCHEMA_VERSION == 11
+
+
+# --- L1: sign-out revokes THIS cookie; sign-out-everywhere still revokes all ----
+
+def _cookie(client):
+    c = client.get_cookie('bb_session', path='/blade-book')
+    assert c is not None
+    return c.value
+
+
+def test_signout_invalidates_a_captured_cookie(client, mailer, app):
+    signed_in(client, mailer)
+    stolen = _cookie(client)
+    assert client.post(A + '/signout').get_json() == {'ok': True}
+    thief = app.test_client()
+    thief.set_cookie('bb_session', stolen, path='/blade-book')
+    assert thief.get(A + '/me').status_code == 401                       # the row is gone
+
+
+def test_signout_leaves_other_devices_signed_in(client, mailer, app):
+    signed_in(client, mailer)
+    phone = app.test_client()
+    signed_in(phone, mailer)                                              # second session, same user
+    assert client.post(A + '/signout').status_code == 200
+    assert phone.get(A + '/me').status_code == 200
+
+
+def test_signout_all_still_revokes_every_device(client, mailer, app):
+    signed_in(client, mailer)
+    phone = app.test_client()
+    signed_in(phone, mailer)
+    assert client.post(A + '/signout-all').status_code == 200
+    assert phone.get(A + '/me').status_code == 401
+    assert client.get(A + '/me').status_code == 401
+
+
+def test_cookie_without_session_row_is_not_signed_in(client, mailer, con):
+    signed_in(client, mailer)
+    con.execute('DELETE FROM sessions')
+    con.commit()
+    assert client.get(A + '/me').status_code == 401

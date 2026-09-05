@@ -203,6 +203,14 @@ CREATE TABLE IF NOT EXISTS released_handles (
   released_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS sessions (
+  sid_hash TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created TEXT NOT NULL,
+  last_seen TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS sessions_user ON sessions(user_id);
+
 CREATE TABLE IF NOT EXISTS magic_tokens (
   id INTEGER PRIMARY KEY,
   token_hash TEXT NOT NULL UNIQUE,
@@ -460,6 +468,35 @@ def rotate_session_secret(con, user_id):
     return secret
 
 
+SESSION_DAYS = 90                  # must match PERMANENT_SESSION_LIFETIME in app.py
+
+
+def create_session(con, user_id):
+    """One row per signed-in browser (review L1). The cookie carries the raw
+    sid; only its hash is stored, so the DB never holds a usable cookie."""
+    sid = secrets.token_urlsafe(24)
+    con.execute('INSERT INTO sessions (sid_hash, user_id, created, last_seen) VALUES (?, ?, ?, ?)',
+                (_sha(sid), user_id, now(), now()))
+    con.commit()
+    return sid
+
+
+def session_alive(con, user_id, sid):
+    row = con.execute('SELECT 1 FROM sessions WHERE sid_hash = ? AND user_id = ?',
+                      (_sha(sid), user_id)).fetchone()
+    return row is not None
+
+
+def delete_session(con, sid):
+    con.execute('DELETE FROM sessions WHERE sid_hash = ?', (_sha(sid),))
+    con.commit()
+
+
+def delete_user_sessions(con, user_id):
+    con.execute('DELETE FROM sessions WHERE user_id = ?', (user_id,))
+    con.commit()
+
+
 def set_verified(con, user_id):
     con.execute('UPDATE users SET verified_at = ? WHERE id = ? AND verified_at IS NULL',
                 (now(), user_id))
@@ -513,6 +550,7 @@ def purge_auth_tables(con):
     con.execute('DELETE FROM oauth_states WHERE created < ?', (cutoff,))
     con.execute('DELETE FROM released_handles WHERE released_at < ?',
                 (_plus(-HANDLE_TOMBSTONE_DAYS * 24 * 60),))
+    con.execute('DELETE FROM sessions WHERE created < ?', (_plus(-SESSION_DAYS * 24 * 60),))
     con.commit()
 
 
