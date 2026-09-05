@@ -80,6 +80,7 @@ def change_handle(con, user, new):
     new = validate_new_handle(con, user, new)
     old = user['handle']
     fresh = db.set_handle(con, user['id'], new)
+    db.release_handle(con, old)
     remove_public_surface(old)
     search.deindex_user(con, user['id'])
     log.info('handle changed: @%s -> @%s (user %s)', old, new, user['id'])
@@ -162,6 +163,7 @@ def delete_account(con, store, user):
     cascade takes knives, photos, events, wants, intros both ways, reports
     both ways. Unconditional: the ROUTE refuses admin rows, not this."""
     db.tombstone_email(con, user['email'])
+    db.release_handle(con, user['handle'])
     keys = db.owner_photo_keys(con, user['id'])
     removed = 0
     failed = 0

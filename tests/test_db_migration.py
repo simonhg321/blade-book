@@ -177,7 +177,7 @@ def _build_v7_db():
 def test_v7_to_v8_adds_featured_knife_id(env):
     _build_v7_db()
     con = db.connect()
-    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION == 10
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION == 11
     ucols = {r[1] for r in con.execute('PRAGMA table_info(users)')}
     assert 'featured_knife_id' in ucols
     assert con.execute('SELECT featured_knife_id FROM users WHERE id = 1').fetchone()[0] is None
@@ -210,7 +210,7 @@ def _build_v8_db():
 def test_v8_to_v9_adds_handle_changed_at(env):
     _build_v8_db()
     con = db.connect()
-    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION == 10
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION == 11
     assert 'handle_changed_at' in {r[1] for r in con.execute('PRAGMA table_info(users)')}
     assert con.execute('SELECT handle_changed_at FROM users WHERE id = 1').fetchone()[0] is None
     con.close()

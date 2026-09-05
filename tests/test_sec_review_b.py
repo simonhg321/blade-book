@@ -107,3 +107,50 @@ def test_export_hero_never_opens_unvetted_formats(tmp_path):
     store.put('1/1/1.jpg', _ppm(4, 4))                                    # a PPM wearing a .jpg key
     k = {'tag': 'K03', 'hero_photo': 1, 'photos': [{'seq': 1, 'store_key': '1/1/1.jpg'}]}
     assert publish.export_hero(store, k, 'sam', str(tmp_path)) == (None, None)
+
+
+from datetime import datetime, timedelta, timezone
+
+from bb import account, auth, db
+
+
+# --- M8: a released handle cannot be claimed by a stranger for 90 days ----------
+
+def _user(con, email='sam@example.com', handle='sam'):
+    uid = db.create_user(con, email, handle)
+    db.rotate_session_secret(con, uid)
+    return db.get_user(con, uid)
+
+
+def test_renamed_handle_is_tombstoned(con):
+    u = _user(con)
+    account.change_handle(con, u, 'samuel-k')
+    assert db.handle_exists(con, 'sam')                                    # still "taken"
+    assert auth.unique_handle(con, 'sam') == 'sam-2'                       # sign-ups skip it
+    other = _user(con, 'o@example.com', 'other')
+    with pytest.raises(ValueError, match='taken'):
+        account.validate_new_handle(con, other, 'sam')
+
+
+def test_deleted_handle_is_tombstoned(env, con):
+    from bb import store as store_mod
+    u = _user(con)
+    account.delete_account(con, store_mod.from_paths(), u)
+    assert db.handle_exists(con, 'sam')
+    assert auth.handle_for_email(con, 'sam@other.example') == 'sam-2'
+
+
+def test_tombstone_expires_after_90_days(con):
+    db.release_handle(con, 'ghost')
+    assert db.handle_exists(con, 'ghost')
+    old = (datetime.now(timezone.utc) - timedelta(days=db.HANDLE_TOMBSTONE_DAYS + 1)).isoformat()
+    con.execute('UPDATE released_handles SET released_at = ? WHERE handle = ?', (old, 'ghost'))
+    con.commit()
+    assert not db.handle_exists(con, 'ghost')
+    db.purge_auth_tables(con)
+    assert con.execute('SELECT count(*) FROM released_handles').fetchone()[0] == 0
+
+
+def test_schema_is_v11(con):
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == 11
+    assert db.SCHEMA_VERSION == 11

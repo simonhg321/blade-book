@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 
 from bb import paths
 
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 
 SALE_STATUSES = ('keeping', 'for_trade', 'for_sale', 'consigned', 'sold')
 KNIFE_STATUSES = ('draft', 'live')
@@ -30,6 +30,7 @@ WANT_TEXT_MAX = 200
 WANT_MAX_YEAR_SPAN = 25          # born_from..born_to alone counts only when it is a real window
 DECODES_PER_MINUTE = 3
 MAX_BOARD_OFFSET = 10_000
+HANDLE_TOMBSTONE_DAYS = 90       # a released handle stays unclaimable this long (review M8)
 HIDDEN_BY = ('reports', 'admin')
 
 # never leaves the private register — see spec §5 invariant
@@ -197,6 +198,11 @@ CREATE TABLE IF NOT EXISTS deleted_users (
   deleted_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS released_handles (
+  handle TEXT PRIMARY KEY,
+  released_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS magic_tokens (
   id INTEGER PRIMARY KEY,
   token_hash TEXT NOT NULL UNIQUE,
@@ -283,6 +289,10 @@ MIGRATIONS = {
          'UPDATE users SET share_email_on_intro = 0 '
          'WHERE NOT EXISTS (SELECT 1 FROM migration_marks WHERE v = 10)',
          'INSERT OR IGNORE INTO migration_marks (v) VALUES (10)'],
+    # security review 2026-09-04 batch B: released handles + session rows (tables
+    # come from SCHEMA on connect); magic_tokens.flow binds a link to the browser
+    # that asked for it. All idempotent — old workers re-stamp 10 until restart.
+    11: ['ALTER TABLE magic_tokens ADD COLUMN flow TEXT'],
 }
 
 
@@ -471,8 +481,20 @@ def get_user_by_subject(con, provider, sub):
 
 
 def handle_exists(con, handle):
-    return con.execute('SELECT 1 FROM users WHERE handle = ?',
-                       (handle,)).fetchone() is not None
+    """Live handles, plus handles released (rename/delete) within
+    HANDLE_TOMBSTONE_DAYS — every shared /@handle/ link keeps pointing at
+    nobody rather than at a stranger (review M8)."""
+    if con.execute('SELECT 1 FROM users WHERE handle = ?', (handle,)).fetchone():
+        return True
+    cutoff = _plus(-HANDLE_TOMBSTONE_DAYS * 24 * 60)
+    return con.execute('SELECT 1 FROM released_handles WHERE handle = ? AND released_at > ?',
+                       (handle, cutoff)).fetchone() is not None
+
+
+def release_handle(con, handle):
+    con.execute('INSERT OR REPLACE INTO released_handles (handle, released_at) VALUES (?, ?)',
+                (handle, now()))
+    con.commit()
 
 
 def set_handle(con, user_id, handle):
@@ -489,6 +511,8 @@ def purge_auth_tables(con):
     con.execute('DELETE FROM magic_tokens WHERE created < ?', (cutoff,))
     con.execute('DELETE FROM auth_attempts WHERE ts < ?', (cutoff,))
     con.execute('DELETE FROM oauth_states WHERE created < ?', (cutoff,))
+    con.execute('DELETE FROM released_handles WHERE released_at < ?',
+                (_plus(-HANDLE_TOMBSTONE_DAYS * 24 * 60),))
     con.commit()
 
 
