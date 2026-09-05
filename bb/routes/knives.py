@@ -434,6 +434,9 @@ def upload_photo(knife_id, seq):
             return jsonify({'error': f'photo over {photos.MAX_PHOTO_BYTES // (1024 * 1024)} MB'}), 400
         except photos.BadType:
             return jsonify({'error': 'not an accepted image type'}), 415
+        except photos.Undecodable:
+            log.info('undecodable upload refused for @%s: %s', g.user['handle'], f.filename[:80])
+            return jsonify({'error': 'could not read that image — use JPEG, PNG, HEIC or WebP'}), 415
         key = f'{owner}/{knife_id}/{seq}.{ing.ext}'
         tkey = db.thumb_key(key)
         if request.args.get('replace') == '1':

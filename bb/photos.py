@@ -4,8 +4,8 @@ bb/photos.py — turn uploaded bytes into what the register stores. Ported
 from billboard crkinv/photos.py: the original is kept EXACTLY as received
 (full resolution, EXIF intact — stripping happens at publish, plan 06); the
 thumb is a best-effort ≤400 px JPEG for the intake screen. A file Pillow
-can't decode (HEIC without pillow-heif) is still stored; it just has no
-thumb and no dimensions.
+can't decode with a vetted decoder is refused (photos.Undecodable) — see
+security review M7.
 """
 import hashlib
 import io
@@ -51,11 +51,18 @@ class BadType(ValueError):
     pass
 
 
+class Undecodable(ValueError):
+    """Pillow could not identify or load the file with a vetted decoder.
+    Refused at ingest (review M7): a file we cannot decode here cannot be
+    thumbed, decoded by the model, or published — and, stored uncapped, it
+    would be the one file that reaches publish's decoder at full size."""
+
+
 @dataclass
 class Ingested:
     ext: str
     sha256: str
-    width: int | None
+    width: int | None  # always set now — kept nullable, decode.py and callers still handle None defensively
     height: int | None
     thumb: bytes | None
 
@@ -118,7 +125,7 @@ def ingest(data, filename):
     sha = hashlib.sha256(data).hexdigest()
     img, width, height = _decode(data)
     if img is None:
-        return Ingested(ext, sha, None, None, None)
+        raise Undecodable(f'{filename!r}: not a decodable {ext}')
     thumb = ImageOps.exif_transpose(img).convert('RGB')
     thumb.thumbnail((THUMB_EDGE, THUMB_EDGE))
     buf = io.BytesIO()

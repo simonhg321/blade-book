@@ -9,7 +9,6 @@ The DB never sees public traffic; Apache serves the files.
 import fcntl
 import hashlib
 import html as html_mod
-import io
 import json
 import logging
 import os
@@ -20,7 +19,9 @@ from datetime import datetime, timezone
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps, UnidentifiedImageError
 
-from bb import auth, db, paths
+from bb import auth, db, paths, photos
+
+log = logging.getLogger('blade-book.publish')
 
 SAFE_HANDLE = re.compile(r'[a-z0-9-]{3,24}')
 
@@ -120,12 +121,16 @@ def export_hero(store, k, handle, img_dir):
     by_seq = {p['seq']: p for p in photos_}
     p = by_seq.get(k.get('hero_photo')) or photos_[0]
     try:
-        img = Image.open(io.BytesIO(store.get(p['store_key'])))
+        img = photos._open(store.get(p['store_key']))     # vetted decoders + declared-size cap (review M7)
+        if img is None:
+            return None, None
+        img.load()
         img = ImageOps.exif_transpose(img)
         img = img.convert('RGB')          # re-encode: EXIF/XMP/GPS dropped ...
-        img.info.pop('comment', None)     # ... and the JPEG COM segment, which
-                                          # Pillow would otherwise copy through
-                                          # convert() and write on save (review M9)
+        img.info.pop('comment', None)     # ... and the JPEG COM segment (review M9)
+    except photos.TooBig as e:
+        log.warning('hero for %s skipped at publish: %s', k.get('tag'), e)
+        return None, None
     except (OSError, KeyError, UnidentifiedImageError):
         return None, None
     os.makedirs(img_dir, exist_ok=True)
@@ -705,8 +710,6 @@ def build_user(con, user, store):
         fcntl.flock(lockf, fcntl.LOCK_UN)
         lockf.close()
 
-
-log = logging.getLogger('blade-book.publish')
 
 DEBOUNCE_S = float(os.environ.get('BLADEBOOK_PUBLISH_DEBOUNCE_S', '30'))
 

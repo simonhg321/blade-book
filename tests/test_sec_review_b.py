@@ -59,3 +59,51 @@ def test_jpeg_comment_is_stripped_at_publish(tmp_path):
         out = Image.open(os.path.join(tmp_path, name))
         assert 'comment' not in out.info, name
         assert b'Simon' not in open(os.path.join(tmp_path, name), 'rb').read()
+
+
+import pytest
+
+from bb import photos
+from tests.test_photos_api import _up
+
+
+def _ppm(w, h):
+    """A binary PPM: Pillow decodes it fully, no draft mode, no size check
+    until the pixels are in memory — the reviewer's bypass file."""
+    return b'P6\n%d %d\n255\n' % (w, h) + b'\x00' * (w * h * 3)
+
+
+# --- M7: an undecodable file is refused at ingest, and publish keeps the cap ----
+
+def test_ingest_refuses_what_it_cannot_decode():
+    with pytest.raises(photos.Undecodable):
+        photos.ingest(b'not really an image', 'shot.heic')
+    with pytest.raises(photos.Undecodable):
+        photos.ingest(_ppm(4, 4), 'renamed.jpg')                        # PPM is not a vetted decoder
+
+
+def test_upload_of_undecodable_file_is_415(client, mailer):
+    signed_in(client, mailer)
+    kid = client.post(K + '/').get_json()['id']
+    r = _up(client, kid, 1, _ppm(4, 4), name='IMG_1.jpg')
+    assert r.status_code == 415
+    assert 'could not read' in r.get_json()['error']
+    assert client.get(f'{K}/{kid}/photos/1/original').status_code == 404   # nothing stored
+
+
+def test_export_hero_refuses_oversize_via_guarded_open(tmp_path, monkeypatch):
+    monkeypatch.setattr(photos, 'MAX_PIXELS_NON_JPEG', 100)              # 10x10 PNG will be "too big"
+    store = _MemStore()
+    buf = io.BytesIO()
+    Image.new('RGB', (20, 20)).save(buf, 'PNG')
+    store.put('1/1/1.png', buf.getvalue())
+    k = {'tag': 'K02', 'hero_photo': 1, 'photos': [{'seq': 1, 'store_key': '1/1/1.png'}]}
+    assert publish.export_hero(store, k, 'sam', str(tmp_path)) == (None, None)
+    assert not os.path.exists(os.path.join(tmp_path, 'K02.jpg'))
+
+
+def test_export_hero_never_opens_unvetted_formats(tmp_path):
+    store = _MemStore()
+    store.put('1/1/1.jpg', _ppm(4, 4))                                    # a PPM wearing a .jpg key
+    k = {'tag': 'K03', 'hero_photo': 1, 'photos': [{'seq': 1, 'store_key': '1/1/1.jpg'}]}
+    assert publish.export_hero(store, k, 'sam', str(tmp_path)) == (None, None)

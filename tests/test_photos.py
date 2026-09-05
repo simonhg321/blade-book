@@ -50,10 +50,9 @@ def test_ingest_thumb_respects_exif_orientation():
     assert (r.width, r.height) == (1200, 900)  # dims are of the stored original, untouched
 
 
-def test_ingest_undecodable_but_allowed_ext_is_stored_without_thumb():
-    r = photos.ingest(b'not really an image', 'shot.heic')
-    assert r.ext == 'heic' and r.thumb is None and r.width is None and r.height is None
-    assert r.sha256 == hashlib.sha256(b'not really an image').hexdigest()
+def test_ingest_undecodable_but_allowed_ext_is_refused():
+    with pytest.raises(photos.Undecodable):
+        photos.ingest(b'not really an image', 'shot.heic')
 
 
 def test_ingest_rejects_too_big_and_bad_type():

@@ -53,16 +53,13 @@ def test_thumb_and_original_endpoints(client, mailer):
     assert client.get(f'{K}/{kid}/photos/3/original').status_code == 404
 
 
-def test_undecodable_heic_is_stored_without_thumb(client, mailer, app, env):
+def test_undecodable_heic_is_refused_415(client, mailer, app, env):
     me = signed_in(client, mailer)
     kid = client.post(K + '/').get_json()['id']
     r = _up(client, kid, 1, b'\x00\x00\x00\x18ftypheic-not-really', name='IMG_9.HEIC')
-    assert r.status_code == 201
-    assert r.get_json()['has_thumb'] is False and r.get_json()['width'] is None
-    assert app.config['STORE'].exists(f"{me['id']}/{kid}/1.heic")
-    assert client.get(f'{K}/{kid}/photos/1/thumb').status_code == 404
-    o = client.get(f'{K}/{kid}/photos/1/original')
-    assert o.status_code == 200 and o.mimetype == 'image/heic'
+    assert r.status_code == 415
+    assert not app.config['STORE'].exists(f"{me['id']}/{kid}/1.heic")
+    assert client.get(f'{K}/{kid}/photos/1/original').status_code == 404
 
 
 def test_slot_rules(client, mailer, app, env):

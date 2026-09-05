@@ -107,13 +107,15 @@ def test_decode_not_configured_is_503(client, mailer, app):
     assert client.post(f'{K}/{kid}/decode').status_code == 503
 
 
-def test_decode_skips_undecodable_photos_and_400s_when_none(client, mailer, decoder):
+def test_decode_refuses_undecodable_photo_at_upload(client, mailer, decoder):
+    # M7 (security review): an undecodable file is now refused at ingest, not
+    # stored with no thumb — it never reaches decode's own skip-and-400 path.
     signed_in(client, mailer, 'a@example.com')
     kid = client.post(K + '/').get_json()['id']
     r = client.post(f'{K}/{kid}/photos/1', data={'photo': (io.BytesIO(b'\x00' * 2000), 'raw.dng')}, content_type='multipart/form-data')
-    assert r.status_code == 201   # stored, no thumb (plan 03 behaviour)
+    assert r.status_code == 415
     r = client.post(f'{K}/{kid}/decode')
-    assert r.status_code == 400 and 'decodable' in r.get_json()['error']
+    assert r.status_code == 400 and 'add the box' in r.get_json()['error']   # no photos at all
     assert decoder.calls == []
 
 
