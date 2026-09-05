@@ -17,7 +17,7 @@ import shutil
 import zipfile
 from datetime import datetime, timezone
 
-from bb import auth, db, publish, search
+from bb import auth, cdn, db, publish, search
 
 log = logging.getLogger('blade-book.account')
 
@@ -55,11 +55,13 @@ def remove_public_surface(handle):
     lockf = open(lock_path, 'w')
     try:
         fcntl.flock(lockf, fcntl.LOCK_EX)
+        gone = cdn.bundle_files(dest)              # what the edge may still hold (review L3)
         shutil.rmtree(dest, ignore_errors=True)
         shutil.rmtree(dest + '.tmp', ignore_errors=True)
     finally:
         fcntl.flock(lockf, fcntl.LOCK_UN)
         lockf.close()
+    cdn.purge_urls([cdn.public_url(handle, rel) for rel in gone])
     try:
         os.unlink(lock_path)
     except FileNotFoundError:

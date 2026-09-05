@@ -296,3 +296,35 @@ def test_dead_token_still_says_expired(client, mailer):
     assert client.get(A + '/magic?t=nope').headers['Location'].endswith('?auth=expired')
     assert client.post(A + '/magic/confirm', data={'t': 'nope'}, headers={'Origin': 'http://localhost'}) \
         .headers['Location'].endswith('?auth=expired')
+
+
+from bb import cdn
+
+
+# --- L3: removed public files are purged from the edge -----------------------------
+
+def test_remove_public_surface_purges_every_file(env, monkeypatch):
+    dest = publish.bundle_dir('sam')
+    os.makedirs(os.path.join(dest, 'img'))
+    open(os.path.join(dest, 'index.html'), 'w').close()
+    open(os.path.join(dest, 'img', 'K01.jpg'), 'w').close()
+    purged = []
+    monkeypatch.setattr(cdn, 'purge_urls', lambda urls: purged.extend(urls) or len(urls))
+    assert account.remove_public_surface('sam') is True
+    assert sorted(purged) == [cdn.public_url('sam', 'img/K01.jpg'), cdn.public_url('sam', 'index.html')]
+
+
+def test_rebuild_purges_files_that_vanished(env, con, monkeypatch):
+    from bb import store as store_mod
+    from tests.test_account import _knife_with_photo
+    u = _user(con)
+    store = store_mod.from_paths()
+    k = _knife_with_photo(con, store, u, tag_photo=_jpeg_with_comment(b'', (40, 30)))
+    publish.build_user(con, u, store)
+    hero = cdn.public_url('sam', f"img/{k['tag']}.jpg")
+    purged = []
+    monkeypatch.setattr(cdn, 'purge_urls', lambda urls: purged.extend(urls) or len(urls))
+    db.set_public(con, u['id'], [k['id']], False)                          # bb/db.py:639
+    publish.build_user(con, db.get_user(con, u['id']), store)
+    assert hero in purged and cdn.public_url('sam', f"{k['tag']}/index.html") in purged
+    assert cdn.public_url('sam', 'index.html') not in purged                # still there, rewritten
