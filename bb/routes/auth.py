@@ -25,6 +25,25 @@ def _landing(**qs):
     return redirect(LANDING)
 
 
+FLOW_COOKIE_PATH = paths.API_PREFIX + '/auth'
+
+
+def _flow_cookie(resp, name, value, max_age):
+    """A browser-binding cookie for a sign-in flow (review M2). Scoped to the
+    auth routes, HttpOnly, and — because Apple's form_post callback is a
+    cross-site POST — SameSite=None (which browsers only honour with Secure,
+    hence the https check; plain-http test runs fall back to Lax)."""
+    secure = auth.base_url().startswith('https')
+    resp.set_cookie(name, value, max_age=max_age, path=FLOW_COOKIE_PATH, httponly=True,
+                    secure=secure, samesite='None' if secure else 'Lax')
+    return resp
+
+
+def _clear_flow_cookie(resp, name):
+    resp.delete_cookie(name, path=FLOW_COOKIE_PATH)
+    return resp
+
+
 @bp.post('/magic')
 def request_magic_link():
     body = request.get_json(silent=True) or {}
@@ -110,7 +129,8 @@ def oidc_start(name):
         state = db.create_oauth_state(con, provider.name, nonce)
     finally:
         con.close()
-    return redirect(oidc.authorize_url(provider, state, nonce))
+    resp = redirect(oidc.authorize_url(provider, state, nonce))
+    return _flow_cookie(resp, 'bb_oidc', state, db.STATE_TTL_MIN * 60)
 
 
 @bp.route('/<name>/callback', methods=['GET', 'POST'])
@@ -123,21 +143,23 @@ def oidc_callback(name):
     con = db.connect()
     try:
         saved = db.pop_oauth_state(con, state) if state else None
-        if params.get('error') or not code or saved is None or saved['provider'] != provider.name:
-            log.warning('%s callback rejected: error=%r code=%s state_ok=%s',
-                        provider.name, str(params.get('error'))[:64], bool(code), saved is not None)
-            return _landing(auth='failed')
+        bound = request.cookies.get('bb_oidc') == state
+        if params.get('error') or not code or saved is None or saved['provider'] != provider.name or not bound:
+            log.warning('%s callback rejected: error=%r code=%s state_ok=%s browser_bound=%s',
+                        provider.name, str(params.get('error'))[:64], bool(code),
+                        saved is not None, bound)
+            return _clear_flow_cookie(_landing(auth='failed'), 'bb_oidc')
         try:
             claims = oidc.exchange_code(provider, code, saved['nonce'])
         except oidc.OIDCError as e:
             log.warning('%s exchange failed: %s', provider.name, e)
-            return _landing(auth='failed')
+            return _clear_flow_cookie(_landing(auth='failed'), 'bb_oidc')
         if not claims['email_verified']:
             log.warning('%s sign-in rejected: email not verified by provider', provider.name)
-            return _landing(auth='unverified')
+            return _clear_flow_cookie(_landing(auth='unverified'), 'bb_oidc')
         user = auth.sign_in_by_email(con, claims['email'], provider=provider.name,
                                      sub=claims['sub'])
     finally:
         con.close()
     log.info('%s sign-in: %s (@%s)', provider.name, user['email'], user['handle'])
-    return _landing()
+    return _clear_flow_cookie(_landing(), 'bb_oidc')

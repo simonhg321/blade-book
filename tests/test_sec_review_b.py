@@ -195,3 +195,39 @@ def test_cookie_without_session_row_is_not_signed_in(client, mailer, con):
     con.execute('DELETE FROM sessions')
     con.commit()
     assert client.get(A + '/me').status_code == 401
+
+
+from tests.test_auth_oidc import _fake_exchange, _start, both  # noqa: F401 — fixture re-export
+
+
+# --- M2a: an OIDC callback minted elsewhere does not sign this browser in ------
+
+def test_oidc_callback_requires_the_flow_cookie(client, both, monkeypatch, app):
+    _fake_exchange(monkeypatch, {'google': {'sub': 'g-9', 'email': 'attacker@example.com',
+                                            'email_verified': True}})
+    q = _start(client, 'google')                                          # attacker's browser starts
+    victim = app.test_client()                                            # victim never visited /auth/google
+    r = victim.get(f"/blade-book/api/auth/google/callback?code=c0de&state={q['state'][0]}")
+    assert r.status_code == 302 and r.headers['Location'].endswith('?auth=failed')
+    assert victim.get(A + '/me').status_code == 401
+    # the state was burned: replaying it in the attacker's own browser fails too
+    r = client.get(f"/blade-book/api/auth/google/callback?code=c0de&state={q['state'][0]}")
+    assert r.headers['Location'].endswith('?auth=failed')
+
+
+def test_oidc_flow_cookie_is_scoped_and_short_lived(client, both):
+    r = client.get('/blade-book/api/auth/google')
+    assert r.status_code == 302
+    c = client.get_cookie('bb_oidc', path='/blade-book/api/auth')
+    assert c is not None and c.http_only and c.path == '/blade-book/api/auth'
+    assert c.max_age == db.STATE_TTL_MIN * 60
+
+
+def test_oidc_same_browser_still_signs_in(client, both, monkeypatch):
+    _fake_exchange(monkeypatch, {'google': {'sub': 'g-1', 'email': 'sam@example.com',
+                                            'email_verified': True}})
+    q = _start(client, 'google')
+    r = client.get(f"/blade-book/api/auth/google/callback?code=c0de&state={q['state'][0]}")
+    assert r.headers['Location'].endswith('/blade-book/')
+    assert client.get(A + '/me').status_code == 200
+    assert client.get_cookie('bb_oidc', path='/blade-book/api/auth') is None   # cleared on callback
