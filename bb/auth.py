@@ -177,6 +177,49 @@ UNAUTHENTICATED_HTML = (
 )
 
 
+def mask_email(email):
+    local, _, domain = email.partition('@')
+    return f'{local[:1]}***@{domain}'
+
+
+def confirm_signin_html(email, token, current_handle=None):
+    """The confirm page for a magic link opened outside the browser that asked
+    for it (review M2): one same-origin POST stands between the link and a
+    session, so a link an attacker minted cannot sign this browser in silently.
+    Only the masked email and the token go in; both are escaped."""
+    from markupsafe import escape
+    who = escape(mask_email(email))
+    action = f'{paths.API_PREFIX}/auth/magic/confirm'
+    if current_handle:
+        note = (f'<p>you are signed in as <b>@{escape(current_handle)}</b> — continuing '
+                f'will switch this browser to {who}.</p>')
+        button = 'switch account'
+    else:
+        note = f'<p>sign in to blade-book as <b>{who}</b>?</p>'
+        button = 'continue'
+    return (
+        '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        '<meta name="robots" content="noindex">'
+        '<title>Confirm sign-in — blade-book</title>'
+        '<style>body{font-family:system-ui,sans-serif;background:#f6f1e7;color:#1a1a1a;margin:0;'
+        'display:flex;min-height:100vh;align-items:center;justify-content:center}'
+        'main{text-align:center;padding:2rem;max-width:26rem}h1{font-size:1.6rem;margin:0 0 .5rem}'
+        'p{margin:.4rem 0}button{font:inherit;font-weight:600;padding:.6rem 1.2rem;border:2px solid #1a1a1a;'
+        'border-radius:8px;background:#1a1a1a;color:#f6f1e7;cursor:pointer;margin-top:1rem}'
+        'a{color:#1a1a1a}</style></head><body><main>'
+        '<h1>confirm sign-in</h1>'
+        f'{note}'
+        '<p style="color:#666;font-size:.9rem">this link was opened in a different browser than '
+        'the one that asked for it.</p>'
+        f'<form method="post" action="{action}">'
+        f'<input type="hidden" name="t" value="{escape(token)}">'
+        f'<button type="submit">{button}</button></form>'
+        f'<p style="margin-top:1.2rem"><a href="{paths.URL_PREFIX}/">no, take me home</a></p>'
+        '</main></body></html>'
+    )
+
+
 def _wants_html():
     """True for a browser navigation (address bar, link), false for fetch/XHR.
     fetch() sends Accept */* by default; navigations rank text/html first."""

@@ -34,7 +34,8 @@ def test_click_creates_user_signs_in_and_verifies(client, mailer, env):
     link = magic_link_from(mailer)
     r = client.get(link)
     assert r.status_code == 302 and r.headers['Location'].endswith('/blade-book/')
-    cookie = r.headers.get('Set-Cookie', '')
+    # two Set-Cookie headers now (bb_magic cleared + bb_session set) — find bb_session's
+    cookie = next(c for c in r.headers.get_all('Set-Cookie') if c.startswith('bb_session='))
     assert 'bb_session=' in cookie and 'HttpOnly' in cookie
     assert 'Path=/blade-book' in cookie and 'SameSite=Lax' in cookie
     assert 'Secure' not in cookie  # BASE_URL is http in tests
@@ -107,11 +108,15 @@ def test_secure_cookie_when_base_url_is_https(env, mailer, monkeypatch):
     monkeypatch.setenv('BASE_URL', 'https://blade-book.com')
     from app import create_app
     c = create_app(mailer=mailer).test_client()
-    c.post('/blade-book/api/auth/magic', json={'email': 'sam@example.com'})
+    # same host for both calls: the request-scoped bb_magic cookie is host-bound,
+    # so requesting on 'localhost' and clicking on 'blade-book.com' would look
+    # like two different browsers to the cookiejar, not a scheme difference
+    c.post('/blade-book/api/auth/magic', json={'email': 'sam@example.com'}, base_url='https://blade-book.com')
     link = magic_link_from(mailer)
     assert link.startswith('https://blade-book.com/blade-book/api/auth/magic?t=')
     r = c.get(link.replace('https://blade-book.com', ''), base_url='https://blade-book.com')
-    assert 'Secure' in r.headers.get('Set-Cookie', '')
+    cookie = next(sc for sc in r.headers.get_all('Set-Cookie') if sc.startswith('bb_session='))
+    assert 'Secure' in cookie
 
 
 def test_login_required_decorator_sets_g_user(app, mailer):

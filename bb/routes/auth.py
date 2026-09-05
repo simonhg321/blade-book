@@ -50,13 +50,14 @@ def request_magic_link():
     email = (body.get('email') or '').strip().lower()
     if not EMAIL_RE.match(email) or len(email) > 254:
         return jsonify({'error': 'enter a valid email'}), 400
+    flow = secrets.token_urlsafe(24)
     con = db.connect()
     try:
         reason = auth.check_rate_limits(con, email)
         if reason:
             log.warning('rate limited %s from %s: %s', email, auth.client_ip(), reason)
             return jsonify({'error': reason}), 429
-        token = db.create_magic_token(con, email, auth.client_ip())
+        token = db.create_magic_token(con, email, auth.client_ip(), flow=db._sha(flow))
     finally:
         con.close()
     link = f'{auth.base_url()}{paths.API_PREFIX}/auth/magic?t={token}'
@@ -67,7 +68,17 @@ def request_magic_link():
         log.exception('magic link send failed for %s', email)
         return jsonify({'error': 'could not send the email — try again in a minute'}), 502
     log.info('magic link requested for %s from %s', email, auth.client_ip())
-    return jsonify({'ok': True}), 202
+    resp = jsonify({'ok': True})
+    resp.status_code = 202
+    return _flow_cookie(resp, 'bb_magic', flow, db.MAGIC_TTL_MIN * 60)
+
+
+def _finish_magic_sign_in(con, token):
+    """Burn the token and sign in; None when the token is dead."""
+    email = db.consume_magic_token(con, token) if token else None
+    if email is None:
+        return None
+    return auth.sign_in_by_email(con, email)
 
 
 @bp.get('/magic')
@@ -75,14 +86,42 @@ def click_magic_link():
     token = request.args.get('t', '')
     con = db.connect()
     try:
-        email = db.consume_magic_token(con, token) if token else None
-        if email is None:
-            return _landing(auth='expired')
-        user = auth.sign_in_by_email(con, email)
+        peek = db.peek_magic_token(con, token) if token else None
+        if peek is None:
+            return _clear_flow_cookie(_landing(auth='expired'), 'bb_magic')
+        cookie = request.cookies.get('bb_magic')
+        bound = bool(cookie) and peek['flow'] is not None and db._sha(cookie) == peek['flow']
+        if not bound:
+            # opened somewhere else than where it was requested (another device —
+            # or an attacker's link in a victim's browser, review M2): ask first
+            current = auth.current_user(con)
+            log.info('magic link for %s opened unbound from %s (signed in: %s)',
+                     peek['email'], auth.client_ip(), current['handle'] if current else '-')
+            html = auth.confirm_signin_html(peek['email'], token, current['handle'] if current else None)
+            return html, 200, {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store'}
+        user = _finish_magic_sign_in(con, token)
+        if user is None:
+            return _clear_flow_cookie(_landing(auth='expired'), 'bb_magic')
     finally:
         con.close()
     log.info('magic link sign-in: %s (@%s)', user['email'], user['handle'])
-    return _landing()
+    return _clear_flow_cookie(_landing(), 'bb_magic')
+
+
+@bp.post('/magic/confirm')
+def confirm_magic_link():
+    """The confirm page's form. Form-encoded on purpose (no JS on that page);
+    the same-origin gate in app.py is what makes this safe to accept."""
+    token = request.form.get('t', '')
+    con = db.connect()
+    try:
+        user = _finish_magic_sign_in(con, token)
+    finally:
+        con.close()
+    if user is None:
+        return _landing(auth='expired')
+    log.info('magic link sign-in (confirmed): %s (@%s)', user['email'], user['handle'])
+    return _clear_flow_cookie(_landing(), 'bb_magic')
 
 
 @bp.get('/me')

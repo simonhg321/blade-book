@@ -218,7 +218,8 @@ CREATE TABLE IF NOT EXISTS magic_tokens (
   ip TEXT,
   created TEXT NOT NULL,
   expires TEXT NOT NULL,
-  used_at TEXT
+  used_at TEXT,
+  flow TEXT
 );
 CREATE INDEX IF NOT EXISTS magic_tokens_email ON magic_tokens(email, created);
 
@@ -399,14 +400,25 @@ def _plus(minutes):
 
 # --- magic links -----------------------------------------------------------
 
-def create_magic_token(con, email, ip):
+def create_magic_token(con, email, ip, flow=None):
+    """flow = hash of the requesting browser's bb_magic cookie (review M2), or
+    None for a request without one (non-browser clients)."""
     token = secrets.token_urlsafe(32)
     con.execute(
-        'INSERT INTO magic_tokens (token_hash, email, ip, created, expires) '
-        'VALUES (?, ?, ?, ?, ?)',
-        (_sha(token), _norm_email(email), ip, now(), _plus(MAGIC_TTL_MIN)))
+        'INSERT INTO magic_tokens (token_hash, email, ip, created, expires, flow) '
+        'VALUES (?, ?, ?, ?, ?, ?)',
+        (_sha(token), _norm_email(email), ip, now(), _plus(MAGIC_TTL_MIN), flow))
     con.commit()
     return token
+
+
+def peek_magic_token(con, token):
+    """{'email', 'flow'} for a live, unused token WITHOUT burning it — the
+    confirm page reads it; consume_magic_token burns it. None otherwise."""
+    row = con.execute(
+        'SELECT email, flow FROM magic_tokens WHERE token_hash = ? AND used_at IS NULL '
+        'AND expires > ?', (_sha(token), now())).fetchone()
+    return dict(row) if row else None
 
 
 def consume_magic_token(con, token):

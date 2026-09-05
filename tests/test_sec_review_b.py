@@ -231,3 +231,68 @@ def test_oidc_same_browser_still_signs_in(client, both, monkeypatch):
     assert r.headers['Location'].endswith('/blade-book/')
     assert client.get(A + '/me').status_code == 200
     assert client.get_cookie('bb_oidc', path='/blade-book/api/auth') is None   # cleared on callback
+
+
+import re
+
+
+def _token(link):
+    return re.search(r'[?&]t=([^&\s]+)', link).group(1)
+
+
+# --- M2b: a magic link clicked outside the requesting browser must be confirmed --
+
+def test_same_browser_magic_link_signs_in_silently(client, mailer):
+    client.post(A + '/magic', json={'email': 'sam@example.com'})
+    c = client.get_cookie('bb_magic', path='/blade-book/api/auth')
+    assert c is not None and c.http_only and c.max_age == db.MAGIC_TTL_MIN * 60
+    r = client.get(magic_link_from(mailer))
+    assert r.status_code == 302 and r.headers['Location'].endswith('/blade-book/')
+    assert client.get(A + '/me').status_code == 200
+    assert client.get_cookie('bb_magic', path='/blade-book/api/auth') is None
+
+
+def test_foreign_browser_gets_confirm_page_not_a_session(client, mailer, app):
+    client.post(A + '/magic', json={'email': 'attacker@example.com'})
+    link = magic_link_from(mailer)
+    victim = app.test_client()
+    r = victim.get(link)
+    assert r.status_code == 200 and r.mimetype == 'text/html'
+    body = r.get_data(as_text=True)
+    assert 'a***@example.com' in body and 'attacker@example.com' not in body
+    assert 'action="/blade-book/api/auth/magic/confirm"' in body and 'method="post"' in body
+    assert victim.get(A + '/me').status_code == 401                       # nothing happened yet
+    # the token is still live: the confirm consumes it
+    r = victim.post(A + '/magic/confirm', data={'t': _token(link)},
+                    headers={'Origin': 'http://localhost'})
+    assert r.status_code == 302 and r.headers['Location'].endswith('/blade-book/')
+    assert victim.get(A + '/me').get_json()['email'] == 'attacker@example.com'
+    # and only once
+    r = victim.post(A + '/magic/confirm', data={'t': _token(link)}, headers={'Origin': 'http://localhost'})
+    assert r.headers['Location'].endswith('?auth=expired')
+
+
+def test_confirm_page_names_the_signed_in_account(client, mailer, app):
+    signed_in(client, mailer, 'victim@example.com')                       # @victim is signed in here
+    other = app.test_client()
+    other.post(A + '/magic', json={'email': 'attacker@example.com'})
+    r = client.get(magic_link_from(mailer))
+    assert r.status_code == 200
+    body = r.get_data(as_text=True)
+    assert '@victim' in body and 'switch' in body.lower()
+    assert client.get(A + '/me').get_json()['email'] == 'victim@example.com'   # still the victim
+
+
+def test_confirm_from_foreign_origin_is_refused(client, mailer, app):
+    client.post(A + '/magic', json={'email': 'attacker@example.com'})
+    link = magic_link_from(mailer)
+    victim = app.test_client()
+    r = victim.post(A + '/magic/confirm', data={'t': _token(link)}, headers={'Origin': 'https://evil.example'})
+    assert r.status_code == 403
+    assert victim.get(A + '/me').status_code == 401
+
+
+def test_dead_token_still_says_expired(client, mailer):
+    assert client.get(A + '/magic?t=nope').headers['Location'].endswith('?auth=expired')
+    assert client.post(A + '/magic/confirm', data={'t': 'nope'}, headers={'Origin': 'http://localhost'}) \
+        .headers['Location'].endswith('?auth=expired')
