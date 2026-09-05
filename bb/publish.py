@@ -122,7 +122,10 @@ def export_hero(store, k, handle, img_dir):
     try:
         img = Image.open(io.BytesIO(store.get(p['store_key'])))
         img = ImageOps.exif_transpose(img)
-        img = img.convert('RGB')          # re-encode: all metadata dropped
+        img = img.convert('RGB')          # re-encode: EXIF/XMP/GPS dropped ...
+        img.info.pop('comment', None)     # ... and the JPEG COM segment, which
+                                          # Pillow would otherwise copy through
+                                          # convert() and write on save (review M9)
     except (OSError, KeyError, UnidentifiedImageError):
         return None, None
     os.makedirs(img_dir, exist_ok=True)
