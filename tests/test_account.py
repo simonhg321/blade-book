@@ -182,7 +182,7 @@ def test_export_zip_contents(env, con, tmp_path):
     assert os.path.basename(out).startswith('sam-') and out.endswith('.zip')
     with zipfile.ZipFile(out) as z:
         names = set(z.namelist())
-        assert names == {'knives.json', 'knives.csv', f"photos/{k['tag']}-1.jpg"}
+        assert names == {'knives.json', 'knives.csv', 'register.html', f"photos/{k['tag']}-1.jpg"}   # no thumb stored here
         j = json.loads(z.read('knives.json'))
         assert j['handle'] == 'sam' and j['count'] == 1 and j['missing_photos'] == []
         row = j['knives'][0]
@@ -211,12 +211,12 @@ def test_export_csv_columns_cover_private_and_skip_ids():
     cols = account.EXPORT_CSV_COLUMNS
     assert 'id' not in cols and 'owner_id' not in cols
     assert set(db.PRIVATE_COLUMNS) - {'events'} <= set(cols)
-    assert cols[-1] == 'photo_count' and cols[0] == 'tag'
+    assert cols[-4:] == account.EXPORT_DERIVED_COLUMNS and cols[0] == 'tag'
 
 
 def test_export_csv_columns_track_the_knives_ddl(con):
     ddl = [r[1] for r in con.execute('PRAGMA table_info(knives)')]
-    expected = tuple(c for c in ddl if c not in ('id', 'owner_id')) + ('photo_count',)
+    expected = tuple(c for c in ddl if c not in ('id', 'owner_id')) + account.EXPORT_DERIVED_COLUMNS
     assert account.EXPORT_CSV_COLUMNS == expected
 
 
@@ -262,3 +262,65 @@ def test_delete_account_without_photos_or_bundle(env, con, tmp_path):
     assert account.delete_account(con, store, u) == {
         'knives': 0, 'photos': 0, 'store_keys': 0, 'store_failed': 0, 'surface_removed': True}
     assert db.get_user_by_email(con, 'bare@example.com') is None and db.is_tombstoned(con, 'bare@example.com')
+
+
+# --- export: thumbs + register.html + file columns (2026-09-05) -----------------------
+
+def _with_thumb(store, k, data=b'THUMBBYTES'):
+    store.put(db.thumb_key(k['photos'][0]['store_key']), data)
+
+
+def test_export_zip_includes_thumbs_register_html_and_file_columns(env, con, tmp_path):
+    store = LocalFSStore(str(tmp_path / 'store'))
+    u = _user(con)
+    k = _knife_with_photo(con, store, u)
+    _with_thumb(store, k)
+    out = account.export_zip(con, store, u, str(tmp_path / 'exports'))
+    with zipfile.ZipFile(out) as z:
+        names = set(z.namelist())
+        assert names == {'knives.json', 'knives.csv', 'register.html',
+                         f"photos/{k['tag']}-1.jpg", f"thumbs/{k['tag']}-1.jpg"}
+        assert z.read(f"thumbs/{k['tag']}-1.jpg") == b'THUMBBYTES'
+        assert z.getinfo(f"thumbs/{k['tag']}-1.jpg").compress_type == zipfile.ZIP_STORED
+        j = json.loads(z.read('knives.json'))
+        assert j['missing_thumbs'] == []
+        assert j['knives'][0]['photos'][0]['thumb'] == f"thumbs/{k['tag']}-1.jpg"
+        rows = list(csv.DictReader(io.StringIO(z.read('knives.csv').decode())))
+        assert rows[0]['hero_file'] == f"photos/{k['tag']}-1.jpg"
+        assert rows[0]['photo_files'] == f"photos/{k['tag']}-1.jpg"
+        assert rows[0]['thumb_files'] == f"thumbs/{k['tag']}-1.jpg"
+        assert list(rows[0].keys())[-4:] == ['photo_count', 'hero_file', 'photo_files', 'thumb_files']
+        page = z.read('register.html').decode()
+        assert k['tag'] in page and f'src="thumbs/{k["tag"]}-1.jpg"' in page
+        assert 'Sebenza' in page and '$475' in page and 'gift from Dad' in page   # owner's own page: private fields shown
+
+
+def test_export_zip_lists_missing_thumbs(env, con, tmp_path):
+    store = LocalFSStore(str(tmp_path / 'store'))
+    u = _user(con)
+    k = _knife_with_photo(con, store, u)                       # original only, no thumb
+    out = account.export_zip(con, store, u, str(tmp_path / 'exports'))
+    with zipfile.ZipFile(out) as z:
+        assert 'thumbs/' not in ' '.join(z.namelist())
+        j = json.loads(z.read('knives.json'))
+        assert j['missing_thumbs'] == [f"{k['tag']}-1"]
+        assert j['knives'][0]['photos'][0]['thumb'] is None
+        rows = list(csv.DictReader(io.StringIO(z.read('knives.csv').decode())))
+        assert rows[0]['thumb_files'] == '' and rows[0]['hero_file'] == f"photos/{k['tag']}-1.jpg"
+        page = z.read('register.html').decode()
+        assert k['tag'] in page and 'src="thumbs/' not in page   # no broken image, row still there
+
+
+def test_export_register_html_escapes_and_handles_no_photos(env, con, tmp_path):
+    store = LocalFSStore(str(tmp_path / 'store'))
+    u = _user(con)
+    k = db.create_draft_knife(con, u['id'])
+    con.execute("UPDATE knives SET model = 'Mnandi', notes_private = '<script>alert(1)</script> & co' WHERE id = ?", (k['id'],))
+    con.commit()
+    out = account.export_zip(con, store, u, str(tmp_path / 'exports'))
+    with zipfile.ZipFile(out) as z:
+        page = z.read('register.html').decode()
+        assert '<script>alert' not in page and '&lt;script&gt;alert(1)&lt;/script&gt; &amp; co' in page
+        assert k['tag'] in page and 'Mnandi' in page and 'draft' in page
+        rows = list(csv.DictReader(io.StringIO(z.read('knives.csv').decode())))
+        assert rows[0]['hero_file'] == '' and rows[0]['photo_files'] == ''

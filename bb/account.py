@@ -8,6 +8,7 @@ complete"): DB rows, store keys, the public bundle + its tmp + its lock, the
 search index, and a tombstone. tests/test_account.py enumerates every surface."""
 import csv
 import fcntl
+import html as html_mod
 import io
 import json
 import logging
@@ -91,7 +92,9 @@ def change_handle(con, user, new):
 
 # --- export ------------------------------------------------------------------------
 
-# The knives table in DDL order minus id/owner_id, plus photo_count. ext and
+# The knives table in DDL order minus id/owner_id, plus the derived columns:
+# photo_count, then the three file references into the ZIP (a CSV cell cannot
+# hold a picture, so the row points at photos/ and thumbs/ instead). ext and
 # confidence are JSON text in their cells. Never derived from PRAGMA at run
 # time: the header is a contract with whoever opens the CSV in a spreadsheet.
 EXPORT_CSV_COLUMNS = (
@@ -104,8 +107,9 @@ EXPORT_CSV_COLUMNS = (
     'confidence', 'card_text', 'decode_note',
     'notes_public', 'is_public', 'sale_status', 'asking_price', 'seller_note', 'listed_at',
     'hidden_at', 'hidden_by', 'hidden_note', 'hero_photo', 'created', 'updated',
-    'photo_count',
+    'photo_count', 'hero_file', 'photo_files', 'thumb_files',
 )
+EXPORT_DERIVED_COLUMNS = ('photo_count', 'hero_file', 'photo_files', 'thumb_files')
 
 
 def _csv_cell(v):
@@ -116,16 +120,113 @@ def _csv_cell(v):
     return v
 
 
+def _hero(k):
+    """The photo dict the register treats as the knife's face: the pinned
+    hero_photo seq, else the first slot. None without photos."""
+    photos_ = k.get('photos') or []
+    if not photos_:
+        return None
+    return next((p for p in photos_ if p['seq'] == k.get('hero_photo')), photos_[0])
+
+
+def _zip_stored(z, name, data):
+    z.writestr(zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0)), data,
+               compress_type=zipfile.ZIP_STORED)     # already-compressed JPEG bytes
+
+
+# --- register.html: the owner's own paper page inside the ZIP -----------------------
+
+_REGISTER_STYLE = '''
+  body{font-family:system-ui,-apple-system,sans-serif;background:#f6f1e7;color:#1a1a1a;margin:0;padding:24px}
+  main{max-width:960px;margin:0 auto}
+  h1{font-size:1.8rem;margin:0 0 4px}.sub{color:#666;margin:0 0 20px;font-size:.9rem}
+  .knife{display:grid;grid-template-columns:200px 1fr;gap:18px;background:#fff;border:2px solid #141210;
+         border-radius:14px;padding:16px;margin-bottom:16px;break-inside:avoid}
+  .knife img{width:200px;height:200px;object-fit:cover;border-radius:8px;background:#eee}
+  .nophoto{width:200px;height:200px;border-radius:8px;background:#eee;display:flex;align-items:center;
+           justify-content:center;color:#999;font-size:.85rem}
+  .knife h2{margin:0 0 2px;font-size:1.25rem}.tag{color:#666;font-size:.85rem;margin:0 0 10px}
+  dl{display:grid;grid-template-columns:max-content 1fr;gap:3px 14px;margin:0;font-size:.92rem}
+  dt{color:#666}dd{margin:0}.notes{margin-top:10px;white-space:pre-wrap;font-size:.92rem}
+  @media(max-width:600px){.knife{grid-template-columns:1fr}.knife img,.nophoto{width:100%;height:auto;aspect-ratio:1}}
+  @media print{body{background:#fff;padding:0}.knife{border-color:#999}}
+'''
+
+# (label, column); column None = the formatted born-on date
+_REGISTER_FIELDS = (
+    ('born', None), ('condition', 'condition'), ('status', 'status'), ('sale', 'sale_status'),
+    ('steel', 'blade_steel'), ('blade', 'blade_shape'), ('handle', 'handle_material'),
+    ('paid', 'price_paid'), ('from', 'acquired_from'), ('acquired', 'acquired_date'),
+    ('location', 'location'), ('asking', 'asking_price'),
+)
+_REGISTER_FLAGS = (('box', 'has_box'), ('card', 'has_card'), ('papers', 'has_papers'), ('pouch', 'has_pouch'))
+_REGISTER_NOTES = (('public note', 'notes_public'), ('private note', 'notes_private'),
+                   ('condition', 'condition_note'))
+
+
+def _register_title(k):
+    """'Large Sebenza 31' from model + ext, same rule as the public page."""
+    ext = k.get('ext') or {}
+    return publish.display_name({'model': k.get('model'), 'size': ext.get('size'),
+                                 'generation': ext.get('generation'), 'tag': k['tag']})
+
+
+def _register_html(user, knives, hero_thumb):
+    """One self-contained page: the hero thumb beside every knife's key fields,
+    private ones included — this is the owner's copy, not a public surface.
+    Every interpolated value goes through html.escape. hero_thumb maps a
+    knife id to its thumbs/ path in the ZIP, or None."""
+    e = html_mod.escape
+    parts = [f'<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
+             f'<meta name="viewport" content="width=device-width,initial-scale=1">\n'
+             f'<title>@{e(user["handle"])} — blade-book export</title>\n'
+             f'<style>{_REGISTER_STYLE}</style>\n</head>\n<body>\n<main>\n'
+             f'<h1>@{e(user["handle"])}</h1>\n'
+             f'<p class="sub">{len(knives)} knives · exported '
+             f'{datetime.now(timezone.utc).strftime("%Y-%m-%d")} · knives.csv and knives.json '
+             f'hold every column; photos/ holds the originals.</p>\n']
+    for k in knives:
+        thumb = hero_thumb.get(k['id'])
+        img = f'<img src="{e(thumb)}" alt="">' if thumb else '<div class="nophoto">no photo</div>'
+        dl = ''
+        for label, col in _REGISTER_FIELDS:
+            val = (publish._fmt_born(k.get('born_on'), k.get('born_on_precision')) if col is None
+                   else k.get(col))
+            if val in (None, ''):
+                continue
+            if col in ('price_paid', 'asking_price'):
+                val = f'${val:,.0f}' if float(val) == int(float(val)) else f'${val:,.2f}'
+            elif col == 'sale_status':
+                val = str(val).replace('_', ' ')
+            dl += f'<dt>{label}</dt><dd>{e(str(val))}</dd>'
+        flags = ', '.join(name for name, col in _REGISTER_FLAGS if k.get(col))
+        if flags:
+            dl += f'<dt>with</dt><dd>{e(flags)}</dd>'
+        notes = ''.join(f'<p class="notes"><b>{label}:</b> {e(str(k[col]))}</p>'
+                        for label, col in _REGISTER_NOTES if k.get(col))
+        maker = f' · {e(k["maker"])}' if k.get('maker') else ''
+        parts.append(f'<section class="knife">{img}<div>'
+                     f'<h2>{e(_register_title(k))}</h2><p class="tag">{e(k["tag"])}{maker}</p>'
+                     f'<dl>{dl}</dl>{notes}</div></section>\n')
+    parts.append('</main>\n</body>\n</html>\n')
+    return ''.join(parts)
+
+
 def export_zip(con, store, user, out_dir):
     """Everything the owner has, as one ZIP: knives.json (every column,
-    private ones included — it is their data), knives.csv, and the original
-    photos as photos/<TAG>-<seq>.jpg (stored, not deflated: JPEG). A photo the
-    store no longer has is skipped and named in missing_photos."""
+    private ones included — it is their data), knives.csv, the original
+    photos as photos/<TAG>-<seq>.jpg, the app's own thumbs as
+    thumbs/<TAG>-<seq>.jpg (both stored, not deflated: JPEG), and
+    register.html — a page showing each knife's hero thumb beside its key
+    fields, because a spreadsheet cannot show a picture from a local path.
+    A photo or thumb the store no longer has is skipped and named in
+    missing_photos / missing_thumbs."""
     os.makedirs(out_dir, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')
     path = os.path.join(out_dir, f"{user['handle']}-{stamp}-{secrets.token_hex(4)}.zip")
     knives = db.full_register(con, user['id'])
-    missing = []
+    missing, missing_thumbs = [], []
+    hero_thumb = {}
     with zipfile.ZipFile(path, 'w', compression=zipfile.ZIP_DEFLATED) as z:
         for k in knives:
             for p in k['photos']:
@@ -135,23 +236,38 @@ def export_zip(con, store, user, out_dir):
                 except KeyError:
                     missing.append(name)
                     p['file'] = None
-                    continue
-                p['file'] = f'photos/{name}.jpg'
-                z.writestr(zipfile.ZipInfo(p['file'], date_time=(1980, 1, 1, 0, 0, 0)), data,
-                           compress_type=zipfile.ZIP_STORED)
+                else:
+                    p['file'] = f'photos/{name}.jpg'
+                    _zip_stored(z, p['file'], data)
+                try:
+                    tdata = store.get(db.thumb_key(p['store_key']))
+                except KeyError:
+                    missing_thumbs.append(name)
+                    p['thumb'] = None
+                else:
+                    p['thumb'] = f'thumbs/{name}.jpg'
+                    _zip_stored(z, p['thumb'], tdata)
+            hero = _hero(k)
+            hero_thumb[k['id']] = hero['thumb'] if hero else None
         z.writestr('knives.json', json.dumps({
             'generated': datetime.now(timezone.utc).isoformat(), 'handle': user['handle'],
-            'count': len(knives), 'missing_photos': missing, 'knives': knives}, indent=1, default=str))
+            'count': len(knives), 'missing_photos': missing, 'missing_thumbs': missing_thumbs,
+            'knives': knives}, indent=1, default=str))
         buf = io.StringIO()
         w = csv.DictWriter(buf, fieldnames=EXPORT_CSV_COLUMNS, extrasaction='ignore')
         w.writeheader()
         for k in knives:
             row = {c: _csv_cell(k.get(c)) for c in EXPORT_CSV_COLUMNS}
+            hero = _hero(k)
             row['photo_count'] = len(k['photos'])
+            row['hero_file'] = (hero or {}).get('file') or ''
+            row['photo_files'] = ';'.join(p['file'] for p in k['photos'] if p.get('file'))
+            row['thumb_files'] = ';'.join(p['thumb'] for p in k['photos'] if p.get('thumb'))
             w.writerow(row)
         z.writestr('knives.csv', buf.getvalue())
-    log.info('export for @%s: %d knives, %d missing photos, %d bytes',
-             user['handle'], len(knives), len(missing), os.path.getsize(path))
+        z.writestr('register.html', _register_html(user, knives, hero_thumb))
+    log.info('export for @%s: %d knives, %d missing photos, %d missing thumbs, %d bytes',
+             user['handle'], len(knives), len(missing), len(missing_thumbs), os.path.getsize(path))
     return path
 
 

@@ -59,7 +59,7 @@ def test_export_zip_and_rate_limit(client, mailer, app):
     assert r.headers['Content-Type'] == 'application/zip'
     assert f"blade-book-{me['handle']}.zip" in r.headers['Content-Disposition']
     with zipfile.ZipFile(io.BytesIO(r.data)) as z:
-        assert {'knives.json', 'knives.csv', f"photos/{k['tag']}-1.jpg"} == set(z.namelist())
+        assert {'knives.json', 'knives.csv', 'register.html', f"photos/{k['tag']}-1.jpg"} == set(z.namelist())
         assert json.loads(z.read('knives.json'))['count'] == 1
     r.close()                                                              # release the file (Werkzeug 3.1 keeps it open until close)
     from bb import paths
