@@ -8,7 +8,8 @@ import re
 CONF = ['high', 'medium', 'low']
 
 CORE_PROPS = {
-    'model': {'type': 'string', 'description': 'Model line only, e.g. "Sebenza", "Inkosi", "Mnandi"; empty if unknown'},
+    'maker_name': {'type': 'string', 'description': 'Maker / brand as printed on the card, box or blade, e.g. "Chris Reeve Knives", "Hinderer Knives", "Strider"; empty if nothing in frame names the maker'},
+    'model': {'type': 'string', 'description': 'Model line only, e.g. "Sebenza", "Inkosi", "Mnandi", "XM-18"; empty if unknown'},
     'variant': {'type': 'string', 'description': 'Edition/qualifier not covered elsewhere, e.g. "25th Anniversary"; empty if none'},
     'blade_steel': {'type': 'string', 'description': 'As printed, e.g. "CPM MagnaCut", "S35VN", "Damascus"; empty if unknown'},
     'blade_shape': {'type': 'string', 'description': '"Drop Point", "Insingo", "Tanto", "Wharncliffe"…; empty if unknown'},
@@ -36,6 +37,9 @@ BASE_PROMPT = (
     'Photo 1 should show the box, the kit and the birth card together; photos 2 and 3 are '
     'the knife open and closed. Fill EVERY field of the schema.\n\n'
     'Rules:\n'
+    '- maker_name: the maker is NOT known in advance. Read the brand from the card, certificate, '
+    'box label or blade tang stamp, as printed. Maker-specific rules below apply ONLY when the '
+    'maker matches; otherwise leave that maker\'s ext fields empty.\n'
     '- If a birth card, certificate or box label is visible, READ IT and use it verbatim for '
     'steel, hardness, date, inlay, hand. Transcribe the whole card into card_text, one printed '
     'line per line. Set no_card=true only when no card is in frame.\n'

@@ -98,7 +98,7 @@ def change_handle(con, user, new):
 # confidence are JSON text in their cells. Never derived from PRAGMA at run
 # time: the header is a contract with whoever opens the CSV in a spreadsheet.
 EXPORT_CSV_COLUMNS = (
-    'tag', 'maker', 'status',
+    'tag', 'maker', 'maker_name', 'status',
     'model', 'variant', 'blade_steel', 'blade_shape', 'blade_length_in', 'handle_material', 'lock_type',
     'born_on', 'born_on_precision', 'born_on_source', 'condition',
     'has_box', 'has_card', 'has_papers', 'has_pouch', 'has_lanyard', 'has_spare_hardware',
@@ -168,7 +168,8 @@ def _register_title(k):
     """'Large Sebenza 31' from model + ext, same rule as the public page."""
     ext = k.get('ext') or {}
     return publish.display_name({'model': k.get('model'), 'size': ext.get('size'),
-                                 'generation': ext.get('generation'), 'tag': k['tag']})
+                                 'generation': ext.get('generation'), 'tag': k['tag'],
+                                 'maker': k.get('maker') or 'crk', 'maker_name': k.get('maker_name')})
 
 
 def _register_html(user, knives, hero_thumb):
@@ -204,7 +205,8 @@ def _register_html(user, knives, hero_thumb):
             dl += f'<dt>with</dt><dd>{e(flags)}</dd>'
         notes = ''.join(f'<p class="notes"><b>{label}:</b> {e(str(k[col]))}</p>'
                         for label, col in _REGISTER_NOTES if k.get(col))
-        maker = f' · {e(k["maker"])}' if k.get('maker') else ''
+        brand = k.get('maker_name') or ('Chris Reeve Knives' if (k.get('maker') or 'crk') == 'crk' else '')
+        maker = f' · {e(brand)}' if brand else ''
         parts.append(f'<section class="knife">{img}<div>'
                      f'<h2>{e(_register_title(k))}</h2><p class="tag">{e(k["tag"])}{maker}</p>'
                      f'<dl>{dl}</dl>{notes}</div></section>\n')

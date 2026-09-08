@@ -26,7 +26,7 @@ log = logging.getLogger('blade-book.publish')
 SAFE_HANDLE = re.compile(r'[a-z0-9-]{3,24}')
 
 # spec §8 whitelist, verbatim — core columns and (for crk) ext keys.
-PUBLIC_FIELDS = ('tag', 'maker', 'model', 'variant', 'blade_steel', 'blade_shape',
+PUBLIC_FIELDS = ('tag', 'maker', 'maker_name', 'model', 'variant', 'blade_steel', 'blade_shape',
                  'born_on', 'born_on_precision', 'notes_public')
 PUBLIC_EXT = ('generation', 'size', 'handle_treatment', 'graphic_name',
               'inlay_material', 'damascus_smith', 'damascus_pattern',
@@ -75,12 +75,19 @@ def public_row(k, user):
 
 
 def display_name(row):
-    """'Large Sebenza 31', 'Mnandi', 'Small Inkosi' — from public fields only."""
+    """'Large Sebenza 31', 'Mnandi', 'Small Inkosi' — from public fields only.
+    Other makers carry the brand ('Hinderer Knives XM-18', plan 14): the site
+    is no longer implicitly CRK. CRK names stay as they always were."""
     if row.get('model') == 'Sebenza':
         return ' '.join(x for x in (row.get('size'), 'Sebenza', row.get('generation')) if x)
     name = row.get('model') or row['tag']
     if row.get('size') and row.get('size') not in name:
-        return f"{row['size']} {name}"
+        name = f"{row['size']} {name}"
+    brand = (row.get('maker_name') or '').strip()
+    if row.get('maker', 'crk') != 'crk' and brand and brand.lower() not in name.lower():
+        first = brand.split()[0].lower()
+        if first not in name.lower():           # "Strider SNG" already says Strider
+            name = f'{brand} {name}'
     return name
 
 
@@ -324,6 +331,7 @@ def _knife_page(row, handle, gated):
         if value:
             specs.append(f'<tr><th>{e(label)}</th><td>{e(str(value))}</td></tr>')
 
+    spec('Maker', row.get('maker_name'))
     spec('Born on', row.get('born'))
     spec('Blade', row.get('blade_shape'))
     spec('Steel', row.get('blade_steel'))

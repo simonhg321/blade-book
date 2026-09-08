@@ -186,3 +186,19 @@ def test_query_results_ordered_by_born_year_descending(con):
     assert r['knives'][0]['born'] == 'January 1, 2021'     # First (most recent)
     assert r['knives'][1]['born'] == 'June 5, 2019'        # Second
     assert r['knives'][2]['born'] == 'March 14, 2008'      # Third (oldest)
+
+
+# --- plan 14: brand in the index ---
+
+def test_query_by_maker_name_and_makers_aggregate(con):
+    u = _mk_user(con)
+    _mk_knife(con, u['id'], maker_name='Chris Reeve Knives')
+    _mk_knife(con, u['id'], model='XM-18', born='2021-01-01', ext={'generation': '', 'size': ''},
+              maker='other', maker_name='Hinderer Knives')
+    search.reindex_user(con, u, _rows(con, u))
+    r = search.run_query(con, 'hinderer')
+    assert r['count'] == 1 and r['knives'][0]['maker_name'] == 'Hinderer Knives'
+    assert r['knives'][0]['name'] == 'Hinderer Knives XM-18'
+    r = search.run_query(con, '')
+    assert {tuple(p) for p in r['aggregates']['makers']} == {('Chris Reeve Knives', 1), ('Hinderer Knives', 1)}
+    assert search.run_query(con, 'zzz')['aggregates']['makers'] == []

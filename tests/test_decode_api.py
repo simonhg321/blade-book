@@ -139,3 +139,27 @@ def test_decode_result_appears_in_get_and_private_fields_stay_owner_only(client,
     j = client.get(f'{K}/{kid}').get_json()
     assert j['card_text'] == 'LARGE SEBENZA 31' and j['confidence']['model'] == 'high'
     assert 'card_text' in db.PRIVATE_COLUMNS  # the /@handle bundle (plan 06) strips it
+
+
+# --- plan 14: a Hinderer through the whole API ---
+
+def test_decode_refiles_other_brands_and_edit_refiles_back(client, mailer, decoder):
+    kid = _draft_with_photo(client, mailer)
+    decoder.result = ok_result(maker_name='Hinderer Knives', model='XM-18', card_text='XM-18 3.5" SPANTO')
+    j = client.post(f'{K}/{kid}/decode').get_json()
+    assert j['maker'] == 'other' and j['maker_name'] == 'Hinderer Knives' and j['model'] == 'XM-18'
+    assert j['ext'] == {} and j['decoded']['flags'] == []
+    # an 'other' knife rejects CRK-only fields on edit ...
+    r = client.patch(f'{K}/{kid}', json={'ext': {'generation': '31'}})
+    assert r.status_code == 400 and 'ext.generation' in r.get_json()['error']
+    # ... and re-files as CRK when the owner corrects the brand
+    j = client.patch(f'{K}/{kid}', json={'maker_name': 'Chris Reeve Knives'}).get_json()
+    assert j['maker'] == 'crk' and j['maker_name'] == 'Chris Reeve Knives'
+    j = client.patch(f'{K}/{kid}', json={'ext': {'generation': '31', 'size': 'Large'}}).get_json()
+    assert j['ext']['generation'] == '31'
+    # back to Hinderer: the CRK ext is dropped, not merged
+    j = client.patch(f'{K}/{kid}', json={'maker_name': 'Hinderer'}).get_json()
+    assert j['maker'] == 'other' and j['ext'] == {}
+    # a second decode on an 'other' draft keeps the hint when the model reads no brand
+    decoder.result = ok_result(maker_name='', card_text='', model='XM-18')
+    assert client.post(f'{K}/{kid}/decode').get_json()['maker'] == 'other'

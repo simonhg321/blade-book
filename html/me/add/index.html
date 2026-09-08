@@ -275,7 +275,7 @@
   $('note').addEventListener('input', function () { $('notestat').className = ''; $('notestat').textContent = 'typing…'; clearTimeout(noteTimer); noteTimer = setTimeout(saveNote, 1200); });
   $('note').addEventListener('blur', function () { clearTimeout(noteTimer); saveNote(); });
 
-  var CARD_ROWS = [['model', 'model'], ['ext.generation', 'generation'], ['ext.size', 'size'],
+  var CARD_ROWS = [['maker_name', 'maker'], ['model', 'model'], ['ext.generation', 'generation'], ['ext.size', 'size'],
     ['blade_shape', 'blade'], ['blade_steel', 'steel'], ['ext.hardness_note', 'hardness'],
     ['born_on', 'born on'], ['ext.hand', 'hand'], ['ext.crk_sku', 'SKU'],
     ['ext.handle_treatment', 'handle'], ['ext.inlay_material', 'inlay'], ['ext.damascus_smith', 'damascus'],

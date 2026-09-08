@@ -127,7 +127,7 @@
   var GEN = ['', 'Classic', '21', '25', '31'], HAND = ['', 'right', 'left'];
   var FIELDS = [
     ['sec', 'knife'],
-    ['model', 'model', 'text'], ['variant', 'variant', 'text'], ['ext.size', 'size', 'select', ['', 'Small', 'Large']],
+    ['maker_name', 'maker', 'text'], ['model', 'model', 'text'], ['variant', 'variant', 'text'], ['ext.size', 'size', 'select', ['', 'Small', 'Large']],
     ['ext.generation', 'generation', 'select', GEN], ['ext.crk_sku', 'SKU', 'text'], ['ext.special_edition', 'edition', 'text'],
     ['sec', 'blade'],
     ['blade_steel', 'steel', 'text'], ['ext.hardness_note', 'hardness', 'text'], ['blade_shape', 'shape', 'text'],
@@ -153,6 +153,8 @@
   var PRIVATE = { price_paid: 'paid', acquired_from: 'from', acquired_date: 'acquired', location: 'location', condition_note: 'condition', notes_private: 'notes' };
 
   function get(k, key) { return key.indexOf('ext.') === 0 ? (k.ext || {})[key.slice(4)] : k[key]; }
+  // ext.* rows are the CRK module's fields: another maker's knife never shows or posts them (plan 14)
+  function fieldsFor(k) { return (k.maker || 'crk') === 'crk' ? FIELDS : FIELDS.filter(function (f) { return f[0].indexOf('ext.') !== 0; }); }
   function isEmpty(v) { return v === null || v === undefined || v === ''; }
   function fmtDate(s) { return (s || '').slice(0, 10); }
   function ageLabel(m) { if (m == null) return ''; if (m < 1) return 'this month'; if (m < 24) return m + ' mo'; return Math.floor(m / 12) + ' yr'; }
@@ -174,14 +176,15 @@
   }
   function title(k) {
     var e = k.ext || {};
-    return [e.size, k.model, e.generation, k.blade_shape ? '· ' + k.blade_shape : '', k.blade_steel ? '· ' + k.blade_steel : ''].filter(Boolean).join(' ') || 'untitled';
+    var brand = (k.maker || 'crk') !== 'crk' && k.maker_name && (k.model || '').toLowerCase().indexOf(k.maker_name.split(' ')[0].toLowerCase()) === -1 ? k.maker_name : '';
+    return [brand, e.size, k.model, e.generation, k.blade_shape ? '· ' + k.blade_shape : '', k.blade_steel ? '· ' + k.blade_steel : ''].filter(Boolean).join(' ') || 'untitled';
   }
 
   function renderRows(tbody, k) {
     clear(tbody);
     var conf = k.confidence || {};
     var pendingSec = null;
-    FIELDS.forEach(function (f) {
+    fieldsFor(k).forEach(function (f) {
       if (f[0] === 'sec') { pendingSec = f[1]; return; }
       if (f[1] === 'story' || PRIVATE[f[0]]) return;               // story + private strip render elsewhere
       var v = get(k, f[0]);
@@ -249,7 +252,7 @@
 
   function buildForm(form, k) {
     clear(form);
-    FIELDS.forEach(function (f) {
+    fieldsFor(k).forEach(function (f) {
       if (f[0] === 'sec') { form.appendChild(el('label', 'sec', f[1])); return; }
       var v = get(k, f[0]);
       var lab = el('label', f[2] === 'bool' ? 'chk' : ''); var input;
@@ -288,7 +291,7 @@
 
   function formDiff(form, k) {
     var body = {}, ext = {};
-    FIELDS.forEach(function (f) {
+    fieldsFor(k).forEach(function (f) {
       if (f[0] === 'sec') return;
       var input = form.elements[f[0]]; if (!input) return;
       var v = f[2] === 'bool' ? input.checked : input.value;

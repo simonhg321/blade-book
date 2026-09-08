@@ -14,7 +14,8 @@ from datetime import datetime, timedelta, timezone
 
 from bb import paths
 
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
+MAKER_KEYS = ('crk', 'other')   # mirrors bb.makers.MAKERS — db never imports makers (test pins them equal)
 
 SALE_STATUSES = ('keeping', 'for_trade', 'for_sale', 'consigned', 'sold')
 KNIFE_STATUSES = ('draft', 'live')
@@ -125,6 +126,7 @@ CREATE TABLE IF NOT EXISTS knives (
   owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   tag TEXT NOT NULL,
   maker TEXT NOT NULL DEFAULT 'crk',
+  maker_name TEXT,
   status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN {KNIFE_STATUSES}),
   -- core
   model TEXT, variant TEXT, blade_steel TEXT, blade_shape TEXT,
@@ -242,6 +244,7 @@ CREATE TABLE IF NOT EXISTS search_cards (
   knife_id INTEGER PRIMARY KEY,
   owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   handle TEXT NOT NULL,
+  maker_name TEXT,
   model TEXT, generation TEXT, size TEXT,
   born_year INTEGER,
   damascus_smith TEXT, damascus_pattern TEXT, special_edition TEXT,
@@ -302,6 +305,16 @@ MIGRATIONS = {
     # come from SCHEMA on connect); magic_tokens.flow binds a link to the browser
     # that asked for it. All idempotent — old workers re-stamp 10 until restart.
     11: ['ALTER TABLE magic_tokens ADD COLUMN flow TEXT'],
+    # plan 14 any-maker: the brand as printed. Existing rows are all CRK (the
+    # only module before this), so backfill the name once — marked, because
+    # old workers re-stamp 11 until the restart and must not overwrite edits.
+    12: ['CREATE TABLE IF NOT EXISTS migration_marks (v INTEGER PRIMARY KEY)',
+         'ALTER TABLE knives ADD COLUMN maker_name TEXT',
+         'ALTER TABLE search_cards ADD COLUMN maker_name TEXT',
+         "UPDATE knives SET maker_name = 'Chris Reeve Knives' "
+         "WHERE maker = 'crk' AND (maker_name IS NULL OR maker_name = '') "
+         'AND NOT EXISTS (SELECT 1 FROM migration_marks WHERE v = 12)',
+         'INSERT OR IGNORE INTO migration_marks (v) VALUES (12)'],
 }
 
 
@@ -1096,7 +1109,7 @@ def record_decode_call(con, owner_id, knife_id):
     con.commit()
 
 
-_DECODE_COLUMNS = ('model', 'variant', 'blade_steel', 'blade_shape', 'blade_length_in',
+_DECODE_COLUMNS = ('maker_name', 'model', 'variant', 'blade_steel', 'blade_shape', 'blade_length_in',
                    'handle_material', 'lock_type', 'born_on', 'born_on_precision',
                    'born_on_source', 'condition', 'has_box', 'has_card', 'has_papers',
                    'has_pouch', 'has_lanyard', 'has_spare_hardware')
@@ -1134,6 +1147,7 @@ def apply_decode(con, owner_id, knife_id, d):
         note += '\nDROPPED: ' + '; '.join(dropped)
     if d.flags:
         note += '\nFLAGS: ' + '; '.join(d.flags)
+    vals['maker'] = d.maker if d.maker in MAKER_KEYS else 'crk'   # resolved from the read (plan 14)
     sets = ', '.join(f'{c} = ?' for c in vals)
     con.execute(
         f'UPDATE knives SET {sets}, ext = ?, confidence = ?, card_text = ?, decode_note = ?, '
@@ -1148,7 +1162,7 @@ def apply_decode(con, owner_id, knife_id, d):
 
 
 EDITABLE_COLUMNS = frozenset(_DECODE_COLUMNS) | {
-    'ext', 'price_paid', 'acquired_from', 'acquired_date', 'location', 'notes_private',
+    'maker', 'ext', 'price_paid', 'acquired_from', 'acquired_date', 'location', 'notes_private',
     'condition_note', 'notes_public', 'hero_photo'}
 
 

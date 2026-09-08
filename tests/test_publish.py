@@ -334,3 +334,26 @@ def test_index_hero_is_blur_filled_not_cropped():
     # or it collapses to nothing (found by screenshot, 2026-09-02)
     assert 'position:absolute' in html.split('.hero > .hero-photo {')[1].split('}')[0]
     assert '<div class="hero-photo"' not in publish._index_html(_rows(with_img=False), USER, gated=False)
+
+
+# --- plan 14: any maker on the public side ---
+
+def test_public_row_carries_maker_name_and_display_name_prefixes_other_brands():
+    row = publish.public_row(_knife(maker_name='Chris Reeve Knives'), USER)
+    assert row['maker_name'] == 'Chris Reeve Knives'
+    assert publish.display_name(row) == 'Large Sebenza 31'          # CRK names unchanged
+    h = _knife(maker='other', maker_name='Hinderer Knives', model='XM-18', ext={})
+    assert publish.display_name(publish.public_row(h, USER)) == 'Hinderer Knives XM-18'
+    s = _knife(maker='other', maker_name='Strider', model='Strider SNG', ext={})
+    assert publish.display_name(publish.public_row(s, USER)) == 'Strider SNG'   # brand already in the model
+    nameless = _knife(maker='other', maker_name='', model='Custom slipjoint', ext={})
+    assert publish.display_name(publish.public_row(nameless, USER)) == 'Custom slipjoint'
+    bare = _knife(maker='other', maker_name='Hinderer Knives', model='', ext={})
+    assert publish.display_name(publish.public_row(bare, USER)) == 'Hinderer Knives K07'
+
+
+def test_knife_page_shows_the_maker_row():
+    row = publish.public_row(_knife(maker='other', maker_name='Hinderer Knives', model='XM-18', ext={}), USER)
+    html = publish._knife_page(row, 'simon-collector', gated=False)
+    assert '<th>Maker</th><td>Hinderer Knives</td>' in html
+    assert '<h1>Hinderer Knives XM-18</h1>' in html

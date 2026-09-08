@@ -4,7 +4,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>blade-book — search the registers</title>
 <meta property="og:title" content="Search the registers — blade-book">
-<meta property="og:description" content="Every public knife on blade-book, searchable — model, steel, damascus smith, edition and more.">
+<meta property="og:description" content="Every public knife on blade-book, searchable — maker, model, steel, damascus smith, edition and more.">
 <link rel="icon" type="image/svg+xml" href="/blade-book/mark.svg">
 <link rel="apple-touch-icon" href="/blade-book/apple-touch-icon.png">
 <link rel="stylesheet" href="/blade-book/vibe.css?v=20260904">
@@ -45,7 +45,7 @@
 </header>
 <p class="lede">Every public knife on blade-book.</p>
 
-<input id="q" type="search" placeholder="model, steel, damascus smith, edition…" autocomplete="off">
+<input id="q" type="search" placeholder="maker, model, steel, damascus smith, edition…" autocomplete="off">
 
 <details id="filters">
   <summary>FILTERS</summary>
@@ -118,7 +118,10 @@
     // the SQL ORDER BY count(*) DESC — never a dict (Flask 3.1's default
     // JSON provider sorts dict keys alphabetically, which would silently
     // undo the ordering).
+    var makers = (aggregates && aggregates.makers) || [];
     var models = (aggregates && aggregates.models) || [];
+    // brand chips first when more than one maker is on the board (plan 14), then models
+    if (makers.length > 1) makers.slice(0, 4).forEach(function (pair) { parts.push(pair[0] + ' ' + pair[1]); });
     models.slice(0, 5).forEach(function (pair) {
       parts.push(pair[0] + ' ' + pair[1]);
     });

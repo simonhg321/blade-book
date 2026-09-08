@@ -91,7 +91,18 @@ def validate(maker, body, photo_seqs=()):
     mod = makers.get(maker)  # KeyError for an unknown maker — the route never lets one in
     out = {}
     for key, v in body.items():
-        if key in core.CORE_PROPS:
+        if key == 'maker_name':
+            # plan 14: the brand decides the module. A blank name keeps the current
+            # one; leaving crk drops the CRK-only ext values (they must not follow
+            # a knife re-filed as another brand). The route replaces ext, not merges,
+            # when maker changes.
+            name = _core(key, core.CORE_PROPS[key], v)
+            out[key] = name
+            new_maker = makers.resolve(name, fallback=maker) if name else maker
+            out['maker'] = new_maker
+            if new_maker != maker and mod.EXT_PROPS:
+                out['ext'] = {}
+        elif key in core.CORE_PROPS:
             out[key] = _core(key, core.CORE_PROPS[key], v)
         elif key == 'ext':
             if not isinstance(v, dict):

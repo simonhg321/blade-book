@@ -192,3 +192,37 @@ def test_images_for_reads_slots_in_order_and_skips_junk(env):
     out = decode.images_for(st, knife)
     assert len(out) == 2
     assert Image.open(io.BytesIO(out[0])).size == (500, 500)
+
+
+# --- plan 14: any maker -------------------------------------------------------
+
+def test_build_messages_is_maker_agnostic():
+    msgs = decode.build_messages([b'a'], 'a Hinderer', 'crk')
+    text = msgs[0]['content'][-1]['text']
+    assert 'maker_name' in text and 'Chris Reeve' in text and 'a Hinderer' in text
+
+
+def test_schema_ext_is_the_union_of_all_makers(env):
+    stub = _StubClient(json.dumps(_fake_result()))
+    d = decode.ClaudeDecoder('claude-sonnet-5', client=stub)
+    d.decode([b'x'], '', 'crk')
+    schema = stub.requests[0]['output_config']['format']['schema']
+    assert set(schema['properties']['ext']['required']) == set(decode.makers.union_ext_props())
+    assert 'maker_name' in schema['required']
+
+
+def test_decoded_resolves_maker_from_result():
+    d = decode.FakeDecoder(_fake_result(maker_name='Chris Reeve Knives'))
+    out = d.decode([b'x'], '', 'crk')
+    assert out.maker == 'crk' and out.core['maker_name'] == 'Chris Reeve Knives'
+    assert out.ext['generation'] == '31'
+
+    d2 = decode.FakeDecoder(_fake_result(maker_name='Hinderer Knives', model='XM-18',
+                                         card_text='XM-18 3.5 SPANTO'))
+    out2 = d2.decode([b'x'], '', 'crk')
+    assert out2.maker == 'other' and out2.ext == {} and out2.flags == []
+
+    # empty maker_name and no card text: the hint wins
+    d3 = decode.FakeDecoder(_fake_result(maker_name='', card_text=''))
+    assert d3.decode([b'x'], '', 'crk').maker == 'crk'
+    assert d3.decode([b'x'], '', 'other').maker == 'other'

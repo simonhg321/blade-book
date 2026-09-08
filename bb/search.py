@@ -16,11 +16,11 @@ from bb import publish
 
 # What a card carries to the browser. Built ONLY from public_row() output
 # (already whitelisted + hide_born_day-truncated) plus handle/name/img_t.
-CARD_FIELDS = ('tag', 'model', 'variant', 'generation', 'size', 'born',
+CARD_FIELDS = ('tag', 'maker_name', 'model', 'variant', 'generation', 'size', 'born',
                'damascus_smith', 'damascus_pattern', 'special_edition',
                'for_sale', 'asking_price', 'img_t')
 
-FTS_FIELDS = ('tag', 'model', 'variant', 'blade_steel', 'blade_shape',
+FTS_FIELDS = ('tag', 'maker_name', 'model', 'variant', 'blade_steel', 'blade_shape',
               'generation', 'size', 'handle_treatment', 'graphic_name',
               'inlay_material', 'damascus_smith', 'damascus_pattern',
               'special_edition', 'notes_public', 'born')
@@ -60,10 +60,10 @@ def reindex_user(con, user, rows):
         m = re.match(r'^(\d{4})', row.get('born_on') or '')
         y = int(m.group(1)) if m else None
         con.execute(
-            'INSERT INTO search_cards (knife_id, owner_id, handle, model, generation,'
+            'INSERT INTO search_cards (knife_id, owner_id, handle, maker_name, model, generation,'
             ' size, born_year, damascus_smith, damascus_pattern, special_edition,'
-            ' for_sale, card) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
-            (kid, user['id'], handle, row.get('model') or '', row.get('generation') or '',
+            ' for_sale, card) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
+            (kid, user['id'], handle, row.get('maker_name') or '', row.get('model') or '', row.get('generation') or '',
              row.get('size') or '', y, row.get('damascus_smith') or '',
              row.get('damascus_pattern') or '', row.get('special_edition') or '',
              row.get('for_sale') or 0, json.dumps(_card(row, handle))))
@@ -94,7 +94,7 @@ def run_query(con, q, filters=None, who_min=None, limit=50):
             'SELECT rowid FROM search_fts WHERE search_fts MATCH ?', (match,))]
         if not ids:
             return {'count': 0, 'knives': [],
-                    'aggregates': {'models': [], 'years': [], 'sizes': []},
+                    'aggregates': {'makers': [], 'models': [], 'years': [], 'sizes': []},
                     **({'owners': []} if who_min else {})}
         ph = ','.join('?' * len(ids))
         where.append(f'knife_id IN ({ph})')
@@ -117,7 +117,7 @@ def run_query(con, q, filters=None, who_min=None, limit=50):
     # these and threw away the ORDER BY count(*) DESC below. Lists preserve
     # the SQL ordering all the way to the browser.
     aggs = {}
-    for name, col in (('models', 'model'), ('years', 'born_year'), ('sizes', 'size')):
+    for name, col in (('makers', 'maker_name'), ('models', 'model'), ('years', 'born_year'), ('sizes', 'size')):
         aggs[name] = [[str(r[0]), r[1]] for r in con.execute(
             f"SELECT {col}, count(*) FROM search_cards {w} "
             f"GROUP BY {col} ORDER BY count(*) DESC", args) if r[0] not in (None, '')]

@@ -174,8 +174,8 @@ def edit_knife(knife_id):
             fields = edit.validate(k['maker'], body, photo_seqs=[p['seq'] for p in k['photos']])
         except edit.EditError as e:
             return jsonify({'error': str(e)}), 400
-        if 'ext' in fields:
-            fields['ext'] = {**k['ext'], **fields['ext']}
+        if 'ext' in fields and fields.get('maker', k['maker']) == k['maker']:
+            fields['ext'] = {**k['ext'], **fields['ext']}   # same module: merge; re-filed: replace (plan 14)
         changed = sorted(c for c, v in fields.items() if _norm_cmp(k.get(c)) != _norm_cmp(v))
         k2 = db.update_knife(con, g.user['id'], knife_id, fields)
         if k2 is None:

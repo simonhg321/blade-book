@@ -114,3 +114,52 @@ def test_core_born_date_precisions():
     assert core.born_date('2008') == dt.date(2008, 1, 1)
     assert core.born_date(None) is None and core.born_date('') is None
     assert core.born_date('2008-13-40') is None and core.born_date('March 2008') is None
+
+
+# --- plan 14: any maker -------------------------------------------------------
+from bb.makers import other
+
+
+def test_registry_knows_crk_and_other():
+    assert makers.get('crk') is crk and makers.get('other') is other
+    assert makers.MAKERS == ('crk', 'other')
+
+
+def test_maker_name_is_a_core_field():
+    assert 'maker_name' in core.CORE_FIELDS
+    assert core.CORE_PROPS['maker_name']['type'] == 'string'
+
+
+def test_other_module_is_minimal_and_never_flags():
+    assert other.EXT_PROPS == {}
+    assert other.flags({'model': 'XM-18', 'born_on': '2099-01-01'}, {}) == []
+    assert other.norm('model', ' XM-18 ') == 'xm-18'
+    assert 'maker' in other.PROMPT.lower()
+
+
+def test_resolve_maker_from_brand_or_model_names():
+    assert makers.resolve('Chris Reeve Knives') == 'crk'
+    assert makers.resolve('CRK') == 'crk'
+    assert makers.resolve('chris reeve') == 'crk'
+    assert makers.resolve('Hinderer Knives') == 'other'
+    assert makers.resolve('Strider') == 'other'
+    # empty brand: the card text can still say
+    assert makers.resolve('', card_text='LARGE SEBENZA 31\nBorn on 09/29/2025') == 'crk'
+    assert makers.resolve('', card_text='XM-18 3.5" Spanto') == 'other'
+    # nothing readable → the caller's fallback
+    assert makers.resolve('', card_text='', fallback='crk') == 'crk'
+    assert makers.resolve('', card_text='', fallback='other') == 'other'
+    assert makers.resolve(None) == 'other'
+
+
+def test_union_ext_props_and_combined_prompt():
+    u = makers.union_ext_props()
+    assert set(u) == set(crk.EXT_PROPS)          # 'other' adds nothing today
+    p = makers.combined_prompt()
+    assert 'Chris Reeve' in p and 'maker_name' in p
+    assert p.index('maker_name') < p.index('Chris Reeve')   # detection rule comes first
+
+
+def test_db_maker_keys_mirror_the_registry():
+    from bb import db
+    assert db.MAKER_KEYS == makers.MAKERS

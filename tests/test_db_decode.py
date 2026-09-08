@@ -105,3 +105,21 @@ def test_add_event_rejects_unknown_type(env):
     k = db.create_draft_knife(con, u['id'])
     with pytest.raises(sqlite3.IntegrityError):
         db.add_event(con, u['id'], k['id'], 'exploded')
+
+
+# --- plan 14: decode writes the resolved maker + maker_name ---
+
+def test_apply_decode_writes_maker_and_maker_name(env):
+    con = db.connect()
+    u = _user(con, 'anymaker@example.com')
+    k = db.create_draft_knife(con, u['id'])                    # starts as 'crk'
+    assert k['maker'] == 'crk'
+    core_ = dict(_decoded().core, maker_name='Hinderer Knives', model='XM-18')
+    d = _decoded(core=core_, ext={}, maker='other', flags=[])
+    k2 = db.apply_decode(con, u['id'], k['id'], d)
+    assert k2['maker'] == 'other' and k2['maker_name'] == 'Hinderer Knives' and k2['ext'] == {}
+    # and back: a CRK read on an 'other' draft re-files it
+    d2 = _decoded(core=dict(_decoded().core, maker_name='Chris Reeve Knives'), maker='crk')
+    k3 = db.apply_decode(con, u['id'], k['id'], d2)
+    assert k3['maker'] == 'crk' and k3['maker_name'] == 'Chris Reeve Knives' and k3['ext']['generation'] == '31'
+    con.close()

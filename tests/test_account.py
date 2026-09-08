@@ -324,3 +324,14 @@ def test_export_register_html_escapes_and_handles_no_photos(env, con, tmp_path):
         assert k['tag'] in page and 'Mnandi' in page and 'draft' in page
         rows = list(csv.DictReader(io.StringIO(z.read('knives.csv').decode())))
         assert rows[0]['hero_file'] == '' and rows[0]['photo_files'] == ''
+
+
+# --- plan 14 ---
+
+def test_export_register_shows_the_brand_not_the_module_key():
+    k = {'id': 3, 'tag': 'K03', 'maker': 'other', 'maker_name': 'Hinderer Knives', 'model': 'XM-18', 'ext': {},
+         'status': 'live', 'sale_status': 'keeping'}
+    html = account._register_html({'handle': 'x', 'name': ''}, [k], {})
+    assert 'Hinderer Knives' in html and '<h2>Hinderer Knives XM-18</h2>' in html and '· other' not in html
+    assert 'maker_name' in account.EXPORT_CSV_COLUMNS
+    assert account.EXPORT_CSV_COLUMNS.index('maker_name') == account.EXPORT_CSV_COLUMNS.index('maker') + 1

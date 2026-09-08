@@ -50,6 +50,7 @@ class Decoded:
     reasoning: str
     flags: list
     model: str
+    maker: str = 'crk'       # module key resolved from the result (plan 14)
     input_tokens: int = 0
     output_tokens: int = 0
     latency_ms: int = 0
@@ -91,30 +92,40 @@ def images_for(store, knife):
     return out
 
 
-def build_messages(jpegs, note, maker, no_card=False):
-    mod = makers.get(maker)
+def build_messages(jpegs, note, maker=None, no_card=False):
+    """One prompt for every maker: `maker` is accepted for call-site symmetry
+    but no longer picks the prompt — the model reads the brand (plan 14)."""
     content = [{'type': 'image', 'source': {'type': 'base64', 'media_type': 'image/jpeg',
                                             'data': base64.standard_b64encode(j).decode()}}
                for j in jpegs]
     content.append({'type': 'text', 'text': core.BASE_PROMPT.format(
-        maker_prompt=mod.PROMPT, note=note or '', no_card=core.NO_CARD_LINE if no_card else '')})
+        maker_prompt=makers.combined_prompt(), note=note or '',
+        no_card=core.NO_CARD_LINE if no_card else '')})
     return [{'role': 'user', 'content': content}]
+
+
+def _schema():
+    return core.build_schema(makers.union_ext_props())
 
 
 def _to_decoded(data, maker, model):
     """Raw JSON dict (schema-shaped) → Decoded. Anything missing → DecodeError,
-    never a KeyError leaking to the route."""
-    mod = makers.get(maker)
+    never a KeyError leaking to the route. `maker` is the caller's prior; the
+    result's maker_name / card text decide the module, and only that module's
+    ext keys are kept."""
     try:
         core_ = {f: data[f] for f in core.CORE_FIELDS}
-        ext = {k: data['ext'][k] for k in mod.EXT_PROPS}
-        conf = dict(data['confidence'])
         card_text, no_card, reasoning = data['card_text'], bool(data['no_card']), data['reasoning']
+        resolved = makers.resolve(core_.get('maker_name'), card_text or '', fallback=maker)
+        mod = makers.get(resolved)
+        ext_in = data['ext'] or {}
+        ext = {k: ext_in.get(k, '') for k in mod.EXT_PROPS}
+        conf = dict(data['confidence'])
     except (KeyError, TypeError, ValueError) as e:
         raise DecodeError(f'model output missing {e}') from e
     return Decoded(core=core_, ext=ext, card_text=card_text or '', no_card=no_card,
                    confidence=conf, reasoning=reasoning or '', flags=mod.flags(core_, ext),
-                   model=model)
+                   model=model, maker=resolved)
 
 
 class Decoder:
@@ -139,7 +150,7 @@ class ClaudeDecoder(Decoder):
     def decode(self, jpegs, note, maker='crk', no_card=False):
         if not jpegs:
             raise DecodeError('no decodable photos')
-        schema = core.build_schema(makers.get(maker).EXT_PROPS)
+        schema = _schema()
         t0 = time.monotonic()
         try:
             resp = self.client.messages.create(

@@ -68,3 +68,18 @@ def test_flags_for_uses_the_maker_rules():
          'ext': {'crk_sku': 'L31-0001', 'size': 'Large', 'generation': '31'}}
     assert any('Sebenza' in f for f in edit.flags_for(k))
     assert edit.flags_for({'maker': 'crk', 'model': 'Sebenza', 'ext': {}}) == []
+
+
+# --- plan 14: editing maker_name re-files the knife ---
+
+def test_maker_name_edit_resolves_maker_and_clears_crk_ext_on_the_way_out():
+    out = edit.validate('crk', {'maker_name': ' Hinderer Knives '})
+    assert out == {'maker_name': 'Hinderer Knives', 'maker': 'other', 'ext': {}}
+    out = edit.validate('other', {'maker_name': 'Chris Reeve Knives'})
+    assert out == {'maker_name': 'Chris Reeve Knives', 'maker': 'crk'}     # ext untouched coming in
+    out = edit.validate('crk', {'maker_name': 'CRK', 'model': 'Inkosi'})
+    assert out == {'maker_name': 'CRK', 'maker': 'crk', 'model': 'Inkosi'}  # same module: no clear
+    out = edit.validate('other', {'maker_name': ''})
+    assert out == {'maker_name': '', 'maker': 'other'}                      # blank keeps the module
+    with pytest.raises(edit.EditError):
+        edit.validate('crk', {'maker': 'other'})                            # maker itself is not editable
