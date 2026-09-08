@@ -266,6 +266,7 @@ def _foot():
     No collector data — safe on gated pages too."""
     return ('<footer class="bb-foot">' + _mark_svg(16) + ' <a href="/blade-book/search/">search</a> · '
             '<a href="/blade-book/board/">board</a> · <a href="/blade-book/how/">how</a> · '
+            '<a href="/blade-book/faq/">faq</a> · '
             '<a href="/blade-book/about/">about</a> · <a href="/blade-book/terms/">terms</a> · '
             '<a class="bb-auth" href="/blade-book/me/">sign in</a></footer>\n'
             '<script src="/blade-book/nav.js?v=20260904" defer></script>\n')

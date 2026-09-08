@@ -525,8 +525,9 @@ def test_vibe_css_has_shared_nav_rules():
 
 
 PUBLIC_PAGES = ('index.html', 'board/index.html', 'search/index.html', 'how/index.html',
-                'about/index.html', 'terms/index.html')
+                'faq/index.html', 'about/index.html', 'terms/index.html')
 STRIP_LINKS = ('href="/blade-book/search/">search<', 'href="/blade-book/board/">board<', 'href="/blade-book/how/">how<',
+               'href="/blade-book/faq/">faq<',
                'href="/blade-book/about/">about<', 'href="/blade-book/terms/">terms<',
                'class="bb-auth" href="/blade-book/me/">sign in<')
 
