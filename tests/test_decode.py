@@ -65,7 +65,7 @@ def _fake_result(**over):
     r['ext'].update({'generation': '31', 'size': 'Large', 'crk_sku': 'L31-1400-0004', 'hand': 'right'})
     r['card_text'] = 'LARGE SEBENZA 31\nCPM MagnaCut 63-64 RC\nBorn on 09/29/2025'
     r['no_card'] = False
-    r['confidence'] = {f: 'high' for f in list(core.CORE_FIELDS) + list(crk.EXT_PROPS)}
+    r['confidence'] = {'low': [], 'medium': []}
     r['reasoning'] = 'Card read verbatim.'
     r.update(over)
     return r
@@ -226,3 +226,20 @@ def test_decoded_resolves_maker_from_result():
     d3 = decode.FakeDecoder(_fake_result(maker_name='', card_text=''))
     assert d3.decode([b'x'], '', 'crk').maker == 'crk'
     assert d3.decode([b'x'], '', 'other').maker == 'other'
+
+
+def test_to_decoded_expands_confidence_lists_to_per_field():
+    """Wire shape: {'low': [...], 'medium': [...]} — everything else is high, and
+    only known fields of the resolved maker survive (the model may name junk)."""
+    raw = _fake_result(confidence={'low': ['born_on', 'nonsense'], 'medium': ['blade_steel', 'generation']})
+    d = decode._to_decoded(raw, 'crk', 'fake')
+    assert d.confidence['born_on'] == 'low'
+    assert d.confidence['blade_steel'] == 'medium' and d.confidence['generation'] == 'medium'
+    assert d.confidence['model'] == 'high'
+    assert 'nonsense' not in d.confidence
+    assert set(d.confidence) == set(core.CORE_FIELDS) | set(crk.EXT_PROPS)
+
+
+def test_to_decoded_confidence_lists_must_be_lists():
+    with pytest.raises(decode.DecodeError):
+        decode._to_decoded(_fake_result(confidence={'low': 'born_on', 'medium': []}), 'crk', 'fake')

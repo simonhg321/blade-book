@@ -47,7 +47,7 @@ def ok_result(**over):
     r['ext'] = {k: '' for k in crk.EXT_PROPS}
     r['ext'].update({'generation': '31', 'size': 'Large', 'crk_sku': 'L31-1400-0004', 'hand': 'right'})
     r.update({'card_text': 'LARGE SEBENZA 31', 'no_card': False, 'reasoning': 'card read',
-              'confidence': {f: 'high' for f in list(core.CORE_FIELDS) + list(crk.EXT_PROPS)}})
+              'confidence': {'low': [], 'medium': []}})
     r.update(over)
     return r
 

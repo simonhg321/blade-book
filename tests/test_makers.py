@@ -24,8 +24,10 @@ def test_schema_is_closed_and_covers_core_ext_confidence():
     assert set(ext['required']) == set(crk.EXT_PROPS)
     conf = s['properties']['confidence']
     assert conf['additionalProperties'] is False
-    assert set(conf['required']) == set(core.CORE_FIELDS) | set(crk.EXT_PROPS)
-    assert conf['properties']['model']['enum'] == ['high', 'medium', 'low']
+    # Wire shape is two lists of field names (unlisted = high): a per-field enum
+    # object put the whole schema over the API's grammar-size cliff (2026-09-09).
+    assert set(conf['required']) == {'low', 'medium'}
+    assert conf['properties']['low'] == {'type': 'array', 'items': {'type': 'string'}}
     for k in ('card_text', 'no_card', 'reasoning'):
         assert k in s['required'], k
     assert s['properties']['condition']['anyOf'][0]['enum'] == [1, 2, 3, 4]
@@ -163,3 +165,28 @@ def test_union_ext_props_and_combined_prompt():
 def test_db_maker_keys_mirror_the_registry():
     from bb import db
     assert db.MAKER_KEYS == makers.MAKERS
+
+
+def _property_count(schema):
+    n = 0
+    def walk(o):
+        nonlocal n
+        if isinstance(o, dict):
+            if 'properties' in o:
+                n += len(o['properties'])
+            for v in o.values():
+                walk(v)
+        elif isinstance(o, list):
+            for v in o:
+                walk(v)
+    walk(schema)
+    return n
+
+
+def test_decode_schema_stays_under_the_grammar_budget():
+    """The API compiles a strict json_schema to a grammar and 400s above a size
+    cliff ('The compiled grammar is too large'). Probed 2026-09-09 on sonnet-5:
+    60 total properties compiled, 70 did not, and plan 14's one extra field
+    took the live schema from 69 to 71 — every decode failed. Keep 10 in hand."""
+    from bb.makers import union_ext_props
+    assert _property_count(core.build_schema(union_ext_props())) <= 60

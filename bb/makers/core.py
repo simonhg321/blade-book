@@ -48,8 +48,9 @@ BASE_PROMPT = (
     '- Use knowledge of the maker only for standard specs when the model is unambiguous; '
     'otherwise leave the field empty/null and mark it low confidence.\n'
     '- Never invent accessories that are not in frame. has_* fields describe what is VISIBLE.\n'
-    '- confidence: "high" = read from card/box/stamp, "medium" = inferred from what is visible, '
-    '"low" = guess. Every field gets a rating.\n'
+    '- confidence: list under "low" the field names you guessed, under "medium" the ones '
+    'inferred from what is visible; every field not listed was read from the card/box/stamp. '
+    'Use the exact schema field names (core fields and ext fields).\n'
     '- reasoning: two sentences — what identified it, what is a guess.\n'
     '{no_card}\n'
     '{maker_prompt}\n'
@@ -67,9 +68,15 @@ def build_schema(ext_props):
                     'required': list(ext_props), 'additionalProperties': False},
             'card_text': {'type': 'string', 'description': 'Verbatim transcription of the birth card / certificate; empty if none'},
             'no_card': {'type': 'boolean'},
+            # Two lists of field names, unlisted = high. A per-field enum object
+            # (one property per field) pushed the strict schema over the API's
+            # grammar-size cliff (~70 properties total, probed 2026-09-09) and
+            # every decode 400'd. decode._to_decoded expands this back to the
+            # per-field dict the DB stores. tests/test_makers.py pins the budget.
             'confidence': {'type': 'object',
-                           'properties': {f: {'type': 'string', 'enum': list(CONF)} for f in fields},
-                           'required': fields, 'additionalProperties': False},
+                           'properties': {'low': {'type': 'array', 'items': {'type': 'string'}},
+                                          'medium': {'type': 'array', 'items': {'type': 'string'}}},
+                           'required': ['low', 'medium'], 'additionalProperties': False},
             'reasoning': {'type': 'string'},
         },
         'required': list(CORE_FIELDS) + ['ext', 'card_text', 'no_card', 'confidence', 'reasoning'],

@@ -108,6 +108,23 @@ def _schema():
     return core.build_schema(makers.union_ext_props())
 
 
+def _expand_confidence(wire, fields):
+    """Wire shape {'low': [names], 'medium': [names]} → {field: level} over
+    `fields`, unlisted = 'high'. Names the model made up are dropped; a
+    non-list value is a malformed result (TypeError → DecodeError upstream)."""
+    low, medium = wire['low'], wire['medium']
+    if not isinstance(low, list) or not isinstance(medium, list):
+        raise TypeError('confidence.low/medium must be lists')
+    out = {f: 'high' for f in fields}
+    for f in medium:
+        if f in out:
+            out[f] = 'medium'
+    for f in low:            # low wins if the model listed a field twice
+        if f in out:
+            out[f] = 'low'
+    return out
+
+
 def _to_decoded(data, maker, model):
     """Raw JSON dict (schema-shaped) → Decoded. Anything missing → DecodeError,
     never a KeyError leaking to the route. `maker` is the caller's prior; the
@@ -120,7 +137,7 @@ def _to_decoded(data, maker, model):
         mod = makers.get(resolved)
         ext_in = data['ext'] or {}
         ext = {k: ext_in.get(k, '') for k in mod.EXT_PROPS}
-        conf = dict(data['confidence'])
+        conf = _expand_confidence(data['confidence'], list(core.CORE_FIELDS) + list(mod.EXT_PROPS))
     except (KeyError, TypeError, ValueError) as e:
         raise DecodeError(f'model output missing {e}') from e
     return Decoded(core=core_, ext=ext, card_text=card_text or '', no_card=no_card,
