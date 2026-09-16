@@ -279,18 +279,31 @@ def _foot():
             '<script src="/blade-book/nav.js?v=20260904" defer></script>\n')
 
 
-def _head(title, desc, og_image, noindex, extra_style=''):
+def _head(title, desc, og_image, noindex, extra_style='', url=''):
     """Document head through `<body>`. Callers open their own `<main>` (the
-    register index puts a full-bleed hero BEFORE main)."""
+    register index puts a full-bleed hero BEFORE main).
+
+    OG card (2026-09-15): a page with no hero of its own (photo-less register,
+    or any gated page — those must never unfurl a knife photo) gets the generic
+    1200x630 site card, html/og.jpg, with its dims so the first share renders
+    at once. A real hero keeps its own photo and no dims (they vary)."""
     e = html_mod.escape
     robots = '<meta name="robots" content="noindex, nofollow">\n' if noindex else ''
-    og_img = f'<meta property="og:image" content="{e(og_image)}">\n' if og_image else ''
+    if og_image:
+        og_img = f'<meta property="og:image" content="{e(og_image)}">\n'
+    else:
+        og_img = (f'<meta property="og:image" content="{e(_public_base())}/og.jpg">\n'
+                  '<meta property="og:image:width" content="1200">\n'
+                  '<meta property="og:image:height" content="630">\n')
+    og_url = f'<meta property="og:url" content="{e(url)}">\n' if url else ''
     return (f'<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
             f'<meta name="viewport" content="width=device-width, initial-scale=1">\n{robots}'
             f'<title>{e(title)}</title>\n'
             f'<meta property="og:title" content="{e(title)}">\n'
             f'<meta property="og:description" content="{e(desc)}">\n'
-            f'{og_img}<meta property="og:type" content="website">\n'
+            f'{og_img}<meta property="og:site_name" content="blade-book">\n'
+            f'{og_url}<meta property="og:type" content="website">\n'
+            '<meta name="twitter:card" content="summary_large_image">\n'
             f'<link rel="icon" type="image/svg+xml" href="/blade-book/mark.svg">\n'
             f'<link rel="apple-touch-icon" href="/blade-book/apple-touch-icon.png">\n'
             f'<link rel="stylesheet" href="/blade-book/vibe.css?v=20260904">\n'
@@ -314,7 +327,8 @@ def _knife_page(row, handle, gated):
         f"born {row['born']}" if row.get('born') else None) if b]
     desc = '' if gated else (' · '.join(desc_bits) or 'From a private register on blade-book.')
     og_image = (f"{_public_base()}/@{handle}/img/{row['img']}" if row.get('img') and not gated else '')
-    out = _head(title, desc, og_image, noindex=gated) + '<main>\n'
+    out = _head(title, desc, og_image, noindex=gated,
+                url=f"{_public_base()}/@{handle}/{row['tag']}/") + '<main>\n'
     out += f'<p class="tag">{e(row["tag"])}</p>\n<h1>{e(name)}</h1>\n'
     if row.get('img'):
         out += f'<img class="hero" src="../img/{e(row["img"])}" alt="{e(name)}">\n'
@@ -583,7 +597,8 @@ def _index_html(rows, user, gated, featured_tag=None):
     # OG card for a shared register link = the hero photo (watermarked display
     # image, already public); never on a gated register.
     og_image = (f"{_public_base()}/@{handle}/img/{hero_row['img']}" if hero_row and not gated else '')
-    out = _head(title, desc, og_image, noindex=gated, extra_style=_INDEX_STYLE)
+    out = _head(title, desc, og_image, noindex=gated, extra_style=_INDEX_STYLE,
+                url=f'{_public_base()}/@{handle}/')
     if hero_row:
         hero_var = f'--hero:url(img/{e(hero_row["img"])})'
         out += (f'<div class="hero-bg" style="{hero_var}"></div>\n'

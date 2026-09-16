@@ -607,3 +607,34 @@ def test_asset_urls_are_versioned_everywhere():
         if 'nav.js' in s:
             assert f'/blade-book/nav.js?v={ASSET_V}" defer' in s, f
     assert seen >= 12
+
+
+# --- OG card (2026-09-15): one 1200x630 site card on every static page -------
+
+STATIC_OG_PAGES = ('index.html', 'about/index.html', 'board/index.html', 'card/index.html',
+                   'faq/index.html', 'how/index.html', 'search/index.html', 'terms/index.html')
+
+
+def test_og_card_file_is_1200x630():
+    from PIL import Image
+    p = os.path.join(ROOT, 'html', 'og.jpg')
+    assert os.path.exists(p)
+    assert Image.open(p).size == (1200, 630)
+    assert os.path.getsize(p) < 600_000
+
+
+def test_static_pages_carry_full_og_card():
+    for rel in STATIC_OG_PAGES:
+        html = _read('html/' + rel)
+        head = html.split('<style>')[0]
+        for needle in ('<meta property="og:title" content="',
+                       '<meta property="og:description" content="',
+                       '<meta property="og:image" content="https://blade-book.com/og.jpg">',
+                       '<meta property="og:image:width" content="1200">',
+                       '<meta property="og:image:height" content="630">',
+                       '<meta property="og:site_name" content="blade-book">',
+                       '<meta property="og:type" content="website">',
+                       '<meta name="twitter:card" content="summary_large_image">'):
+            assert needle in head, (rel, needle)
+        url = 'https://blade-book.com/' + rel.replace('index.html', '')
+        assert f'<meta property="og:url" content="{url}">' in head, (rel, url)

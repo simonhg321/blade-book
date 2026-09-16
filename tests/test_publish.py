@@ -275,8 +275,10 @@ def test_index_has_og_image_from_hero_when_not_gated():
     html = publish._index_html(_rows(), USER, gated=False)
     assert '<meta property="og:image" content="' in html
     assert '/@simon-collector/img/K01.jpg">' in html.split('property="og:image"')[1][:120]
-    assert 'property="og:image"' not in publish._index_html(_rows(), USER, gated=True)
-    assert 'property="og:image"' not in publish._index_html(_rows(with_img=False), USER, gated=False)
+    # gated / photo-less → the generic site card stands in, never a knife photo
+    for h in (publish._index_html(_rows(), USER, gated=True),
+              publish._index_html(_rows(with_img=False), USER, gated=False)):
+        assert '/img/' not in h.split('property="og:image"')[1][:120]
 
 
 # --- featured_knife_id pins the hero (hero-pin, 2026-09-03) -----------------
@@ -357,3 +359,33 @@ def test_knife_page_shows_the_maker_row():
     html = publish._knife_page(row, 'simon-collector', gated=False)
     assert '<th>Maker</th><td>Hinderer Knives</td>' in html
     assert '<h1>Hinderer Knives XM-18</h1>' in html
+
+
+# --- OG card (2026-09-15): site card fallback + twitter/site_name/url ---------
+
+def test_head_carries_site_name_twitter_card_and_url():
+    html = publish._index_html(_rows(), USER, gated=False)
+    head = html.split('<body>')[0]
+    assert '<meta property="og:site_name" content="blade-book">' in head
+    assert '<meta name="twitter:card" content="summary_large_image">' in head
+    base = publish._public_base()
+    assert f'<meta property="og:url" content="{base}/@simon-collector/">' in head
+    knife = publish._knife_page(_rows()[0], USER['handle'], gated=False).split('<body>')[0]
+    assert f'<meta property="og:url" content="{base}/@simon-collector/K01/">' in knife
+
+
+def test_head_falls_back_to_site_card_when_no_hero():
+    """No hero (no photos, or gated) → the generic site card, never a knife photo."""
+    for html in (publish._index_html(_rows(with_img=False), USER, gated=False),
+                 publish._index_html(_rows(), USER, gated=True),
+                 publish._knife_page(_rows()[0], USER['handle'], gated=True)):
+        head = html.split('<body>')[0]
+        og = head.split('property="og:image"')[1][:120]
+        assert f'content="{publish._public_base()}/og.jpg">' in og
+        assert '/img/' not in og
+        assert '<meta property="og:image:width" content="1200">' in head
+        assert '<meta property="og:image:height" content="630">' in head
+    # a real hero keeps its own photo and carries no (wrong) 1200x630 dims
+    hero = publish._index_html(_rows(), USER, gated=False).split('<body>')[0]
+    assert '/@simon-collector/img/K01.jpg">' in hero.split('property="og:image"')[1][:120]
+    assert 'og:image:width' not in hero
