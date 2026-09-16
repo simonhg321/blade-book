@@ -26,7 +26,7 @@
   section.danger h2{color:var(--accent)}
   .btn.danger{background:var(--accent);border-color:var(--accent);color:#fff}
   .muted{color:var(--muted);font-size:.9rem}
-  #export{display:inline-block;margin-top:10px}
+  #export,#exportcsv{display:inline-block;margin-top:10px;margin-right:8px}
   .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 </style>
 
@@ -69,7 +69,9 @@
 <section class="card">
   <h2 class="bb-display">YOUR DATA</h2>
   <p class="muted">One ZIP: your original photos, <code>knives.json</code> with every field (private notes and prices included — it is your data), and <code>knives.csv</code> for a spreadsheet. Always available, subscription or not.</p>
-  <p><a class="btn alt" id="export" href="/blade-book/api/settings/export">download everything (.zip)</a></p>
+  <p><a class="btn alt" id="export" href="/blade-book/api/settings/export">download everything (.zip)</a>
+     <a class="btn alt" id="exportcsv" href="/blade-book/api/settings/export.csv" download>take my data (.csv)</a></p>
+  <p class="muted">The CSV alone is the same spreadsheet without the photos — instant, no ten-minute wait.</p>
 </section>
 
 <section class="card danger">

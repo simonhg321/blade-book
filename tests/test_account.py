@@ -335,3 +335,18 @@ def test_export_register_shows_the_brand_not_the_module_key():
     assert 'Hinderer Knives' in html and '<h2>Hinderer Knives XM-18</h2>' in html and '· other' not in html
     assert 'maker_name' in account.EXPORT_CSV_COLUMNS
     assert account.EXPORT_CSV_COLUMNS.index('maker_name') == account.EXPORT_CSV_COLUMNS.index('maker') + 1
+
+
+def test_export_csv_standalone_matches_zip_header_with_empty_file_columns(env, con, tmp_path):
+    store = LocalFSStore(str(tmp_path / 'store'))
+    u = _user(con)
+    k = _knife_with_photo(con, store, u)
+    draft = db.create_draft_knife(con, u['id'])          # drafts are the owner's data too
+    text = account.export_csv(con, u)
+    rows = list(csv.DictReader(io.StringIO(text)))
+    assert list(rows[0].keys()) == list(account.EXPORT_CSV_COLUMNS)
+    assert {r['tag'] for r in rows} == {k['tag'], draft['tag']}
+    live = next(r for r in rows if r['tag'] == k['tag'])
+    assert live['price_paid'] == '475.0' and live['notes_private'] == 'gift from Dad'
+    assert live['photo_count'] == '1'
+    assert live['hero_file'] == '' and live['photo_files'] == '' and live['thumb_files'] == ''

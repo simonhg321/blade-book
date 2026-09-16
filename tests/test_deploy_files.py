@@ -638,3 +638,10 @@ def test_static_pages_carry_full_og_card():
             assert needle in head, (rel, needle)
         url = 'https://blade-book.com/' + rel.replace('index.html', '')
         assert f'<meta property="og:url" content="{url}">' in head, (rel, url)
+
+
+def test_take_my_data_csv_button_on_register_and_settings():
+    for page in ('html/me/index.html', 'html/me/settings/index.html'):
+        s = _read(page)
+        assert '/blade-book/api/settings/export.csv' in s, page
+        assert 'take my data' in s, page

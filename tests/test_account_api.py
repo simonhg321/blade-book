@@ -4,7 +4,7 @@ import json
 import os
 import zipfile
 
-from bb import db, publish
+from bb import account, db, publish
 from bb.routes import settings as settings_routes
 from tests.conftest import signed_in
 from tests.test_search import _mk_knife
@@ -143,3 +143,34 @@ def test_delete_refuses_admin(client, mailer):
 
 def test_delete_requires_auth(client):
     assert client.post(S + '/delete', json={'confirm': 'x'}).status_code == 401
+
+
+def test_export_csv_route(client, mailer, app):
+    me = signed_in(client, mailer)
+    con = db.connect()
+    k = _mk_knife(con, me['id'])
+    con.close()
+    r = client.get(S + '/export.csv')
+    assert r.status_code == 200, r.data
+    assert r.headers['Content-Type'].startswith('text/csv')
+    assert f"blade-book-{me['handle']}.csv" in r.headers['Content-Disposition']
+    import csv
+    rows = list(csv.DictReader(io.StringIO(r.get_data(as_text=True))))
+    assert len(rows) == 1 and rows[0]['tag'] == k['tag']
+    assert list(rows[0].keys()) == list(account.EXPORT_CSV_COLUMNS)
+
+
+def test_export_csv_is_not_rate_limited_with_the_zip(client, mailer, app):
+    _reset_export_clock()
+    me = signed_in(client, mailer)
+    con = db.connect()
+    k = _mk_knife(con, me['id'])
+    app.config['STORE'].put(k['photos'][0]['store_key'], b'JPEG')
+    con.close()
+    r = client.get(S + '/export'); assert r.status_code == 200; r.close()
+    assert client.get(S + '/export.csv').status_code == 200
+    assert client.get(S + '/export.csv').status_code == 200
+
+
+def test_export_csv_requires_auth(client):
+    assert client.get(S + '/export.csv').status_code == 401

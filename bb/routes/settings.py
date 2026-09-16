@@ -115,6 +115,22 @@ def patch_settings():
 
 # --- account operations (plan 11) --------------------------------------------------
 
+@bp.get('/export.csv')
+@auth.login_required
+def export_csv():
+    """The register as one CSV — the "take my data" button. Never gated, no
+    rate limit (no photos, no disk), same columns as the ZIP's knives.csv."""
+    con = db.connect()
+    try:
+        text = account.export_csv(con, g.user)
+    finally:
+        con.close()
+    return (text, 200, {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': f'attachment; filename="blade-book-{g.user["handle"]}.csv"',
+        'Cache-Control': 'no-store'})
+
+
 @bp.get('/export')
 @auth.login_required
 def export():

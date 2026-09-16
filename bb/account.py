@@ -214,6 +214,33 @@ def _register_html(user, knives, hero_thumb):
     return ''.join(parts)
 
 
+def _csv_text(knives):
+    """knives.csv: one row per knife in EXPORT_CSV_COLUMNS order. The three
+    file columns come from p['file'] / p['thumb'] that export_zip stamps on
+    each photo; a register that never went through the ZIP has none, so those
+    cells are empty and photo_count still says how many exist."""
+    buf = io.StringIO()
+    w = csv.DictWriter(buf, fieldnames=EXPORT_CSV_COLUMNS, extrasaction='ignore')
+    w.writeheader()
+    for k in knives:
+        row = {c: _csv_cell(k.get(c)) for c in EXPORT_CSV_COLUMNS}
+        hero = _hero(k)
+        row['photo_count'] = len(k['photos'])
+        row['hero_file'] = (hero or {}).get('file') or ''
+        row['photo_files'] = ';'.join(p['file'] for p in k['photos'] if p.get('file'))
+        row['thumb_files'] = ';'.join(p['thumb'] for p in k['photos'] if p.get('thumb'))
+        w.writerow(row)
+    return buf.getvalue()
+
+
+def export_csv(con, user):
+    """The register as a spreadsheet, nothing else: every knife (drafts and
+    private ones included — it is their data), same header as the ZIP's
+    knives.csv, file columns empty because there is no ZIP for them to point
+    into. Cheap: no photos are read."""
+    return _csv_text(db.full_register(con, user['id']))
+
+
 def export_zip(con, store, user, out_dir):
     """Everything the owner has, as one ZIP: knives.json (every column,
     private ones included — it is their data), knives.csv, the original
@@ -255,18 +282,7 @@ def export_zip(con, store, user, out_dir):
             'generated': datetime.now(timezone.utc).isoformat(), 'handle': user['handle'],
             'count': len(knives), 'missing_photos': missing, 'missing_thumbs': missing_thumbs,
             'knives': knives}, indent=1, default=str))
-        buf = io.StringIO()
-        w = csv.DictWriter(buf, fieldnames=EXPORT_CSV_COLUMNS, extrasaction='ignore')
-        w.writeheader()
-        for k in knives:
-            row = {c: _csv_cell(k.get(c)) for c in EXPORT_CSV_COLUMNS}
-            hero = _hero(k)
-            row['photo_count'] = len(k['photos'])
-            row['hero_file'] = (hero or {}).get('file') or ''
-            row['photo_files'] = ';'.join(p['file'] for p in k['photos'] if p.get('file'))
-            row['thumb_files'] = ';'.join(p['thumb'] for p in k['photos'] if p.get('thumb'))
-            w.writerow(row)
-        z.writestr('knives.csv', buf.getvalue())
+        z.writestr('knives.csv', _csv_text(knives))
         z.writestr('register.html', _register_html(user, knives, hero_thumb))
     log.info('export for @%s: %d knives, %d missing photos, %d missing thumbs, %d bytes',
              user['handle'], len(knives), len(missing), len(missing_thumbs), os.path.getsize(path))
