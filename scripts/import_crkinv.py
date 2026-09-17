@@ -89,7 +89,7 @@ def to_fields(r):
         if v:
             ext[f] = v
     if r['m_generation']:
-        ext['generation'] = 'Classic' if r['m_generation'] == 'Regular' else r['m_generation']
+        ext['generation'] = r['m_generation']  # Regular and Classic are distinct pre-21 models
     if r['m_size']:
         ext['size'] = r['m_size']
     if r['inlay_note']:

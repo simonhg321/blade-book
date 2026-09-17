@@ -64,7 +64,10 @@ def test_norm_collapses_case_prefixes_and_aliases():
     assert crk.norm('size', 'large') == 'large'
     assert crk.norm('hand', 'Left-handed') == 'left'
     assert crk.norm('hand', '') == crk.norm('hand', None) == crk.norm('hand', 'right') == 'right'
-    assert crk.norm('generation', 'Regular') == crk.norm('generation', 'Classic') == 'classic'
+    # Regular (1996-2008) and Classic (2000-2008) were separate pre-21 models — never fold them
+    assert crk.norm('generation', 'Regular') == crk.norm('generation', 'Regular Sebenza') == 'regular'
+    assert crk.norm('generation', 'Classic') == 'classic'
+    assert crk.norm('generation', 'Regular') != crk.norm('generation', 'Classic')
     assert crk.norm('born_on', '2022-03-30') == '2022-03-30'
     assert crk.norm('born_on', '2011-12-01') == crk.norm('born_on', '2011-12') == '2011-12'
     assert crk.norm('born_on', '2008-01-01') == crk.norm('born_on', '2008') == '2008'

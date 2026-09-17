@@ -8,7 +8,7 @@ import re
 from bb.makers import core
 
 EXT_PROPS = {
-    'generation': {'type': 'string', 'enum': ['', 'Classic', '21', '25', '31'], 'description': 'Sebenza generation from card/box/SKU; "" for non-Sebenza'},
+    'generation': {'type': 'string', 'enum': ['', 'Regular', 'Classic', '21', '25', '31'], 'description': 'Sebenza generation from card/box/SKU; pre-2008 cards without "Classic" are Regular; "" for non-Sebenza'},
     'size': {'type': 'string', 'enum': ['', 'Small', 'Large']},
     'crk_sku': {'type': 'string', 'description': 'Box label SKU exactly as printed, e.g. "L31-1633", "LIN-1000"; empty if not visible'},
     'hand': {'type': 'string', 'enum': ['', 'right', 'left']},
@@ -26,7 +26,9 @@ EXT_PROPS = {
 }
 
 PROMPT = (
-    'Maker: Chris Reeve Knives (Boise, Idaho). Models: Sebenza (generations Classic, 21, 25, 31; '
+    'Maker: Chris Reeve Knives (Boise, Idaho). Models: Sebenza (generations Regular, Classic, 21, 25, 31 — '
+    'Regular and Classic are separate pre-2008 models that ran side by side; a pre-2008 card that does not say '
+    '"Classic" is a Regular; '
     'sizes Small, Large), Inkosi (Small/Large; blade Drop Point or Insingo), Mnandi, Impinda, '
     'Umnumzaan, TiLock (Ti-Lock), Zaan, and fixed blades (Green Beret, Pacific, Nyala, '
     'Professional Soldier, Sikayo). The BIRTH CARD lists the model, blade steel with hardness '
@@ -93,9 +95,9 @@ def norm(field, value):
                 return 'tilock' if m == 'ti-lock' else m
         return s
     if field == 'generation':
-        # crkinv calls the pre-21 Sebenza "Regular"; the schema enum says "Classic"
-        m = re.search(r'\b(classic|regular|21|25|31)\b', s)
-        return 'classic' if m and m.group(1) == 'regular' else (m.group(1) if m else s)
+        # Regular (1996-2008) and Classic (2000-2008) are distinct pre-21 models — keep them apart
+        m = re.search(r'\b(regular|classic|21|25|31)\b', s)
+        return m.group(1) if m else s
     if field == 'crk_sku':
         return str(value).strip().upper()
     if field == 'born_on':
