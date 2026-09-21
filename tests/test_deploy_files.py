@@ -645,3 +645,26 @@ def test_take_my_data_csv_button_on_register_and_settings():
         s = _read(page)
         assert '/blade-book/api/settings/export.csv' in s, page
         assert 'take my data' in s, page
+
+
+def test_search_is_linkable_and_lays_out_as_a_grid():
+    """Audit 2026-09-19: /search/?q=damascus ignored the query (a search could not be shared) and an
+    empty search stacked 50 full-width photos (27,000 px on a desktop)."""
+    html = open(os.path.join(ROOT, 'html', 'search', 'index.html')).read()
+    assert "new URLSearchParams(location.search)" in html and 'seedFromUrl();\n  runSearch();' in html
+    assert 'history.replaceState' in html
+    assert 'repeat(auto-fill,minmax(160px,1fr))' in html
+
+
+def test_404_page_and_vhost_line():
+    page = open(os.path.join(ROOT, 'html', '404.html')).read()
+    assert 'noindex' in page and '/blade-book/search/' in page and 'vibe.css' in page
+    conf = open(os.path.join(ROOT, 'deploy', 'apache-blade-book.com.conf')).read()
+    assert 'ErrorDocument 404 /404.html' in conf
+
+
+def test_save_tells_the_owner_the_public_page_takes_a_minute():
+    add = open(os.path.join(ROOT, 'html', 'me', 'add', 'index.html')).read()
+    me = open(os.path.join(ROOT, 'html', 'me', 'index.html')).read()
+    assert "sessionStorage.setItem('bbJustSaved'" in add
+    assert "sessionStorage.removeItem('bbJustSaved')" in me and 'about a minute' in me

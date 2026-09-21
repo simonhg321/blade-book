@@ -401,7 +401,11 @@ _INDEX_STYLE = """
   .hero.plain h1 { text-shadow:none; }
   .hero .count { color:#ece4d4; font-weight:600; text-shadow:0 1px 8px rgba(0,0,0,.6); }
   .hero.plain .count { color:#555; text-shadow:none; }
-  .hero .signin { color:#fff; }
+  /* top-right, out of the text column — it used to stack on top of the mark (audit 2026-09-19) */
+  .hero .signin { position:absolute; top:14px; right:18px; margin:0; z-index:3; color:#fff; }
+  .hero .signin a { color:#fff; border:2px solid rgba(255,255,255,.85); border-radius:10px; padding:6px 12px;
+                    font-size:.85rem; font-weight:700; text-decoration:none; background:rgba(0,0,0,.25); }
+  .hero.plain .signin a { color:var(--accent,#b8452c); border-color:var(--accent,#b8452c); background:none; }
   .hero.plain .signin { color:var(--accent,#b8452c); }
   /* the mark is the way home — a flex child, so pin it to its own width or the
      whole row becomes the click target */
@@ -433,7 +437,7 @@ _INDEX_STYLE = """
   #view button { font:inherit; font-weight:800; font-size:.8rem; letter-spacing:.06em; padding:9px 12px;
                  border:0; background:#fff; color:var(--ink,#141210); cursor:pointer; }
   #view button.on { background:var(--ink,#141210); color:var(--cream,#f6f1e7); }
-  #cols { display:grid; grid-template-columns:92px 1fr 118px 96px; gap:8px; padding:6px 8px 4px;
+  #cols { display:grid; grid-template-columns:92px minmax(0,1fr) 150px 96px; gap:8px; padding:6px 8px 4px;
           border-bottom:2px solid var(--ink,#141210); }
   #cols button { font:inherit; font-size:.7rem; letter-spacing:.09em; text-transform:uppercase; color:#555;
                  background:none; border:0; padding:0; text-align:left; cursor:pointer; }
@@ -441,7 +445,7 @@ _INDEX_STYLE = """
   #cols button.desc::after { content:" ▼"; color:var(--accent,#b8452c); }
   .k { transition:opacity .45s ease-out, transform .45s ease-out, box-shadow .2s; }
   .k.pre { opacity:0; transform:translateY(16px); }
-  #reg.list .k { display:grid; grid-template-columns:92px 1fr 118px 96px; gap:8px; align-items:center;
+  #reg.list .k { display:grid; grid-template-columns:92px minmax(0,1fr) 150px 96px; gap:8px; align-items:center;
                  padding:6px 8px; border-bottom:1px solid var(--line,#e2d9c8); border-radius:8px; }
   #reg.list .k:hover { background:#fff; box-shadow:0 6px 18px rgba(0,0,0,.08); transform:translateY(-1px); }
   #reg.list .t { width:84px; height:63px; object-fit:cover; border-radius:6px; background:var(--soft,#e8e0d0);
@@ -466,6 +470,14 @@ _INDEX_STYLE = """
   dialog#lb { border:0; padding:0; background:#000; border-radius:14px; max-width:94vw; }
   dialog#lb img { max-width:90vw; max-height:82vh; display:block; }
   dialog#lb::backdrop { background:rgba(10,8,4,.75); }
+  /* phone: four fixed columns overflowed a 390px screen and the whole page scrolled sideways */
+  @media (max-width: 699px) {
+    #cols, #reg.list .k { grid-template-columns:92px minmax(0,1fr) 88px; }
+    #cols button[data-sort="tag"] { display:none; }
+    #reg.list .k > span:empty:not(.t) { display:none; }
+    #reg.list .k .badge-sale { grid-column:2 / -1; justify-self:start; }
+    #reg .born { font-size:.82rem; }
+  }
   @media (min-width: 700px) {
     .hero { min-height:60vh; padding:28px 40px 52px; }
     .hero h1 { font-size:4.6rem; }

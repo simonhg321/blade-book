@@ -443,6 +443,11 @@
       if (!didScroll && location.hash && document.getElementById(location.hash.slice(1))) {
         document.getElementById(location.hash.slice(1)).scrollIntoView(); didScroll = true;
       }
+      // fresh from /me/add: the save is instant, the public bundle is debounced + rebuilt (~1 min).
+      // Say so once, or a new collector checks their page, sees nothing, and thinks it failed.
+      var just = null;
+      try { just = sessionStorage.getItem('bbJustSaved'); sessionStorage.removeItem('bbJustSaved'); } catch (e) {}
+      if (just) say(just + ' saved ✓ — its public page is being built and will be up in about a minute');
     });
   }
 

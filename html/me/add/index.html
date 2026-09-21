@@ -358,6 +358,8 @@
         return;
       }
       if (!res.ok) throw new Error(res.j.error || 'save failed');
+      // /me reads this once and tells the owner the public page takes about a minute to build
+      try { sessionStorage.setItem('bbJustSaved', res.j.tag); } catch (e) {}
       location.href = '/blade-book/me/#' + res.j.tag;
     }).catch(function (e) { if (e.message !== 'sign in') { say('✗ ' + e.message, true); $('save').disabled = false; } });
   });

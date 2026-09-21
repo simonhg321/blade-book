@@ -250,7 +250,18 @@ def test_index_gated_keeps_gate_and_noindex():
 def test_index_list_thumbs_are_a_hair_bigger():
     """Simon on his phone, 2026-09-02: 64×48 read small — 84×63 with a 92px column."""
     css = publish._INDEX_STYLE
-    assert 'width:84px; height:63px' in css and '92px 1fr' in css and '64px' not in css
+    assert 'width:84px; height:63px' in css and '92px minmax(0,1fr)' in css and '64px' not in css
+
+
+def test_index_phone_rows_fit_the_screen_and_signin_sits_top_right():
+    """Audit 2026-09-19: four fixed columns (92+118+96 + gaps) overflowed a 390px phone and the whole
+    register scrolled sideways; 'sign in' stacked on top of the mark. Thumbs stay 84×63 (Simon, 09-02)."""
+    css = publish._INDEX_STYLE
+    phone = css.split('@media (max-width: 699px)')[1].split('@media')[0]
+    assert 'grid-template-columns:92px minmax(0,1fr) 88px' in phone
+    assert 'span:empty:not(.t)' in phone              # the no-photo placeholder is an empty span too — keep it
+    assert 'width:' not in phone                      # no shrinking the thumbs on a phone
+    assert '.hero .signin { position:absolute; top:14px; right:18px' in css
 
 
 def test_index_hero_has_featured_knife_card_and_stats_strip():
