@@ -402,7 +402,7 @@
     var q = $('q').value.trim().toLowerCase();
     var live = knives.filter(function (k) { return k.status === 'live'; });
     var drafts = knives.filter(function (k) { return k.status === 'draft'; });
-    $('count').textContent = live.length + ' knife' + (live.length === 1 ? '' : 's') + (drafts.length ? ' · ' + drafts.length + ' draft' + (drafts.length === 1 ? '' : 's') : '');
+    $('count').textContent = live.length + (live.length === 1 ? ' knife' : ' knives') + (drafts.length ? ' · ' + drafts.length + ' draft' + (drafts.length === 1 ? '' : 's') : '');
     var d = $('drafts'); clear(d);
     drafts.forEach(function (k) {
       var a = el('a'); a.href = '/blade-book/me/add/';
@@ -427,7 +427,7 @@
     var ids = Object.keys(selected).map(Number);
     json('POST', '/knives/bulk', { ids: ids, is_public: isPublic }).then(function (res) {
       if (!res.ok) throw new Error(res.j.error || 'bulk failed');
-      say(res.j.changed + ' knife' + (res.j.changed === 1 ? '' : 's') + ' made ' + (isPublic ? 'public' : 'private'));
+      say(res.j.changed + (res.j.changed === 1 ? ' knife' : ' knives') + ' made ' + (isPublic ? 'public' : 'private'));
       selected = {}; return reload();
     }).catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); });
   }

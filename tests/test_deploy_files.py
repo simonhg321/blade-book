@@ -711,3 +711,9 @@ def test_cover_picker_in_the_add_flow_and_as_a_page():
     assert 'href="/blade-book/me/covers/"' in me and 'coverwrap' in me
     sh = _read('scripts/deploy_landing.sh')
     assert 'me/covers' in sh
+
+
+def test_signed_in_audit_fixes_2026_09_21():
+    me = _read('html/me/index.html')
+    assert "' knife' + (" not in me and me.count("' knives')") == 2          # "0 knifes" / "3 knifes made public"
+    assert 'a.btn{display:inline-block;text-decoration:none}' in _read('html/me/settings/index.html')
