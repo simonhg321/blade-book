@@ -14,4 +14,4 @@ sudo -u shg -H bash -c "
   cp $CODE/html/me/add/index.html $WWW/me/add/index.html"
 bash $CODE/scripts/enable_404.sh            # 404 page + vhost line + apache reload
 bash $CODE/scripts/restart_and_sweep.sh     # new register styles: restart, then rebuild every bundle
-curl -s https://blade-book.com/ | grep -c 'One photo' | sed 's/^/landing live (1 = yes): /'
+curl -s https://blade-book.com/ | grep -c 'Your whole collection' | sed 's/^/landing live (1 = yes, 0 = no): /'
