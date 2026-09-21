@@ -668,3 +668,26 @@ def test_save_tells_the_owner_the_public_page_takes_a_minute():
     me = open(os.path.join(ROOT, 'html', 'me', 'index.html')).read()
     assert "sessionStorage.setItem('bbJustSaved'" in add
     assert "sessionStorage.removeItem('bbJustSaved')" in me and 'about a minute' in me
+
+
+def test_landing_pitches_before_it_asks_and_keeps_the_app_home():
+    """Audit 2026-09-19 blocker #1: / was a bare sign-in form. Signed-out visitors now get the pitch
+    (hero photo, one-photo-vs-spreadsheet, private/public, show them off, sell/hunt, leave any time) ABOVE
+    the unchanged sign-in panel; signed-in collectors keep / as their app home (html.in hides the pitch)."""
+    html = open(os.path.join(ROOT, 'html', 'index.html')).read()
+    assert html.index('class="hero"') < html.index('id="magic"')          # pitch first, ask second
+    assert 'href="#start"' in html and '<main id="start">' in html         # CTAs land on the real form
+    for needle in ('One photo.', 'The private side', 'The public side', 'Show them off.',
+                   'Your data walks out', "html.in .mk, html.in .hero, html.in .out-only{display:none}"):
+        assert needle in html, needle
+    assert "localStorage.getItem('bbIn')" in html and "classList.toggle('in', me.ok)" in html
+    # every landing image is a local, EXIF-free file that exists (CSP img-src 'self')
+    import re
+    imgs = re.findall(r'src="/blade-book/(img/landing/[^"]+)"', html)
+    assert len(imgs) == 4
+    from PIL import Image
+    for rel in imgs:
+        assert not dict(Image.open(os.path.join(ROOT, 'html', rel)).getexif()), rel
+    # the app's own panels survived the move
+    for pid in ('signed-out', 'sent', 'signed-in', 'board', 'providers', 'resend', 'signout'):
+        assert f'id="{pid}"' in html, pid

@@ -3,6 +3,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>blade-book</title>
 <meta property="og:title" content="blade-book">
+<meta name="description" content="blade-book is a register for knife collectors. Photograph a knife with its birth card — we read the card, fill in the record, and build its page.">
 <meta property="og:description" content="A register for knife collectors. One photo, one card, one page per knife.">
 <meta property="og:image" content="https://blade-book.com/og.jpg">
 <meta property="og:image:width" content="1200">
@@ -15,44 +16,288 @@
 <link rel="apple-touch-icon" href="/blade-book/apple-touch-icon.png">
 <link rel="stylesheet" href="/blade-book/vibe.css?v=20260904">
 <style>
-  body{background:var(--cream);color:var(--ink);margin:0;min-height:100vh;display:grid;place-items:center}
-  main{width:min(92vw,420px);text-align:center}
-  h1{font-family:'Bebas Neue',Impact,sans-serif;font-weight:400;font-size:3.4rem;letter-spacing:.06em;margin:0 0 .25rem}
-  p{color:var(--muted);margin:.25rem 0 1.25rem}
-  form{display:grid;gap:.6rem}
-  input,button{font:inherit;padding:.75rem .9rem;border-radius:8px;border:1px solid var(--line)}
-  input{background:#fff}
-  button{background:var(--ink);color:var(--cream);border-color:var(--ink);cursor:pointer}
-  button.alt{background:#fff;color:var(--ink)}
-  .msg{min-height:1.4em;font-size:.95rem}
-  .msg.err{color:var(--accent)}
+  main{width:min(92vw,420px);text-align:center;margin:0 auto}
+  main h1{font-family:'Bebas Neue',Impact,sans-serif;font-weight:400;font-size:3.4rem;letter-spacing:.06em;margin:0 0 .25rem}
+  main p{color:var(--muted);margin:.25rem 0 1.25rem}
+  main form{display:grid;gap:.6rem}
+  main input,main button{font:inherit;padding:.75rem .9rem;border-radius:8px;border:1px solid var(--line)}
+  main input{background:#fff}
+  main button{background:var(--ink);color:var(--cream);border-color:var(--ink);cursor:pointer}
+  main button.alt{background:#fff;color:var(--ink)}
+  main .msg{min-height:1.4em;font-size:.95rem}
+  main .msg.err{color:var(--accent)}
   .hidden{display:none}
-  small{color:var(--muted)}
-  #signed-in{display:grid;gap:.9rem}
-  #signed-in .who{color:var(--muted)}
-  #signed-in .who strong{color:var(--ink)}
-  a.big{display:block;padding:1.2rem 0;font-size:1.35rem;font-weight:800;letter-spacing:.06em;background:var(--accent);color:#fff;border-radius:14px;text-decoration:none}
-  a.big.alt{background:#fff;color:var(--ink);border:2px solid var(--ink)}
-  #drafts{color:var(--muted);font-size:.95rem;min-height:1.2em}
-  #regcount{color:var(--muted);font-size:.95rem;min-height:1.2em}
-  #signout{background:none;color:var(--muted);border:none;text-decoration:underline;padding:.25rem}
-  #sent{display:grid;gap:.6rem;padding:1.2rem 1rem;border:1px solid var(--line);border-radius:14px;background:#fff}
-  #sent h2{margin:0;font-size:1.5rem}
-  #sent p{color:var(--ink);margin:0}
-  #sent .big-note{font-size:2.6rem;line-height:1}
-  #sent button[disabled]{opacity:.55;cursor:default}
-  button.link{background:none;color:var(--muted);border:none;text-decoration:underline;padding:.25rem}
-  #board{margin-top:1.6rem;text-align:left}
-  #board h2{font-family:'Bebas Neue',Impact,sans-serif;font-weight:400;font-size:1.5rem;letter-spacing:.06em;margin:0 0 .5rem;text-align:center}
-  #bcards{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-  #bcards a{display:block;background:#fff;border:2px solid var(--ink);border-radius:12px;overflow:hidden;text-decoration:none;color:var(--ink)}
-  #bcards img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;background:var(--soft)}
-  #bcards .b{padding:6px 8px;font-size:.82rem}
-  #bcards .b b{display:block;font-size:.9rem}
-  #bcards .b .p{color:var(--accent);font-weight:700}
-  #board .all{display:block;text-align:center;margin-top:.7rem;color:var(--accent);font-weight:700}
+  main small{color:var(--muted)}
+  main #signed-in{display:grid;gap:.9rem}
+  main #signed-in .who{color:var(--muted)}
+  main #signed-in .who strong{color:var(--ink)}
+  main a.big{display:block;padding:1.2rem 0;font-size:1.35rem;font-weight:800;letter-spacing:.06em;background:var(--accent);color:#fff;border-radius:14px;text-decoration:none}
+  main a.big.alt{background:#fff;color:var(--ink);border:2px solid var(--ink)}
+  main #drafts{color:var(--muted);font-size:.95rem;min-height:1.2em}
+  main #regcount{color:var(--muted);font-size:.95rem;min-height:1.2em}
+  main #signout{background:none;color:var(--muted);border:none;text-decoration:underline;padding:.25rem}
+  main #sent{display:grid;gap:.6rem;padding:1.2rem 1rem;border:1px solid var(--line);border-radius:14px;background:#fff}
+  main #sent h2{margin:0;font-size:1.5rem}
+  main #sent p{color:var(--ink);margin:0}
+  main #sent .big-note{font-size:2.6rem;line-height:1}
+  main #sent button[disabled]{opacity:.55;cursor:default}
+  main button.link{background:none;color:var(--muted);border:none;text-decoration:underline;padding:.25rem}
+  main #board{margin-top:1.6rem;text-align:left}
+  main #board h2{font-family:'Bebas Neue',Impact,sans-serif;font-weight:400;font-size:1.5rem;letter-spacing:.06em;margin:0 0 .5rem;text-align:center}
+  main #bcards{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  main #bcards a{display:block;background:#fff;border:2px solid var(--ink);border-radius:12px;overflow:hidden;text-decoration:none;color:var(--ink)}
+  main #bcards img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;background:var(--soft)}
+  main #bcards .b{padding:6px 8px;font-size:.82rem}
+  main #bcards .b b{display:block;font-size:.9rem}
+  main #bcards .b .p{color:var(--accent);font-weight:700}
+  main #board .all{display:block;text-align:center;margin-top:.7rem;color:var(--accent);font-weight:700}
+
+html{scroll-behavior:smooth}
+.wrap{max-width:1080px;margin:0 auto;padding:0 20px}
+
+.top{position:absolute;left:0;right:0;top:0;z-index:3}
+.top .wrap{display:flex;align-items:center;justify-content:space-between;padding-top:16px;padding-bottom:16px}
+.top .brand{display:flex;align-items:center;gap:10px;color:#fff;text-decoration:none;font-size:1.7rem}
+.top .brand img{width:34px;height:34px}
+.top nav{display:flex;gap:18px;align-items:center;font-size:.92rem}
+.top nav a{color:#fff;text-decoration:none;opacity:.88;padding:8px 2px}
+.top nav a.in{opacity:1;font-weight:700;border:2px solid #fff;border-radius:10px;padding:7px 14px}
+
+.hero{position:relative;min-height:min(88vh,760px);display:flex;align-items:flex-end;color:#fff;background:#0d0f1a;overflow:hidden}
+.hero img.bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:60% 45%}
+.hero::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,10,20,.55) 0%,rgba(8,10,20,.05) 32%,rgba(8,10,20,.35) 58%,rgba(8,10,20,.92) 100%)}
+.hero > .wrap{position:relative;z-index:2;width:100%;padding-bottom:48px;padding-top:120px}
+.hero h1{font-size:clamp(2.7rem,6.2vw,5rem);line-height:.94;margin:0 0 14px;max-width:16ch;text-shadow:0 2px 24px rgba(0,0,0,.5)}
+.hero h1 em{font-style:normal;color:#f0a58f}
+.hero p.lede{font-size:clamp(1.05rem,1.9vw,1.3rem);max-width:34em;margin:0 0 24px;opacity:.95}
+.cta{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.cta .btn{font-size:1rem;padding:.9rem 1.3rem;text-decoration:none;display:inline-block}
+.cta .ghost{background:transparent;border-color:#fff;color:#fff}
+.hero .cap{position:absolute;right:20px;bottom:14px;z-index:2;font-size:.74rem;letter-spacing:.06em;opacity:.75}
+
+section.mk{padding:64px 0}
+section.mk.alt{background:#fff;border-top:2px solid var(--ink);border-bottom:2px solid var(--ink)}
+.eyebrow{font-size:.78rem;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin:0 0 8px}
+h2.big{font-size:clamp(2.2rem,5vw,3.6rem);line-height:.95;margin:0 0 14px}
+p.sub{font-size:1.08rem;color:var(--muted);max-width:40em;margin:0 0 28px}
+
+.versus{display:grid;grid-template-columns:1fr 1fr;gap:22px;align-items:stretch}
+.way{border:2px solid var(--ink);border-radius:16px;padding:20px;background:var(--cream)}
+.way.old{border-style:dashed;border-color:var(--line);color:var(--muted)}
+.way h3{font-size:.82rem;letter-spacing:.14em;text-transform:uppercase;margin:0 0 12px}
+.way.old ol{margin:0;padding-left:1.2em;line-height:1.9}
+.way.old .time{margin-top:14px;font-weight:700;color:var(--ink)}
+.sheet{font-family:ui-monospace,Menlo,monospace;font-size:.72rem;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-top:14px;background:#fff}
+.sheet div{display:grid;grid-template-columns:3em 1fr 1fr 1fr;border-bottom:1px solid var(--line)}
+.sheet div:last-child{border:0}
+.sheet span{padding:4px 6px;border-right:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.shot{display:grid;grid-template-columns:1fr 1.1fr;gap:16px;align-items:center}
+.shot img{width:100%;border-radius:12px;border:2px solid var(--ink);display:block}
+.shot .arrow{display:none}
+.rec{background:#fff;border:2px solid var(--ink);border-radius:12px;padding:12px 14px;font-size:.9rem}
+.rec b.tag{color:var(--accent);letter-spacing:.1em;font-size:.78rem}
+.rec .name{font-family:'Bebas Neue',Impact,sans-serif;font-size:1.7rem;letter-spacing:.04em;line-height:1;margin:2px 0 8px}
+.rec dl{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:0}
+.rec dt{color:var(--muted);font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;padding-top:2px}
+.rec dd{margin:0;font-weight:600}
+.way.new .time{margin-top:14px;font-weight:700;color:var(--accent)}
+
+.pain{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.pain div{border-top:3px solid var(--ink);padding-top:12px}
+.pain b{display:block;font-family:'Bebas Neue',Impact,sans-serif;font-size:1.6rem;letter-spacing:.04em;font-weight:400;margin-bottom:4px}
+.pain p{margin:0;color:var(--muted)}
+
+.sides{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+.side{border-radius:16px;padding:24px;border:2px solid var(--ink)}
+.side.priv{background:var(--ink);color:var(--cream)}
+.side.pub{background:var(--cream)}
+.side h3{font-family:'Bebas Neue',Impact,sans-serif;font-weight:400;font-size:2rem;letter-spacing:.04em;margin:0 0 4px}
+.side .who{font-size:.8rem;letter-spacing:.12em;text-transform:uppercase;opacity:.7;margin-bottom:14px}
+.side ul{margin:0;padding-left:1.1em;line-height:1.85}
+.sides-note{margin-top:18px;color:var(--muted);font-size:.98rem;max-width:44em}
+
+.gallery{display:grid;grid-template-columns:1.25fr 1fr;gap:18px}
+.gallery figure{margin:0;position:relative;border-radius:16px;overflow:hidden;border:2px solid var(--ink);background:#111}
+.gallery img{width:100%;height:100%;object-fit:cover;display:block;min-height:320px}
+.gallery figcaption{position:absolute;left:0;right:0;bottom:0;padding:34px 16px 14px;color:#fff;background:linear-gradient(180deg,transparent,rgba(0,0,0,.82))}
+.gallery figcaption b{color:#f0a58f;letter-spacing:.1em;font-size:.76rem}
+.gallery figcaption span{display:block;font-family:'Bebas Neue',Impact,sans-serif;font-size:1.6rem;letter-spacing:.04em;line-height:1.05}
+.gallery figcaption small{opacity:.8}
+
+.trio{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.trio .card h3{font-family:'Bebas Neue',Impact,sans-serif;font-weight:400;font-size:1.7rem;letter-spacing:.04em;margin:0 0 6px}
+.trio .card p{margin:0 0 10px;color:var(--muted)}
+.trio .card a{color:var(--accent);font-weight:700;text-decoration:none}
+.hunt{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.hunt span{border:1.5px solid var(--ink);border-radius:999px;padding:3px 10px;font-size:.82rem;font-weight:600;background:var(--cream)}
+
+.leave{text-align:center}
+.leave h2{margin-left:auto;margin-right:auto}
+.leave p.sub{margin-left:auto;margin-right:auto}
+.fine{font-size:.84rem;color:var(--muted);margin-top:12px}
+
+@media (max-width:760px){
+  section.mk{padding:46px 0}
+  .top nav a:not(.in){display:none}
+  .hero{display:block;min-height:0;background:#0b0d18}
+  .hero img.bg{position:relative;height:46vh;object-position:70% 50%}
+  .hero::after{display:none}
+  .top{background:linear-gradient(180deg,rgba(8,10,20,.7),transparent)}
+  .hero > .wrap{padding-top:22px;padding-bottom:30px}
+  .cta .btn{flex:1 1 100%;text-align:center}
+  .versus,.sides,.gallery,.trio,.pain{grid-template-columns:1fr}
+  .shot{grid-template-columns:1fr}
+  .gallery img{min-height:260px}
+  .hero .cap{position:static;display:block;padding:0 20px 18px;text-align:left}
+}
+/* signed-in collectors use / as their app home: no pitch, just the panel. `html.in` is set early from a
+   localStorage hint (no flash) and confirmed by /api/auth/me below. No-JS and crawlers get the full page. */
+html.in .mk, html.in .hero, html.in .out-only{display:none}
+main{padding:40px 0 50px}
 </style>
-<main>
+<script>try{if(localStorage.getItem('bbIn')==='1')document.documentElement.classList.add('in')}catch(e){}</script>
+
+
+<header class="hero">
+  <div class="top"><div class="wrap">
+    <a class="brand bb-display" href="/blade-book/"><img src="/blade-book/mark.svg" alt="">BLADE-BOOK</a>
+    <nav><a href="/blade-book/how/">how it works</a><a href="/blade-book/search/">search</a><a href="/blade-book/board/">the board</a><a class="in" href="#start">sign in</a></nav>
+  </div></div>
+  <img class="bg" src="/blade-book/img/landing/nightsky.jpg" alt="Small Sebenza 31 Night Sky, open on blue cloth">
+  <div class="wrap">
+    <h1 class="bb-display">One photo.<br>Your whole collection, <em>on the record.</em></h1>
+    <p class="lede">blade-book is a register for knife collectors. Photograph a knife with its birth card — we read the card, fill in the record, and build its page. No typing, no spreadsheet.</p>
+    <div class="cta">
+      <a class="btn accent" href="#start">START YOUR REGISTER</a>
+      <a class="btn ghost" href="/@simon-collector/">SEE A REAL ONE →</a>
+    </div>
+  </div>
+  <span class="cap">K75 · Small Sebenza 31 “Night Sky” · born June 23, 2026 · @simon-collector</span>
+</header>
+
+<section class="mk">
+  <div class="wrap">
+    <p class="eyebrow">Why not a spreadsheet</p>
+    <h2 class="big bb-display">You could type it all out.<br>Or take one picture.</h2>
+    <p class="sub">Everything a collector wants to know about a knife is already written on the card that came in the box. So we read the card.</p>
+    <div class="versus">
+      <div class="way old">
+        <h3>The old way</h3>
+        <ol>
+          <li>Open the laptop. Find the spreadsheet.</li>
+          <li>Dig out the box. Squint at the card.</li>
+          <li>Type model, steel, date, inlay, graphic…</li>
+          <li>Take a photo anyway. Lose track of which is which.</li>
+          <li>Repeat for every knife you own.</li>
+        </ol>
+        <div class="sheet">
+          <div><span>#</span><span>model</span><span>steel</span><span>born</span></div>
+          <div><span>41</span><span>lg seb 21 ??</span><span>s35vn</span><span>2019?</span></div>
+          <div><span>42</span><span>sm inkosi LH</span><span></span><span>check box</span></div>
+          <div><span>43</span><span>TODO</span><span></span><span></span></div>
+        </div>
+        <div class="time">About ten minutes a knife. Nobody finishes.</div>
+      </div>
+      <div class="way new">
+        <h3>The blade-book way</h3>
+        <div class="shot">
+          <img src="/blade-book/img/landing/oneshot.jpg" alt="One flat-lay photo: box, papers, birth card and knife">
+          <div class="rec">
+            <b class="tag">K88</b>
+            <div class="name">Small Sebenza 21 — Koi Pond</div>
+            <dl>
+              <dt>Maker</dt><dd>Chris Reeve Knives</dd>
+              <dt>Born</dt><dd>March 21, 2019</dd>
+              <dt>Blade</dt><dd>Drop point · CPM S35VN</dd>
+              <dt>Graphic</dt><dd>CGG “Koi Pond”</dd>
+              <dt>Hand</dt><dd>Left</dd>
+              <dt>Kit</dt><dd>Box · card · papers · cloth</dd>
+            </dl>
+          </div>
+        </div>
+        <div class="time">One photo in. This record out, in about 20 seconds. Fix anything it got wrong.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="mk alt">
+  <div class="wrap">
+    <p class="eyebrow">Somewhere past twenty knives</p>
+    <h2 class="big bb-display">You stop remembering.</h2>
+    <div class="pain">
+      <div><b>Which one was that?</b><p>Two Large 21s with the same inlay, born three years apart. The cards know. Do you?</p></div>
+      <div><b>What did I pay?</b><p>Price, who you got it from, when. Private to you, attached to the knife, there when you trade.</p></div>
+      <div><b>Where did it go?</b><p>Traded, sold, consigned. The record stays, so the story of the knife doesn't end with you.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="mk">
+  <div class="wrap">
+    <p class="eyebrow">Two sides to every register</p>
+    <h2 class="big bb-display">Show what you want.<br>Keep the rest to yourself.</h2>
+    <div class="sides">
+      <div class="side priv">
+        <h3>The private side</h3>
+        <div class="who">Only you, signed in</div>
+        <ul>
+          <li>Every knife you own, including the ones nobody knows about</li>
+          <li>What you paid, who from, where it's kept</li>
+          <li>Your own notes and condition calls</li>
+          <li>Any knife can be fully private — no page, no search, no trace</li>
+        </ul>
+      </div>
+      <div class="side pub">
+        <h3>The public side</h3>
+        <div class="who">Your page, your rules</div>
+        <ul>
+          <li>A page per knife you choose to show</li>
+          <li>One register page for the collection — a link for your forum signature</li>
+          <li>Mark a knife for sale or trade when you're ready</li>
+          <li>Photos are watermarked with your handle</li>
+        </ul>
+      </div>
+    </div>
+    <p class="sides-note">Plenty of collectors would rather nobody knew what's in the safe. That's the default we respect: nothing is public until you say so, and you can hide the day a knife was born if the card gives too much away.</p>
+  </div>
+</section>
+
+<section class="mk alt">
+  <div class="wrap">
+    <p class="eyebrow">And then, the good part</p>
+    <h2 class="big bb-display">Show them off.</h2>
+    <p class="sub">The card photo makes the record. Add a second shot — knife open, good light — and that's the one your page leads with.</p>
+    <div class="gallery">
+      <figure><img src="/blade-book/img/landing/glorious.jpg" alt="Large Sebenza 21 Glorious CGG on patterned plate">
+        <figcaption><b>K80</b><span>Large Sebenza 21 — “Glorious”</span><small>@simon-collector</small></figcaption></figure>
+      <figure><img src="/blade-book/img/landing/koipond.jpg" alt="Small Sebenza 21 Koi Pond CGG half open on CRK cloth">
+        <figcaption><b>K88</b><span>Small Sebenza 21 — “Koi Pond”</span><small>@simon-collector</small></figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section class="mk">
+  <div class="wrap">
+    <p class="eyebrow">When a knife moves on</p>
+    <h2 class="big bb-display">Sell it, trade it, hunt the next one.</h2>
+    <div class="trio">
+      <div class="card"><h3>The board</h3><p>Flag a knife for sale and it joins the board, with its birth card and history already attached. Buyers contact you; we never touch the money.</p><a href="/blade-book/board/">see the board →</a></div>
+      <div class="card"><h3>Search every register</h3><p>Every public knife from every collector, searchable by model, steel, graphic, damascus smith, birth year.</p><a href="/blade-book/search/">search →</a></div>
+      <div class="card"><h3>What are you hunting?</h3><p>Tell us. When a match lands on someone's register, you both get one quiet introduction. Once.</p>
+        <div class="hunt"><span>Large Inkosi CrossHatch</span><span>Area 51</span><span>Night Sky, shooting star</span></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="mk alt leave out-only">
+  <div class="wrap">
+    <p class="eyebrow">We made it easy — now leave</p>
+    <h2 class="big bb-display">Your data walks out<br>whenever you do.</h2>
+    <p class="sub">One button exports everything — photos, records, a spreadsheet if you still want one. One button deletes it all. No ads, no analytics, no passwords.</p>
+  </div>
+</section>
+<main id="start">
   <svg class="bbmark" viewBox="24 14 200 200" width="104" role="img" aria-label="blade-book mark" style="margin-bottom:.5rem">
     <rect x="40" y="64" width="160" height="136" rx="12" fill="var(--ink)"/>
     <g fill="var(--cream)" opacity=".92">
@@ -65,6 +310,7 @@
   </svg>
   <h1>BLADE-BOOK</h1>
   <p>a register for knife collectors — early access</p>
+  <p class="out-only" style="font-size:.9rem">Free during early access. Started with Chris Reeve knives; any maker welcome.</p>
 
   <section id="signed-out">
     <form id="magic">
@@ -121,6 +367,9 @@
   if (flag === 'unverified') msg('Your sign-in provider has not verified that email address — use the email link instead.', true);
 
   const me = await fetch(API + '/me', {credentials: 'same-origin'});
+  try { localStorage.setItem('bbIn', me.ok ? '1' : '0'); } catch (e) {}
+  document.documentElement.classList.toggle('in', me.ok);
+  if (flag && !me.ok) { const s = document.getElementById('start'); if (s) s.scrollIntoView(); }
   if (me.ok) {
     const u = await me.json();
     $('handle').textContent = '@' + u.handle;
