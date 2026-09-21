@@ -680,7 +680,9 @@ def test_landing_pitches_before_it_asks_and_keeps_the_app_home():
     for needle in ('One photo.', 'The private side', 'The public side', 'Show them off.',
                    'Your data walks out', "html.in .mk, html.in .hero, html.in .out-only{display:none}"):
         assert needle in html, needle
-    assert "localStorage.getItem('bbIn')" in html and "classList.toggle('in', me.ok)" in html
+    assert "localStorage.getItem('bbIn')" in html and "classList.toggle('in', me.ok &&" in html
+    assert 'href="/blade-book/?pitch=1"' in html and html.count('pitch=1') >= 3   # owner can see what visitors see
+    assert "' knives' : ' knife'" in html and "'knife' + (n > 1 ? 's'" not in html   # "81 knifes" (Simon, 09-21)
     # every landing image is a local, EXIF-free file that exists (CSP img-src 'self')
     import re
     imgs = re.findall(r'src="/blade-book/(img/landing/[^"]+)"', html)

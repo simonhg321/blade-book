@@ -155,7 +155,7 @@ p.sub{font-size:1.08rem;color:var(--muted);max-width:40em;margin:0 0 28px}
 html.in .mk, html.in .hero, html.in .out-only{display:none}
 main{padding:40px 0 50px}
 </style>
-<script>try{if(localStorage.getItem('bbIn')==='1')document.documentElement.classList.add('in')}catch(e){}</script>
+<script>try{if(localStorage.getItem('bbIn')==='1'&&!/[?&]pitch=1/.test(location.search))document.documentElement.classList.add('in')}catch(e){}</script>
 
 
 <header class="hero">
@@ -343,6 +343,7 @@ main{padding:40px 0 50px}
     <div id="regcount" aria-live="polite"></div>
     <div id="drafts" aria-live="polite"></div>
     <a id="adminlink" href="/blade-book/admin/" style="color:var(--muted);font-size:.85rem" hidden>admin — report queue</a>
+    <a href="/blade-book/?pitch=1" style="color:var(--muted);font-size:.85rem">see the landing page visitors get</a>
     <button id="signout" type="button">sign out</button>
   </section>
 
@@ -368,7 +369,7 @@ main{padding:40px 0 50px}
 
   const me = await fetch(API + '/me', {credentials: 'same-origin'});
   try { localStorage.setItem('bbIn', me.ok ? '1' : '0'); } catch (e) {}
-  document.documentElement.classList.toggle('in', me.ok);
+  document.documentElement.classList.toggle('in', me.ok && !/[?&]pitch=1/.test(location.search));
   if (flag && !me.ok) { const s = document.getElementById('start'); if (s) s.scrollIntoView(); }
   if (me.ok) {
     const u = await me.json();
@@ -387,7 +388,7 @@ main{padding:40px 0 50px}
     fetch('/blade-book/api/knives/?status=live', {credentials: 'same-origin'})
       .then(r => r.json()).then(j => {
         const n = (j.knives || []).length;
-        $('regcount').textContent = n ? n + ' knife' + (n > 1 ? 's' : '') + ' in your register' : 'your register is empty — add the first knife';
+        $('regcount').textContent = n ? n + (n > 1 ? ' knives' : ' knife') + ' in your register' : 'your register is empty — add the first knife';
       }).catch(() => {});
   } else {
     const p = await fetch(API + '/providers').then(r => r.json()).catch(() => ({providers: []}));
