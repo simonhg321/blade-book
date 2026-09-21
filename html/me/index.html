@@ -59,7 +59,7 @@
   <h1 class="bb-display"><img class="bbmark" src="/blade-book/mark.svg" alt="" width="30">MY REGISTER</h1>
   <nav class="bb-nav"><a class="add" href="/blade-book/me/add/">+ add</a><a href="/blade-book/me/">register</a><a href="/blade-book/me/wants/">wants</a><a href="/blade-book/me/settings/">settings</a><a href="/blade-book/board/">board</a><a href="/blade-book/">home</a><a id="adminlink" href="/blade-book/admin/" hidden>admin</a><button id="signout" class="btn link" type="button">sign out</button></nav>
 </header>
-<div class="who"><span id="handle"></span> · <span id="count"></span> · <a class="takedata" href="/blade-book/api/settings/export.csv" download>⬇ take my data (.csv)</a></div>
+<div class="who"><span id="handle"></span> · <span id="count"></span> · <a class="takedata" href="/blade-book/api/settings/export.csv" download>⬇ take my data (.csv)</a><span id="coverwrap" hidden> · <a id="coverlink" class="takedata" href="/blade-book/me/covers/">★ choose covers</a></span></div>
 <input id="q" type="search" placeholder="search your register — everything, private notes too" autocomplete="off">
 <div id="bulkbar" class="hidden"><span id="bulkn"></span>
   <button id="bulkpub" class="btn alt" type="button">make public</button>
@@ -440,6 +440,10 @@
     return api('/knives/full').then(function (res) {
       if (!res.ok) throw new Error(res.j.error || 'could not load your register');
       knives = res.j.knives || []; render();
+      // knives with a second photo whose public page still leads with photo 1 — usually the paperwork flat-lay
+      var nCover = knives.filter(function (k) { return k.status === 'live' && (k.photos || []).length > 1 && !k.hero_photo; }).length;
+      $('coverwrap').hidden = !knives.some(function (k) { return (k.photos || []).length > 1; });
+      $('coverlink').textContent = '★ choose covers' + (nCover ? ' (' + nCover + ')' : '');
       if (!didScroll && location.hash && document.getElementById(location.hash.slice(1))) {
         document.getElementById(location.hash.slice(1)).scrollIntoView(); didScroll = true;
       }

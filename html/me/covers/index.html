@@ -1,0 +1,95 @@
+<!doctype html>
+<!-- Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>blade-book — choose your covers</title>
+<link rel="icon" type="image/svg+xml" href="/blade-book/mark.svg">
+<link rel="apple-touch-icon" href="/blade-book/apple-touch-icon.png">
+<link rel="stylesheet" href="/blade-book/vibe.css?v=20260904">
+<style>
+  body{max-width:720px;margin:0 auto;padding:14px 14px 60px}
+  .lede{color:var(--muted);margin:0 0 14px;font-size:.92rem}
+  #status{text-align:center;color:var(--muted);min-height:1.3em;margin:6px 0;font-size:.9rem;position:sticky;top:0;background:var(--cream);padding:4px 0;z-index:2}
+  #status.err{color:var(--accent);font-weight:700}
+  .kn{background:#fff;border:2px solid var(--ink);border-radius:12px;padding:10px 12px;margin-bottom:12px}
+  .kn h2{font-size:1rem;margin:0 0 8px}
+  .kn h2 .tag{color:var(--accent);margin-right:6px;letter-spacing:.06em}
+  .kn h2 a{color:var(--muted);font-weight:400;font-size:.8rem;margin-left:8px}
+  .pics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .pic{position:relative;padding:0;border:3px solid transparent;border-radius:10px;background:none;cursor:pointer;overflow:hidden;font:inherit}
+  .pic img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;background:var(--soft);border-radius:6px}
+  .pic.on{border-color:var(--accent);cursor:default}
+  .pic .lab{position:absolute;left:6px;top:6px;font-size:.66rem;font-weight:800;letter-spacing:.06em;padding:3px 7px;border-radius:999px;background:rgba(255,255,255,.92);color:var(--ink)}
+  .pic.on .lab{background:var(--accent);color:#fff}
+  .empty{text-align:center;color:var(--muted);padding:30px 0}
+</style>
+
+<header class="bb-head">
+  <h1 class="bb-display"><img class="bbmark" src="/blade-book/mark.svg" alt="" width="30">CHOOSE COVERS</h1>
+  <nav class="bb-nav"><a class="add" href="/blade-book/me/add/">+ add</a><a href="/blade-book/me/">register</a><a href="/blade-book/me/wants/">wants</a><a href="/blade-book/me/settings/">settings</a><a href="/blade-book/board/">board</a><a href="/blade-book/">home</a><a id="adminlink" href="/blade-book/admin/" hidden>admin</a><button id="signout" class="btn link" type="button">sign out</button></nav>
+</header>
+<p class="lede">The <b>cover</b> is the one photo a knife's public page shows. The card shot makes the record; a clean shot of the knife makes the page. Tap the photo that should lead — nothing else about the knife changes, and the other photos stay private. Only knives with more than one photo are listed.</p>
+<div id="status" aria-live="polite"></div>
+<div id="list"></div>
+
+<script>
+(function () {
+  var API = '/blade-book/api';
+  function $(id) { return document.getElementById(id); }
+  function el(t, c, txt) { var e = document.createElement(t); if (c) e.className = c; if (txt != null) e.textContent = txt; return e; }
+  function say(t, err) { var s = $('status'); s.textContent = t || ''; s.className = err ? 'err' : ''; }
+  function api(path, opts) {
+    opts = opts || {}; opts.credentials = 'same-origin';
+    return fetch(API + path, opts).then(function (r) {
+      if (r.status === 401) { location.href = '/blade-book/?auth=required'; throw new Error('sign in'); }
+      return r.json().catch(function () { return {}; }).then(function (j) { return { ok: r.ok, status: r.status, j: j }; });
+    });
+  }
+
+  function card(k) {
+    var box = el('article', 'kn');
+    var h = el('h2'); h.appendChild(el('span', 'tag', k.tag));
+    var e = k.ext || {};
+    h.appendChild(document.createTextNode([e.size, k.model, e.generation, k.variant ? '— ' + k.variant : ''].filter(Boolean).join(' ') || 'untitled'));
+    var back = el('a', null, 'edit'); back.href = '/blade-book/me/#' + k.tag; h.appendChild(back);
+    box.appendChild(h);
+    var pics = el('div', 'pics'); box.appendChild(pics);
+    function draw() {
+      while (pics.firstChild) pics.removeChild(pics.firstChild);
+      var lead = k.hero_photo || k.photos[0].seq;
+      k.photos.slice().sort(function (a, b) { return a.seq - b.seq; }).forEach(function (p) {
+        var on = p.seq === lead;
+        var b = el('button', 'pic' + (on ? ' on' : '')); b.type = 'button';
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+        b.setAttribute('aria-label', k.tag + ' photo ' + p.seq + (on ? ' (cover)' : ' — make cover'));
+        var img = new Image(); img.loading = 'lazy'; img.alt = '';
+        img.src = API + '/knives/' + k.id + '/photos/' + p.seq + '/thumb?v=' + String(p.sha256 || '').slice(0, 8);
+        b.appendChild(img); b.appendChild(el('span', 'lab', on ? '★ COVER' : 'photo ' + p.seq));
+        if (!on) b.addEventListener('click', function () {
+          b.disabled = true;
+          api('/knives/' + k.id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hero_photo: p.seq }) })
+            .then(function (res) {
+              if (!res.ok) { say('✗ ' + (res.j.error || 'could not set the cover'), true); b.disabled = false; return; }
+              k.hero_photo = p.seq; draw();
+              say(k.tag + ': photo ' + p.seq + ' leads ✓ — public page updates in about a minute');
+            }).catch(function (e) { if (e.message !== 'sign in') { say('✗ network error', true); b.disabled = false; } });
+        });
+        pics.appendChild(b);
+      });
+    }
+    draw();
+    return box;
+  }
+
+  say('loading…');
+  api('/knives/full').then(function (res) {
+    if (!res.ok) { say(res.j.error || 'could not load your register', true); return; }
+    var ks = (res.j.knives || []).filter(function (k) { return k.status === 'live' && (k.photos || []).length > 1; });
+    say('');
+    if (!ks.length) { $('list').appendChild(el('div', 'empty', 'No knife has a second photo yet — add one from the knife’s edit form, or when you add the next knife.')); return; }
+    ks.forEach(function (k) { $('list').appendChild(card(k)); });
+  }).catch(function (e) { if (e.message !== 'sign in') say('could not reach the server', true); });
+})();
+</script>
+<script src="/blade-book/nav.js?v=20260904" defer></script>

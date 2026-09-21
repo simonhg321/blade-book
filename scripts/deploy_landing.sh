@@ -5,7 +5,8 @@ set -e
 CODE=/home/shg/blade-book; WWW=/var/www/html/blade-book
 # static pages (as shg, so nothing under the web root turns root-owned)
 sudo -u shg -H bash -c "
-  mkdir -p $WWW/img/landing &&
+  mkdir -p $WWW/img/landing $WWW/me/covers &&
+  cp $CODE/html/me/covers/index.html $WWW/me/covers/index.html &&
   cp $CODE/html/img/landing/*.jpg $WWW/img/landing/ &&
   cp $WWW/index.html $WWW/demo/index.before-landing.html &&
   cp $CODE/html/index.html $WWW/index.html &&

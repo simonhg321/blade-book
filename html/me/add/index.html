@@ -30,6 +30,11 @@
   .cell .ph big{font-size:1.4rem;color:var(--muted)}
   .cell img{cursor:pointer}
   .cell button.x{position:absolute;top:-6px;right:-6px;width:26px;height:26px;border-radius:50%;border:2px solid #fff;background:var(--accent);color:#fff;font-size:.8rem;line-height:1;cursor:pointer;padding:0}
+  /* cover picker (2026-09-21): with 2+ photos, the owner says which one leads the public page.
+     Never auto-picked — slots 2/3 can hold a box label or an invoice. */
+  .cell button.cover{display:block;width:100%;margin-top:4px;font:inherit;font-size:.68rem;font-weight:800;letter-spacing:.06em;padding:4px 0;border-radius:8px;border:1.5px solid var(--ink);background:#fff;color:var(--ink);cursor:pointer}
+  .cell button.cover.on{background:var(--accent);border-color:var(--accent);color:#fff;cursor:default}
+  #coverhint{font-size:.8rem;color:var(--muted);text-align:center;margin:6px 0 0}
   .cell small{display:block;text-align:center;font-size:.72rem;color:var(--muted);margin-top:4px;letter-spacing:.04em}
   .hint{font-size:.78rem;color:#777;margin-top:8px;text-align:center}
   #note{width:100%;min-height:72px;padding:10px;font-size:1rem;resize:vertical;border:2px solid var(--ink);border-radius:10px;background:#fff;margin-top:22px}
@@ -90,6 +95,7 @@
 <div id="status" aria-live="polite"></div>
 <div id="thumbs"></div>
 <div class="hint">tap a photo to retake it · ✕ removes it</div>
+<p id="coverhint" hidden>The <b>cover</b> is the photo your public page shows. The card shot makes the record — a clean shot of the knife makes the page.</p>
 
 <textarea id="note" aria-label="note" placeholder="Note — what you know about it (fed to the decoder as ground truth)&#10;e.g. Large 21, S35VN, bought from a collector 2019, box + card + pouch"></textarea>
 <div id="notestat" aria-live="polite"></div>
@@ -122,7 +128,7 @@
   var API = '/blade-book/api';
   var $ = function (id) { return document.getElementById(id); };
   var SLOTS = [[1, 'BOX + KIT + CARD'], [2, 'HERO open'], [3, 'HERO closed']];
-  var drafts = [], idx = -1, current = null, photos = [], retakeSeq = 0, billing = null;
+  var drafts = [], idx = -1, current = null, photos = [], heroSeq = null, retakeSeq = 0, billing = null;
   var file = $('file'), refile = $('refile');
   file.accept = 'image/*'; refile.accept = 'image/*';
 
@@ -161,7 +167,7 @@
     return api('/knives/' + current).then(function (res) {
       if (!res.ok) { say(res.j.error || 'load failed', true); return; }
       $('note').value = res.j.notes_private || ''; $('notestat').textContent = '';
-      photos = res.j.photos || [];
+      photos = res.j.photos || []; heroSeq = res.j.hero_photo || null;
       renderCard(res.j, null);
       render(k);
     });
@@ -214,8 +220,28 @@
       }
       var small = document.createElement('small'); small.textContent = seq + ' ' + s[1];
       cell.appendChild(small);
+      if (p && n > 1) {
+        var lead = (heroSeq || photos[0].seq) === seq;
+        var cv = document.createElement('button'); cv.type = 'button'; cv.className = 'cover' + (lead ? ' on' : '');
+        cv.textContent = lead ? '★ COVER' : 'make cover';
+        cv.setAttribute('aria-pressed', lead ? 'true' : 'false');
+        if (!lead) cv.addEventListener('click', function () { setCover(seq); });
+        cell.appendChild(cv);
+      }
       th.appendChild(cell);
     });
+    $('coverhint').hidden = n < 2;
+  }
+
+  // the cover is the one photo the public page shows. PATCH works on drafts and live knives alike.
+  function setCover(seq) {
+    var id = current;
+    api('/knives/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hero_photo: seq }) })
+      .then(function (res) {
+        if (!res.ok) { say('✗ ' + (res.j.error || 'could not set the cover'), true); return; }
+        if (id !== current) return;
+        heroSeq = seq; render(drafts[idx]); say('photo ' + seq + ' leads the page ✓');
+      }).catch(function (e) { if (e.message !== 'sign in') say('✗ network error', true); });
   }
 
   function upload(seq, f, replace) {

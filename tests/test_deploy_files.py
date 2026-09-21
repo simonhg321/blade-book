@@ -691,3 +691,21 @@ def test_landing_pitches_before_it_asks_and_keeps_the_app_home():
     # the app's own panels survived the move
     for pid in ('signed-out', 'sent', 'signed-in', 'board', 'providers', 'resend', 'signout'):
         assert f'id="{pid}"' in html, pid
+
+
+def test_cover_picker_in_the_add_flow_and_as_a_page():
+    """Audit 2026-09-19 blocker #2: every public photo was the paperwork flat-lay because the cover
+    (hero_photo) defaulted to photo 1 and the only control was a dropdown deep in the edit form.
+    The owner picks — never automatic: slots 2/3 can hold a box label or an invoice with an address."""
+    add = _read('html/me/add/index.html')
+    assert "JSON.stringify({ hero_photo: seq })" in add and "method: 'PATCH'" in add
+    assert "if (p && n > 1)" in add                     # no picker for a single photo
+    covers = _read('html/me/covers/index.html')
+    assert 'noindex' in covers and "api('/knives/full')" in covers
+    assert "JSON.stringify({ hero_photo: p.seq })" in covers
+    assert '(k.photos || []).length > 1' in covers
+    assert 'innerHTML' not in covers and 'innerHTML' not in add.split('setCover')[1][:900]
+    me = _read('html/me/index.html')
+    assert 'href="/blade-book/me/covers/"' in me and 'coverwrap' in me
+    sh = _read('scripts/deploy_landing.sh')
+    assert 'me/covers' in sh
