@@ -83,8 +83,8 @@
 <div id="count"></div>
 
 <div class="shots">
-  <b>THE SHOT</b> — ① BOX + KIT + CARD in one frame (card flat, date legible!). That's all it takes.
-  Optional: ② HERO open ③ HERO closed for your public page, ④–⑥ details (clip, stamp, inlay).<br>
+  <b>ONE PHOTO IS ALL IT TAKES</b> — ① BOX + KIT + CARD in one frame (card flat, date legible!).
+  Feel like it? Add up to five more for your public page — hero open, hero closed, details. Entirely optional.<br>
   <b>+</b> steps to the next draft, or reserves a new tag at the end.
   <a href="/blade-book/how/" style="color:var(--accent);font-weight:700">full guide with examples →</a>
 </div>
@@ -189,16 +189,23 @@
     var have = {}; photos.forEach(function (p) { have[p.seq] = p; });
     var n = photos.length;
     var c = $('count'); while (c.firstChild) c.removeChild(c.firstChild);
-    var b = document.createElement('b'); b.textContent = n + '/' + MAX + ' photos';
+    // one photo makes the record; the counter never nags for more
+    var b = document.createElement('b');
+    b.textContent = n === 0 ? 'no photo yet — one is all it takes' : n === 1 ? '1 photo ✓ — that\'s enough' : n + ' photos ✓';
     c.appendChild(b); c.appendChild(document.createTextNode(' · draft ' + (idx + 1) + ' of ' + drafts.length));
     $('pick').disabled = n >= MAX;
     $('proc').disabled = n === 0;
     $('save').disabled = n === 0;
     $('agenote').textContent = ''; $('agenote').style.display = 'none';
     applyAccountNote();
-    $('pick').firstChild.textContent = n >= MAX ? '✓ ' + MAX + '/' + MAX + ' — tap a photo to retake ' : '📷  ADD PHOTOS TO ';
+    $('pick').firstChild.textContent = n >= MAX ? '✓ ' + MAX + '/' + MAX + ' — tap a photo to retake '
+      : n === 0 ? '📷  ADD THE PHOTO TO ' : '📷  ADD MORE (OPTIONAL) TO ';
     var th = $('thumbs'); while (th.firstChild) th.removeChild(th.firstChild);
-    SLOTS.forEach(function (s) {
+    // Show slot ①, every filled slot, and ONE empty slot after the last filled one.
+    // Five empty boxes read as homework; one reads as an invitation.
+    var nextEmpty = SLOTS.map(function (s) { return s[0]; }).filter(function (q) { return !have[q]; })[0];
+    var shown = SLOTS.filter(function (s) { return s[0] === 1 || have[s[0]] || s[0] === nextEmpty; });
+    shown.forEach(function (s) {
       var seq = s[0], p = have[seq];
       var cell = document.createElement('div'); cell.className = 'cell';
       if (p && p.has_thumb) {
@@ -210,7 +217,7 @@
       } else {
         var ph = document.createElement('div'); ph.className = 'ph';
         var big = document.createElement('big'); big.textContent = '①②③④⑤⑥'.charAt(seq - 1);
-        ph.appendChild(big); ph.appendChild(document.createTextNode(p ? 'saved ✓' : s[1]));
+        ph.appendChild(big); ph.appendChild(document.createTextNode(p ? 'saved ✓' : seq === 1 ? s[1] : s[1] + ' · optional'));
         if (p) ph.addEventListener('click', function () { retakeSeq = seq; refile.value = ''; refile.click(); });
         cell.appendChild(ph);
       }

@@ -406,7 +406,7 @@
     var d = $('drafts'); clear(d);
     drafts.forEach(function (k) {
       var a = el('a'); a.href = '/blade-book/me/add/';
-      a.appendChild(el('b', null, k.tag)); a.appendChild(document.createTextNode(' · draft · ' + k.photos.length + '/6 photos — finish in add →'));
+      a.appendChild(el('b', null, k.tag)); a.appendChild(document.createTextNode(' · draft · ' + (k.photos.length ? k.photos.length + ' photo' + (k.photos.length > 1 ? 's' : '') : 'no photo yet') + ' — finish in add →'));
       d.appendChild(a);
     });
     var c = $('cards'); clear(c);
