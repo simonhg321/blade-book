@@ -70,7 +70,7 @@ def test_slot_rules(client, mailer, app, env):
     assert r.status_code == 409 and 'taken' in r.get_json()['error']
     assert not app.config['STORE'].exists(f"{me['id']}/{kid}/1.png")  # no orphan on 409
     assert _up(client, kid, 0).status_code == 400
-    assert _up(client, kid, 4).status_code == 400
+    assert _up(client, kid, db.MAX_PHOTO_SLOTS + 1).status_code == 400
     assert client.post(f'{K}/{kid}/photos/2', data={}, content_type='multipart/form-data').status_code == 400
     assert _up(client, kid, 2, name='scan.pdf').status_code == 415
     assert _up(client, kid, 2, b'x' * (photos.MAX_PHOTO_BYTES + 1)).status_code == 400
@@ -182,3 +182,15 @@ def test_replace_swaps_slot_in_one_request_and_bad_file_keeps_old(client, mailer
     assert [p['seq'] for p in client.get(f'{K}/{kid}').get_json()['photos']] == [1]
     # without replace, a taken slot is still a 409
     assert _up(client, kid, 1).status_code == 409
+
+
+def test_six_slots_accepted_seventh_and_zero_rejected(client, mailer):
+    signed_in(client, mailer)
+    kid = client.post(K + '/').get_json()['id']
+    for seq in range(1, 7):
+        assert _up(client, kid, seq).status_code == 201, seq
+    assert _up(client, kid, 7).status_code == 400
+    assert _up(client, kid, 0).status_code == 400
+    assert 'slot must be 1–6' in _up(client, kid, 7).get_json()['error']
+    k = client.get(f'{K}/{kid}').get_json()
+    assert [p['seq'] for p in k['photos']] == [1, 2, 3, 4, 5, 6]

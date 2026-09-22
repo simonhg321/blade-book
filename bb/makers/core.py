@@ -34,8 +34,8 @@ NO_CARD_LINE = ('The owner states there is NO birth card for this knife — no b
 
 BASE_PROMPT = (
     'These photos are ALL of the SAME knife, shot by its owner for their private register. '
-    'Photo 1 should show the box, the kit and the birth card together; photos 2 and 3 are '
-    'the knife open and closed. Fill EVERY field of the schema.\n\n'
+    'Photo 1 should show the box, the kit and the birth card together; any further photos '
+    'are the knife open, closed and in detail (clip, tang stamp, inlay). Fill EVERY field of the schema.\n\n'
     'Rules:\n'
     '- maker_name: the maker is NOT known in advance. Read the brand from the card, certificate, '
     'box label or blade tang stamp, as printed. Maker-specific rules below apply ONLY when the '

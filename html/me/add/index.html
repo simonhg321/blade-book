@@ -84,7 +84,7 @@
 
 <div class="shots">
   <b>THE SHOT</b> — ① BOX + KIT + CARD in one frame (card flat, date legible!). That's all it takes.
-  Optional: ② HERO open ③ HERO closed for your public page.<br>
+  Optional: ② HERO open ③ HERO closed for your public page, ④–⑥ details (clip, stamp, inlay).<br>
   <b>+</b> steps to the next draft, or reserves a new tag at the end.
   <a href="/blade-book/how/" style="color:var(--accent);font-weight:700">full guide with examples →</a>
 </div>
@@ -127,7 +127,9 @@
 (function () {
   var API = '/blade-book/api';
   var $ = function (id) { return document.getElementById(id); };
-  var SLOTS = [[1, 'BOX + KIT + CARD'], [2, 'HERO open'], [3, 'HERO closed']];
+  var SLOTS = [[1, 'BOX + KIT + CARD'], [2, 'HERO open'], [3, 'HERO closed'],
+               [4, 'DETAIL'], [5, 'DETAIL'], [6, 'DETAIL']];   // 6 slots since 2026-09-22 (server MAX_SLOTS)
+  var MAX = SLOTS.length;
   var drafts = [], idx = -1, current = null, photos = [], heroSeq = null, retakeSeq = 0, billing = null;
   var file = $('file'), refile = $('refile');
   file.accept = 'image/*'; refile.accept = 'image/*';
@@ -187,14 +189,14 @@
     var have = {}; photos.forEach(function (p) { have[p.seq] = p; });
     var n = photos.length;
     var c = $('count'); while (c.firstChild) c.removeChild(c.firstChild);
-    var b = document.createElement('b'); b.textContent = n + '/3 photos';
+    var b = document.createElement('b'); b.textContent = n + '/' + MAX + ' photos';
     c.appendChild(b); c.appendChild(document.createTextNode(' · draft ' + (idx + 1) + ' of ' + drafts.length));
-    $('pick').disabled = n >= 3;
+    $('pick').disabled = n >= MAX;
     $('proc').disabled = n === 0;
     $('save').disabled = n === 0;
     $('agenote').textContent = ''; $('agenote').style.display = 'none';
     applyAccountNote();
-    $('pick').firstChild.textContent = n >= 3 ? '✓ 3/3 — tap a photo to retake ' : '📷  ADD PHOTOS TO ';
+    $('pick').firstChild.textContent = n >= MAX ? '✓ ' + MAX + '/' + MAX + ' — tap a photo to retake ' : '📷  ADD PHOTOS TO ';
     var th = $('thumbs'); while (th.firstChild) th.removeChild(th.firstChild);
     SLOTS.forEach(function (s) {
       var seq = s[0], p = have[seq];
@@ -207,7 +209,7 @@
         cell.appendChild(img);
       } else {
         var ph = document.createElement('div'); ph.className = 'ph';
-        var big = document.createElement('big'); big.textContent = '①②③'.charAt(seq - 1);
+        var big = document.createElement('big'); big.textContent = '①②③④⑤⑥'.charAt(seq - 1);
         ph.appendChild(big); ph.appendChild(document.createTextNode(p ? 'saved ✓' : s[1]));
         if (p) ph.addEventListener('click', function () { retakeSeq = seq; refile.value = ''; refile.click(); });
         cell.appendChild(ph);

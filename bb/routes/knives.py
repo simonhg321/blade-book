@@ -401,8 +401,11 @@ def delete_knife(knife_id):
 
 # --- photo slots ---------------------------------------------------------------
 
+MAX_SLOTS = db.MAX_PHOTO_SLOTS   # 6 since 2026-09-22 (Simon); the DB CHECK enforces the same number
+
+
 def _slot_ok(seq):
-    return 1 <= seq <= 3
+    return 1 <= seq <= MAX_SLOTS
 
 
 @bp.post('/<int:knife_id>/photos/<int:seq>')
@@ -412,7 +415,7 @@ def upload_photo(knife_id, seq):
     ?replace=1 swaps a slot in one request: ingest first, then delete the old photo,
     then insert — a rejected file never touches the existing photo."""
     if not _slot_ok(seq):
-        return jsonify({'error': 'slot must be 1, 2 or 3'}), 400
+        return jsonify({'error': f'slot must be 1–{MAX_SLOTS}'}), 400
     f = request.files.get('photo')
     if f is None or not f.filename:
         return jsonify({'error': 'no photo'}), 400

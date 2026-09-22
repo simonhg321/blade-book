@@ -9,6 +9,7 @@ ever produce the current v6 shape) and proves db.connect() repairs it and
 a full match.run() pass works cleanly afterward."""
 import os
 import sqlite3
+import pytest
 
 from bb import db, match, paths
 from bb.mail import FakeMailer
@@ -177,7 +178,7 @@ def _build_v7_db():
 def test_v7_to_v8_adds_featured_knife_id(env):
     _build_v7_db()
     con = db.connect()
-    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION == 12
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION == 13
     ucols = {r[1] for r in con.execute('PRAGMA table_info(users)')}
     assert 'featured_knife_id' in ucols
     assert con.execute('SELECT featured_knife_id FROM users WHERE id = 1').fetchone()[0] is None
@@ -210,7 +211,7 @@ def _build_v8_db():
 def test_v8_to_v9_adds_handle_changed_at(env):
     _build_v8_db()
     con = db.connect()
-    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION == 12
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION == 13
     assert 'handle_changed_at' in {r[1] for r in con.execute('PRAGMA table_info(users)')}
     assert con.execute('SELECT handle_changed_at FROM users WHERE id = 1').fetchone()[0] is None
     con.close()
@@ -245,7 +246,7 @@ def _build_v11_db():
 def test_v11_to_v12_adds_maker_name_and_backfills_crk(env):
     _build_v11_db()
     con = db.connect()
-    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION == 12
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION == 13
     assert 'maker_name' in {r[1] for r in con.execute('PRAGMA table_info(knives)')}
     assert 'maker_name' in {r[1] for r in con.execute('PRAGMA table_info(search_cards)')}
     rows = {r[0]: r[1] for r in con.execute('SELECT id, maker_name FROM knives')}
@@ -256,4 +257,57 @@ def test_v11_to_v12_adds_maker_name_and_backfills_crk(env):
     con = db.connect()                                   # idempotent second open: no re-backfill
     assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION
     assert con.execute('SELECT maker_name FROM knives WHERE id = 1').fetchone()[0] == 'CRK (hand-edited)'
+    con.close()
+
+
+# --- 2026-09-22: v12 → v13 lifts the photos CHECK from 3 slots to 6 (table rebuild) ---
+
+def _build_v12_db():
+    """The live v12 shape: photos.seq CHECK (seq BETWEEN 1 AND 3). Built from the
+    current SCHEMA with the CHECK narrowed back, so nothing else drifts."""
+    path = paths.db_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    v12 = db.SCHEMA.replace(f'CHECK (seq BETWEEN 1 AND {db.MAX_PHOTO_SLOTS})', 'CHECK (seq BETWEEN 1 AND 3)')
+    assert v12 != db.SCHEMA, 'strip pattern drifted — fix the test, not the schema'
+    raw = sqlite3.connect(path)
+    raw.executescript(v12)
+    raw.execute("INSERT INTO users (id, email, handle, created) VALUES (1, 'v12@example.com', 'v12-guy', "
+                "'2026-09-22T00:00:00+00:00')")
+    raw.execute("INSERT INTO knives (id, owner_id, tag, maker, status, model, created, updated) "
+                "VALUES (1, 1, 'K01', 'crk', 'live', 'Sebenza', 't', 't')")
+    for seq in (1, 2, 3):
+        raw.execute("INSERT INTO photos (knife_id, owner_id, seq, store_key, sha256, width, height, created) "
+                    f"VALUES (1, 1, {seq}, '1/1/{seq}.jpg', 'sha{seq}', 800, 600, 't')")
+    raw.execute('INSERT INTO schema_version VALUES (12)')
+    raw.commit()
+    raw.close()
+
+
+def test_v12_to_v13_rebuilds_photos_with_six_slots(env):
+    _build_v12_db()
+    con = db.connect()
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION == 13
+    ddl = con.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'photos'").fetchone()[0]
+    assert 'BETWEEN 1 AND 6' in ddl and 'photos_new' not in ddl
+    # every row survived, ids and order intact
+    assert [tuple(r) for r in con.execute('SELECT id, seq, store_key FROM photos ORDER BY seq')] == \
+        [(1, 1, '1/1/1.jpg'), (2, 2, '1/1/2.jpg'), (3, 3, '1/1/3.jpg')]
+    # slots 4–6 now insert; 7 still refused by the DB itself
+    db.add_photo(con, 1, 1, 6, '1/1/6.jpg', 'sha6', 800, 600)
+    with pytest.raises(db.SlotTaken):
+        db.add_photo(con, 1, 1, 7, '1/1/7.jpg', 'sha7', 800, 600)
+    # UNIQUE (knife_id, seq) and the FK cascade came along with the rebuild
+    with pytest.raises(db.SlotTaken):
+        db.add_photo(con, 1, 1, 1, '1/1/1b.jpg', 'sha1b', 800, 600)
+    idx = con.execute("SELECT sql FROM sqlite_master WHERE tbl_name = 'photos' AND type = 'index' AND sql IS NOT NULL").fetchall()
+    assert idx == []   # the UNIQUE is inline in the DDL, no stray indexes from the rebuild
+    con.close()
+
+    # an old worker re-stamps 12 until the restart: the rebuild must be a no-op then
+    raw = sqlite3.connect(paths.db_path()); raw.execute('UPDATE schema_version SET version = 12'); raw.commit(); raw.close()
+    con = db.connect()
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == 13
+    assert con.execute('SELECT count(*) FROM photos').fetchone()[0] == 4
+    con.execute('DELETE FROM knives WHERE id = 1'); con.commit()
+    assert con.execute('SELECT count(*) FROM photos').fetchone()[0] == 0   # ON DELETE CASCADE survived
     con.close()

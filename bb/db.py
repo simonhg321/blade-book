@@ -14,7 +14,8 @@ from datetime import datetime, timedelta, timezone
 
 from bb import paths
 
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
+MAX_PHOTO_SLOTS = 6              # photo slots per knife; 3 → 6 on 2026-09-22 (v13 rebuilds the CHECK)
 MAKER_KEYS = ('crk', 'other')   # mirrors bb.makers.MAKERS — db never imports makers (test pins them equal)
 
 SALE_STATUSES = ('keeping', 'for_trade', 'for_sale', 'consigned', 'sold')
@@ -77,6 +78,49 @@ CREATE TABLE IF NOT EXISTS intros (
   UNIQUE (want_id, knife_id)
 );
 """
+
+# photos DDL is a template on the table name: SCHEMA creates `photos`, and the
+# v13 rebuild creates `photos_new` from the SAME text (SQLite cannot ALTER a
+# CHECK, so lifting the slot cap means copy → drop → rename).
+def photos_ddl(table='photos'):
+    return f"""
+CREATE TABLE IF NOT EXISTS {table} (
+  id INTEGER PRIMARY KEY,
+  knife_id INTEGER NOT NULL REFERENCES knives(id) ON DELETE CASCADE,
+  owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  seq INTEGER NOT NULL CHECK (seq BETWEEN 1 AND {MAX_PHOTO_SLOTS}),
+  store_key TEXT NOT NULL,
+  sha256 TEXT NOT NULL,
+  width INTEGER, height INTEGER,
+  public_key TEXT,
+  created TEXT NOT NULL,
+  UNIQUE (knife_id, seq)
+);
+"""
+
+
+PHOTOS_DDL = photos_ddl()
+_PHOTOS_COLS = 'id, knife_id, owner_id, seq, store_key, sha256, width, height, public_key, created'
+
+
+def _rebuild_photos_v13(con):
+    """v12 → v13: photos.seq CHECK 1..3 becomes 1..MAX_PHOTO_SLOTS. Idempotent —
+    old gunicorn workers re-stamp 12 until the restart, so this runs again and
+    must see the new CHECK and do nothing. One IMMEDIATE transaction: readers
+    never observe a missing table; a crash mid-way rolls back to the old one."""
+    ddl = con.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'photos'").fetchone()
+    if ddl is None or f'BETWEEN 1 AND {MAX_PHOTO_SLOTS})' in ddl[0]:
+        return
+    if con.in_transaction:
+        con.commit()
+    con.execute('BEGIN IMMEDIATE')
+    con.execute('DROP TABLE IF EXISTS photos_new')
+    con.execute(photos_ddl('photos_new'))
+    con.execute(f'INSERT INTO photos_new ({_PHOTOS_COLS}) SELECT {_PHOTOS_COLS} FROM photos')
+    con.execute('DROP TABLE photos')
+    con.execute('ALTER TABLE photos_new RENAME TO photos')
+    con.commit()
+
 
 # One OPEN report per (knife, reporter): a partial UNIQUE index, so a
 # resolved report never blocks a fresh one on the same knife later.
@@ -156,18 +200,7 @@ CREATE TABLE IF NOT EXISTS knives (
 CREATE INDEX IF NOT EXISTS knives_owner ON knives(owner_id);
 CREATE INDEX IF NOT EXISTS knives_public ON knives(is_public, status, sale_status);
 
-CREATE TABLE IF NOT EXISTS photos (
-  id INTEGER PRIMARY KEY,
-  knife_id INTEGER NOT NULL REFERENCES knives(id) ON DELETE CASCADE,
-  owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  seq INTEGER NOT NULL CHECK (seq BETWEEN 1 AND 3),
-  store_key TEXT NOT NULL,
-  sha256 TEXT NOT NULL,
-  width INTEGER, height INTEGER,
-  public_key TEXT,
-  created TEXT NOT NULL,
-  UNIQUE (knife_id, seq)
-);
+{PHOTOS_DDL}
 
 CREATE TABLE IF NOT EXISTS events (
   id INTEGER PRIMARY KEY,
@@ -315,14 +348,20 @@ MIGRATIONS = {
          "WHERE maker = 'crk' AND (maker_name IS NULL OR maker_name = '') "
          'AND NOT EXISTS (SELECT 1 FROM migration_marks WHERE v = 12)',
          'INSERT OR IGNORE INTO migration_marks (v) VALUES (12)'],
+    # 2026-09-22: six photo slots. A callable, not SQL — the CHECK can only change
+    # via table rebuild, and the rebuild has to look before it leaps (idempotent).
+    13: [_rebuild_photos_v13],
 }
 
 
 def _migrate(con, have):
     for v in range(have + 1, SCHEMA_VERSION + 1):
-        for sql in MIGRATIONS.get(v, []):
+        for step in MIGRATIONS.get(v, []):
+            if callable(step):
+                step(con)
+                continue
             try:
-                con.execute(sql)
+                con.execute(step)
             except sqlite3.OperationalError as e:
                 if 'duplicate column' not in str(e):
                     raise
