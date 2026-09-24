@@ -43,7 +43,11 @@ PROMPT = (
     'The blank blade line may carry a handwritten CRK option, e.g. "Polished, Double Lug" '
     '(polished blade, double thumb lugs): surface_finish "polished", hardware_note "double lug". '
     '1990s cards ("Chris Reeve, Cutler", handwritten, signed) may say "Decorated Sebenza": the '
-    'Decorated is an engraved-handle series, handle_treatment "decorated", not an inlay.'
+    'Decorated is an engraved-handle series, handle_treatment "decorated", not an inlay. On those cards the '
+    'Blade line may carry the damascus smith and pattern (e.g. "Devin Thomas Damascus, Bronze Spiro Graph" = '
+    'damascus_smith Devin Thomas, damascus_pattern Spirograph, bronze etch): that is the blade, never the handle '
+    'graphic. graphic_name is only a name the card gives the graphic itself; many Unique Graphics have no name — '
+    'leave it empty rather than reuse a blade or pattern word.'
 )
 
 SKU_PREFIXES = {

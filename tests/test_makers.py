@@ -220,3 +220,12 @@ def test_crk_knows_the_original_sebenza_before_july_1996():
     assert crk.norm('generation', 'Large Sebenza Regular') == 'regular'
     p = crk.PROMPT.lower()
     assert 'original' in p and '1996' in p
+
+
+def test_crk_prompt_keeps_damascus_pattern_out_of_graphic_name():
+    """2026-09-23: a collector's March 2000 card — Blade: 'Devin Thomas Damascus,
+    Bronze Spiro Graph'. The decoder copied the damascus pattern into
+    graphic_name. Her: 'the handle graphic has no name.'"""
+    p = crk.PROMPT.lower()
+    assert 'graphic_name' in p and 'damascus_pattern' in p
+    assert 'no name' in p or 'unnamed' in p
