@@ -126,7 +126,7 @@
 
   // --- field definitions: the edit form and the card rows come from ONE list ---
   // [key, label, kind, options?]  key 'ext.x' lives in ext; kind: text|num|date|born|select|bool|long|sec
-  var GEN = ['', 'Regular', 'Classic', '21', '25', '31'], HAND = ['', 'right', 'left'];
+  var GEN = ['', 'Original', 'Regular', 'Classic', '21', '25', '31'], HAND = ['', 'right', 'left'];
   var FIELDS = [
     ['sec', 'knife'],
     ['maker_name', 'maker', 'text'], ['model', 'model', 'text'], ['variant', 'variant', 'text'], ['ext.size', 'size', 'select', ['', 'Small', 'Large']],
@@ -136,7 +136,7 @@
     ['blade_length_in', 'length (in)', 'num'], ['ext.damascus_smith', 'damascus smith', 'text'], ['ext.damascus_pattern', 'pattern', 'text'],
     ['sec', 'handle'],
     ['handle_material', 'material', 'text'], ['lock_type', 'lock', 'text'],
-    ['ext.handle_treatment', 'treatment', 'select', ['', 'plain-ti', 'inlay', 'unique graphic', 'CGG', 'front face', 'CAD Custom', 'other']],
+    ['ext.handle_treatment', 'treatment', 'select', ['', 'plain-ti', 'inlay', 'unique graphic', 'CGG', 'front face', 'CAD Custom', 'decorated', 'other']],
     ['ext.inlay_material', 'inlay', 'text'], ['ext.graphic_name', 'graphic', 'text'], ['ext.surface_finish', 'finish', 'text'],
     ['ext.hardware_note', 'hardware', 'text'], ['ext.hand', 'hand', 'select', HAND], ['ext.hand_on_box', 'hand on box', 'select', HAND],
     ['sec', 'date'],

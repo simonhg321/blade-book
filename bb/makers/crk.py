@@ -8,13 +8,13 @@ import re
 from bb.makers import core
 
 EXT_PROPS = {
-    'generation': {'type': 'string', 'enum': ['', 'Regular', 'Classic', '21', '25', '31'], 'description': 'Sebenza generation from card/box/SKU; pre-2008 cards without "Classic" are Regular; "" for non-Sebenza'},
+    'generation': {'type': 'string', 'enum': ['', 'Original', 'Regular', 'Classic', '21', '25', '31'], 'description': 'Sebenza generation from card/box/SKU: born before July 1996 = Original; July 1996–2008 without "Classic" = Regular; "" for non-Sebenza'},
     'size': {'type': 'string', 'enum': ['', 'Small', 'Large']},
     'crk_sku': {'type': 'string', 'description': 'Box label SKU exactly as printed, e.g. "L31-1633", "LIN-1000"; empty if not visible'},
     'hand': {'type': 'string', 'enum': ['', 'right', 'left']},
     'hand_on_box': {'type': 'string', 'enum': ['', 'right', 'left'], 'description': 'Hand as printed on the BOX label, if it differs in origin from the card'},
     'hardness_note': {'type': 'string', 'description': 'e.g. "63-64 RC" as printed'},
-    'handle_treatment': {'type': 'string', 'enum': ['', 'plain-ti', 'inlay', 'unique graphic', 'CGG', 'front face', 'CAD Custom', 'other']},
+    'handle_treatment': {'type': 'string', 'enum': ['', 'plain-ti', 'inlay', 'unique graphic', 'CGG', 'front face', 'CAD Custom', 'decorated', 'other']},
     'inlay_material': {'type': 'string', 'description': 'e.g. "box elder burl", "canvas micarta"; empty if none'},
     'damascus_smith': {'type': 'string', 'description': 'e.g. "Chad Nichols", "Devin Thomas"; empty unless the steel is damascus'},
     'damascus_pattern': {'type': 'string', 'description': 'e.g. "Stainless Ladder", "Raindrop", "Basketweave"'},
@@ -26,9 +26,10 @@ EXT_PROPS = {
 }
 
 PROMPT = (
-    'Maker: Chris Reeve Knives (Boise, Idaho). Models: Sebenza (generations Regular, Classic, 21, 25, 31 — '
-    'Regular and Classic are separate pre-2008 models that ran side by side; a pre-2008 card that does not say '
-    '"Classic" is a Regular; '
+    'Maker: Chris Reeve Knives (Boise, Idaho). Models: Sebenza (generations Original, Regular, Classic, 21, 25, 31 — '
+    'the Original ran 1987 to July 1996 (sandblasted titanium, ATS-34): a card dated before July 1996 is an Original; '
+    'Regular (July 1996–2008) and Classic (2000–2008) are separate models that ran side by side; a July 1996–2008 card '
+    'that does not say "Classic" is a Regular; '
     'sizes Small, Large), Inkosi (Small/Large; blade Drop Point or Insingo), Mnandi, Impinda, '
     'Umnumzaan, TiLock (Ti-Lock), Zaan, and fixed blades (Green Beret, Pacific, Nyala, '
     'Professional Soldier, Sikayo). The BIRTH CARD lists the model, blade steel with hardness '
@@ -40,7 +41,9 @@ PROMPT = (
     '(Chad Nichols, Devin Thomas). "CGG" = Computer Generated Graphic; "unique graphic" is a '
     'one-off anodised pattern named on the card. Left-handed knives say so on the card. '
     'The blank blade line may carry a handwritten CRK option, e.g. "Polished, Double Lug" '
-    '(polished blade, double thumb lugs): surface_finish "polished", hardware_note "double lug".'
+    '(polished blade, double thumb lugs): surface_finish "polished", hardware_note "double lug". '
+    '1990s cards ("Chris Reeve, Cutler", handwritten, signed) may say "Decorated Sebenza": the '
+    'Decorated is an engraved-handle series, handle_treatment "decorated", not an inlay.'
 )
 
 SKU_PREFIXES = {
@@ -97,8 +100,8 @@ def norm(field, value):
                 return 'tilock' if m == 'ti-lock' else m
         return s
     if field == 'generation':
-        # Regular (1996-2008) and Classic (2000-2008) are distinct pre-21 models — keep them apart
-        m = re.search(r'\b(regular|classic|21|25|31)\b', s)
+        # Original (to July 1996), Regular (1996-2008) and Classic (2000-2008) are distinct pre-21 models — keep them apart
+        m = re.search(r'\b(original|regular|classic|21|25|31)\b', s)
         return m.group(1) if m else s
     if field == 'crk_sku':
         return str(value).strip().upper()

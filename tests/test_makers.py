@@ -201,3 +201,22 @@ def test_crk_prompt_explains_handwritten_blade_line_and_double_lug():
     hardware_note empty. The brief has to say what that line is."""
     p = crk.PROMPT.lower()
     assert 'handwritten' in p and 'double lug' in p and 'hardware_note' in p
+
+
+def test_crk_knows_the_decorated_sebenza():
+    """2026-09-23: a collector's 1995 card reads 'Large Decorated Sebenza' by hand;
+    the decoder called it 'inlay, possibly mother of pearl'. Decorated is a 1990s
+    engraved-handle series and must be a handle treatment the brief names."""
+    assert 'decorated' in crk.EXT_PROPS['handle_treatment']['enum']
+    p = crk.PROMPT.lower()
+    assert 'decorated' in p and 'engrav' in p
+
+
+def test_crk_knows_the_original_sebenza_before_july_1996():
+    """2026-09-23: a collector's Dec 1995 card came back 'Regular'. She: 'it's an
+    Original'. CRK-LORE: Original 1987 → July 1996, Regular from July 1996."""
+    assert 'Original' in crk.EXT_PROPS['generation']['enum']
+    assert crk.norm('generation', 'Original') == 'original'
+    assert crk.norm('generation', 'Large Sebenza Regular') == 'regular'
+    p = crk.PROMPT.lower()
+    assert 'original' in p and '1996' in p
