@@ -193,3 +193,11 @@ def test_decode_schema_stays_under_the_grammar_budget():
     took the live schema from 69 to 71 — every decode failed. Keep 10 in hand."""
     from bb.makers import union_ext_props
     assert _property_count(core.build_schema(union_ext_props())) <= 60
+
+
+def test_crk_prompt_explains_handwritten_blade_line_and_double_lug():
+    """2026-09-23: the first outside collector's card said 'Polished, Double Lug'
+    by hand after the ticked steel line; the decoder read 'Dartcurg' and left
+    hardware_note empty. The brief has to say what that line is."""
+    p = crk.PROMPT.lower()
+    assert 'handwritten' in p and 'double lug' in p and 'hardware_note' in p

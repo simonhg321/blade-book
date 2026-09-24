@@ -38,7 +38,9 @@ PROMPT = (
     'SIN/LIN = Small/Large Inkosi, MNA = Mnandi, IMP = Impinda, UMN = Umnumzaan, TIL = TiLock. '
     'Older boxes have an award sticker and no SKU. Damascus blades name the smith on the card '
     '(Chad Nichols, Devin Thomas). "CGG" = Computer Generated Graphic; "unique graphic" is a '
-    'one-off anodised pattern named on the card. Left-handed knives say so on the card.'
+    'one-off anodised pattern named on the card. Left-handed knives say so on the card. '
+    'The blank blade line may carry a handwritten CRK option, e.g. "Polished, Double Lug" '
+    '(polished blade, double thumb lugs): surface_finish "polished", hardware_note "double lug".'
 )
 
 SKU_PREFIXES = {
