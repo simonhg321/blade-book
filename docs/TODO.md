@@ -78,3 +78,15 @@ Small items that don't warrant a plan. Bigger work lives in the plan roadmap
   URLs (`vibe.css?v=N`, `nav.js?v=N`) in every page + `bb/publish.py` and bump N on change (tests pin the
   `href="/blade-book/vibe.css"` needle — update to a shared constant). Until then: purge the zone cache
   after any CSS/JS deploy (Simon, Cloudflare dashboard).
+
+## Parked 2026-09-23 — from a collector's first night
+- **Capture corrections as labeled examples.** Users can edit any decoded field before (and after) save; today the edit
+  overwrites the decode and the original guess is lost. Keep the decoder's output next to what the collector saved (per
+  field: decoded → saved, who, when). That diff is the training signal for the brief and the input to a "CRK knowledge
+  agent" (see below). Simon: "we let users fix things before they save them right? we should capture that." Not now.
+- **CRK knowledge agent.** Turn `/home/shg/billboard/docs/CRK-LORE.md` into a structured vocabulary (generations with
+  date ranges, handle treatments, card formats by era, steels by era, numbering) and generate `crk.PROMPT` from it instead
+  of bolting sentences on; second job = read the correction log above and propose brief changes for Simon to approve.
+- **`card_no` ext field.** Early (pre-mid-1994) cards carry "No: P68" — P = Production serial after the Sept 1991 CNC
+  purchase (H = handmade 1987–91). The decoder reads it and discards it. Add ext `card_no` as printed, one brief sentence,
+  show on the knife page. (a collector's K03/P68, June 9 1992.)
