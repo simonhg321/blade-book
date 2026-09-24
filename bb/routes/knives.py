@@ -362,6 +362,14 @@ def decode_knife(knife_id):
                         error=str(e)[:300], latency_ms=ms)
         return jsonify({'error': 'the decoder failed — try again in a minute'}), 502
     decode.log_call(owner, knife_id, d.model, True, decoded=d)
+    if all(max(p.get('width') or 0, p.get('height') or 0) < photos.MIN_LEGIBLE_PX for p in k['photos']):
+        # a forum thumbnail (451×600) read as three different dates, each 'high' —
+        # the model cannot tell it is guessing, so the route says it (2026-09-23)
+        d.flags.append(f'every photo is under {photos.MIN_LEGIBLE_PX} px on its long side — the card was read at '
+                       'thumbnail size; check the date and the card details, or add the full-size photo')
+        for f in ('born_on', 'born_on_precision'):
+            if f in d.confidence:
+                d.confidence[f] = 'low'
 
     # Stage 3: a fresh connection to write the result and return the owner view.
     con = db.connect()
@@ -466,8 +474,9 @@ def upload_photo(knife_id, seq):
              ing.ext, bool(ing.thumb))
     if k['status'] == 'live':
         publish.schedule(owner)
+    small = max(ing.width or 0, ing.height or 0) < photos.MIN_LEGIBLE_PX
     return jsonify({'seq': seq, 'sha256': ing.sha256, 'width': ing.width,
-                    'height': ing.height, 'has_thumb': bool(ing.thumb)}), 201
+                    'height': ing.height, 'has_thumb': bool(ing.thumb), 'small': small}), 201
 
 
 @bp.delete('/<int:knife_id>/photos/<int:seq>')

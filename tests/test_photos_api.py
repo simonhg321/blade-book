@@ -194,3 +194,19 @@ def test_six_slots_accepted_seventh_and_zero_rejected(client, mailer):
     assert 'slot must be 1–6' in _up(client, kid, 7).get_json()['error']
     k = client.get(f'{K}/{kid}').get_json()
     assert [p['seq'] for p in k['photos']] == [1, 2, 3, 4, 5, 6]
+
+
+def test_upload_flags_a_photo_too_small_to_read_a_card(client, mailer):
+    """2026-09-23: a collector swapped a 451×600 forum thumbnail into slot 1; the
+    decoder read three different dates off it, each 'high' confidence. The
+    upload answer says when the long side is under photos.MIN_LEGIBLE_PX so
+    the add page can warn before anyone decodes."""
+    from bb import photos
+    signed_in(client, mailer)
+    kid = client.post(K + '/').get_json()['id']
+    r = _up(client, kid, 1, _jpeg(451, 600))
+    assert r.status_code == 201 and r.get_json()['small'] is True
+    r = _up(client, kid, 2, _jpeg(photos.MIN_LEGIBLE_PX, 900))
+    assert r.status_code == 201 and r.get_json()['small'] is False
+    r = _up(client, kid, 3, _jpeg(900, photos.MIN_LEGIBLE_PX + 1))   # portrait counts the long side
+    assert r.get_json()['small'] is False

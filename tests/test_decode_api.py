@@ -11,7 +11,7 @@ from tests.conftest import ok_result, signed_in
 K = '/blade-book/api/knives'
 
 
-def _jpeg(w=800, h=600):
+def _jpeg(w=1600, h=1200):   # ≥ photos.MIN_LEGIBLE_PX — a small photo is its own test
     img = Image.new('RGB', (w, h), (10, 120, 200))
     buf = io.BytesIO(); img.save(buf, 'JPEG'); return buf.getvalue()
 
@@ -163,3 +163,25 @@ def test_decode_refiles_other_brands_and_edit_refiles_back(client, mailer, decod
     # a second decode on an 'other' draft keeps the hint when the model reads no brand
     decoder.result = ok_result(maker_name='', card_text='', model='XM-18')
     assert client.post(f'{K}/{kid}/decode').get_json()['maker'] == 'other'
+
+
+def test_decode_from_thumbnail_sized_photos_flags_it_and_marks_the_date_low(client, mailer, decoder):
+    """2026-09-23: a 451×600 forum thumbnail decoded to three different dates,
+    each 'high'. The model cannot tell it is guessing (a brief sentence was tried
+    and did nothing), so the route says it: when every photo is under
+    photos.MIN_LEGIBLE_PX on the long side, born_on goes low and a flag tells
+    the owner to check the card."""
+    from bb import photos
+    signed_in(client, mailer)
+    kid = client.post(K + '/').get_json()['id']
+    client.post(f'{K}/{kid}/photos/1', data={'photo': (io.BytesIO(_jpeg(451, 600)), 'a.jpg')},
+                content_type='multipart/form-data')
+    j = client.post(f'{K}/{kid}/decode').get_json()
+    assert len(j['decoded']['flags']) == 1 and str(photos.MIN_LEGIBLE_PX) in j['decoded']['flags'][0]
+    assert 'thumbnail' in j['decoded']['flags'][0]
+    assert j['confidence']['born_on'] == 'low'
+    # one full-size photo alongside the thumbnail is enough — no flag
+    client.post(f'{K}/{kid}/photos/2', data={'photo': (io.BytesIO(_jpeg(1600, 1200)), 'b.jpg')},
+                content_type='multipart/form-data')
+    j = client.post(f'{K}/{kid}/decode').get_json()
+    assert j['decoded']['flags'] == [] and j['confidence']['born_on'] == 'high'

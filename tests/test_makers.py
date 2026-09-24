@@ -229,3 +229,4 @@ def test_crk_prompt_keeps_damascus_pattern_out_of_graphic_name():
     p = crk.PROMPT.lower()
     assert 'graphic_name' in p and 'damascus_pattern' in p
     assert 'no name' in p or 'unnamed' in p
+

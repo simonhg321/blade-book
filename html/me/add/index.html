@@ -253,6 +253,11 @@
       }).catch(function (e) { if (e.message !== 'sign in') say('✗ network error', true); });
   }
 
+  // a forum-sized thumbnail decodes to a guess: 451×600 gave three different dates on one card (2026-09-23)
+  function tooSmall(j) {
+    return '⚠ photo ' + j.seq + ' is small (' + j.width + '×' + j.height + ') — the card may not be readable. ' +
+      'Use the original full-size photo if you have it; you can still process this one.';
+  }
   function upload(seq, f, replace) {
     var id = current;
     var fd = new FormData(); fd.append('photo', f, f.name || ('shot' + seq + '.jpg'));
@@ -270,12 +275,13 @@
     var todo = files.slice(0, empty.length), id = current, done = 0;
     $('pick').disabled = true;
     say('uploading ' + todo.length + '…');
-    var chain = Promise.resolve();
+    var chain = Promise.resolve(), smalls = [];
     todo.forEach(function (f, i) {
-      chain = chain.then(function () { return upload(empty[i], f, false).then(function () { done++; say('uploading ' + todo.length + '… ' + done + ' saved'); }); });
+      chain = chain.then(function () { return upload(empty[i], f, false).then(function (j) { done++; if (j.small) smalls.push(j); say('uploading ' + todo.length + '… ' + done + ' saved'); }); });
     });
     chain.then(function () {
-      say('✓ saved ' + done + (files.length > todo.length ? ' — only ' + empty.length + ' slot(s) were free' : ''));
+      if (smalls.length) say(tooSmall(smalls[0]), true);
+      else say('✓ saved ' + done + (files.length > todo.length ? ' — only ' + empty.length + ' slot(s) were free' : ''));
     }).catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message + (done ? ' (' + done + ' saved)' : ''), true); })
       .then(function () { file.value = ''; return loadDrafts(id); });
   });
@@ -283,7 +289,7 @@
   refile.addEventListener('change', function () {
     var f = refile.files[0], seq = retakeSeq, id = current; if (!f || !seq) return;
     say('replacing ' + seq + '…');
-    upload(seq, f, true).then(function () { say('✓ replaced ' + seq); })
+    upload(seq, f, true).then(function (j) { say(j.small ? tooSmall(j) : '✓ replaced ' + seq, !!j.small); })
       .catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); })
       .then(function () { refile.value = ''; return loadDrafts(id); });
   });

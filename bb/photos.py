@@ -16,6 +16,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 
 ALLOWED_EXT = frozenset({'jpg', 'jpeg', 'png', 'heic', 'heif', 'webp', 'tif', 'tiff', 'dng', 'gif'})
 MAX_PHOTO_BYTES = 20 * 1024 * 1024
+MIN_LEGIBLE_PX = 1200  # long side below this and a birth card is a guess, not a read (451×600 → three dates, 2026-09-23)
 MAX_PIXELS = 80_000_000  # JPEG/MPO only — decoded cheaply via draft mode, so a bigger
                           # cap is safe; above any phone (48 MP) or DSLR (61 MP)
 MAX_PIXELS_NON_JPEG = 30_000_000  # everything else is fully decoded — keep the cap tight
