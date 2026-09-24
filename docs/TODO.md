@@ -90,3 +90,8 @@ Small items that don't warrant a plan. Bigger work lives in the plan roadmap
 - **`card_no` ext field.** Early (pre-mid-1994) cards carry "No: P68" — P = Production serial after the Sept 1991 CNC
   purchase (H = handmade 1987–91). The decoder reads it and discards it. Add ext `card_no` as printed, one brief sentence,
   show on the knife page. (a collector's K03/P68, June 9 1992.)
+- **A photo with no knife in it must be a loud result, not a blank one.** a collector fed K04 a 6000×4000 calico cat
+  (2026-09-23 21:58 PDT). The model refused correctly ("a calico cat on a shingled roof, not a knife") but the route
+  applied the empty decode over her previous read, reported 0 flags, and only the small reasoning line said why. Detect
+  the no-knife case (empty core + reasoning says so, or a dedicated `no_knife` field), keep the prior decode, and show
+  it as a flag: "no knife, box or card in photo 1 — that's a cat".
