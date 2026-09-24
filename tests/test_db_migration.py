@@ -178,7 +178,7 @@ def _build_v7_db():
 def test_v7_to_v8_adds_featured_knife_id(env):
     _build_v7_db()
     con = db.connect()
-    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION == 13
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION == 14
     ucols = {r[1] for r in con.execute('PRAGMA table_info(users)')}
     assert 'featured_knife_id' in ucols
     assert con.execute('SELECT featured_knife_id FROM users WHERE id = 1').fetchone()[0] is None
@@ -211,7 +211,7 @@ def _build_v8_db():
 def test_v8_to_v9_adds_handle_changed_at(env):
     _build_v8_db()
     con = db.connect()
-    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION == 13
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION == 14
     assert 'handle_changed_at' in {r[1] for r in con.execute('PRAGMA table_info(users)')}
     assert con.execute('SELECT handle_changed_at FROM users WHERE id = 1').fetchone()[0] is None
     con.close()
@@ -246,7 +246,7 @@ def _build_v11_db():
 def test_v11_to_v12_adds_maker_name_and_backfills_crk(env):
     _build_v11_db()
     con = db.connect()
-    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION == 13
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION == 14
     assert 'maker_name' in {r[1] for r in con.execute('PRAGMA table_info(knives)')}
     assert 'maker_name' in {r[1] for r in con.execute('PRAGMA table_info(search_cards)')}
     rows = {r[0]: r[1] for r in con.execute('SELECT id, maker_name FROM knives')}
@@ -286,7 +286,7 @@ def _build_v12_db():
 def test_v12_to_v13_rebuilds_photos_with_six_slots(env):
     _build_v12_db()
     con = db.connect()
-    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION == 13
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION == 14
     ddl = con.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'photos'").fetchone()[0]
     assert 'BETWEEN 1 AND 6' in ddl and 'photos_new' not in ddl
     # every row survived, ids and order intact
@@ -306,8 +306,40 @@ def test_v12_to_v13_rebuilds_photos_with_six_slots(env):
     # an old worker re-stamps 12 until the restart: the rebuild must be a no-op then
     raw = sqlite3.connect(paths.db_path()); raw.execute('UPDATE schema_version SET version = 12'); raw.commit(); raw.close()
     con = db.connect()
-    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == 13
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION
     assert con.execute('SELECT count(*) FROM photos').fetchone()[0] == 4
     con.execute('DELETE FROM knives WHERE id = 1'); con.commit()
     assert con.execute('SELECT count(*) FROM photos').fetchone()[0] == 0   # ON DELETE CASCADE survived
+    con.close()
+
+
+# --- 2026-09-23: v13 → v14 adds users.password_hash (invited handle+password accounts) ---
+
+def _build_v13_db():
+    """The live v13 shape: no users.password_hash. Current SCHEMA with the one
+    column stripped, so nothing else drifts."""
+    path = paths.db_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    v13 = db.SCHEMA.replace(",\n  password_hash TEXT\n);", "\n);")
+    assert 'password_hash' not in v13, 'strip pattern drifted — fix the test, not the schema'
+    raw = sqlite3.connect(path)
+    raw.executescript(v13)
+    raw.execute("INSERT INTO users (id, email, handle, created) VALUES (1, 'v13@example.com', 'v13-guy', "
+                "'2026-09-23T00:00:00+00:00')")
+    raw.execute('INSERT INTO schema_version VALUES (13)')
+    raw.commit()
+    raw.close()
+
+
+def test_v13_to_v14_adds_password_hash(env):
+    _build_v13_db()
+    con = db.connect()
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION == 14
+    assert 'password_hash' in {r[1] for r in con.execute('PRAGMA table_info(users)')}
+    assert db.get_user(con, 1)['password_hash'] is None
+    con.close()
+    # an old worker re-stamps 13 until the restart: the ALTER must be tolerated
+    raw = sqlite3.connect(paths.db_path()); raw.execute('UPDATE schema_version SET version = 13'); raw.commit(); raw.close()
+    con = db.connect()
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == 14
     con.close()

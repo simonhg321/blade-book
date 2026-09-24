@@ -23,7 +23,7 @@ import logging
 import os
 import re
 
-from bb import auth, db, paths, publish
+from bb import auth, db, mail, paths, publish
 
 log = logging.getLogger('blade-book.match')
 
@@ -108,7 +108,8 @@ _card_text = card_text   # kept for tests/test_match.py
 def _emails_for(intro_row, want, k):
     """Build (wanter_email_kwargs, owner_email_kwargs)."""
     url = f"{_base()}/@{k['owner_handle']}/{k['tag']}/"
-    share = bool(want['_wanter_share']) and bool(k['owner_share_email'])
+    share = (bool(want['_wanter_share']) and bool(k['owner_share_email'])
+             and mail.deliverable(want['_wanter_email']) and mail.deliverable(k['owner_email']))
     to_wanter = {
         'to': want['_wanter_email'],
         'subject': f"blade-book: a match for your want — {k['tag']}",
@@ -182,6 +183,8 @@ def _run_locked(con, mailer):
         try:
             mid = 'sent'
             for kwargs in _emails_for(intro, w, k):
+                if not mail.deliverable(kwargs['to']):   # an invited (no-email) account: skip that leg
+                    continue
                 mid = mailer.send(**kwargs)
                 sent += 1
             db.mark_intro_sent(con, intro['id'], mid)

@@ -11,6 +11,7 @@ once; deleting one session row revokes just that cookie.
 import hashlib
 import logging
 import re
+import secrets
 import unicodedata
 from functools import wraps
 
@@ -60,6 +61,40 @@ def unique_handle(con, base):
 def handle_for_email(con, email):
     local = email.strip().lower().split('@', 1)[0]
     return unique_handle(con, slugify_handle(local))
+
+
+# --- passwords (invited accounts only, 2026-09-23) ----------------------------
+# scrypt from the stdlib: no new dependency, memory-hard, ~50 ms at these
+# parameters. Stored as 'scrypt$<salt hex>$<key hex>' so the scheme can change
+# later without touching the rows.
+
+SCRYPT_N, SCRYPT_R, SCRYPT_P = 2 ** 14, 8, 1
+
+
+def _scrypt(password, salt):
+    return hashlib.scrypt(password.encode('utf-8'), salt=salt, n=SCRYPT_N, r=SCRYPT_R,
+                          p=SCRYPT_P, dklen=32)
+
+
+def hash_password(password):
+    salt = secrets.token_bytes(16)
+    return f'scrypt${salt.hex()}${_scrypt(password, salt).hex()}'
+
+
+# checked against when the handle is unknown, so both failures take one scrypt
+DUMMY_HASH = hash_password(secrets.token_hex(8))
+
+
+def verify_password(password, stored):
+    if not stored or not password:
+        return False
+    try:
+        scheme, salt_hex, key_hex = stored.split('$')
+        if scheme != 'scrypt':
+            return False
+        return secrets.compare_digest(_scrypt(password, bytes.fromhex(salt_hex)), bytes.fromhex(key_hex))
+    except (ValueError, TypeError):
+        return False
 
 
 # --- sessions ----------------------------------------------------------------
@@ -261,6 +296,7 @@ def admin_required(fn):
 
 EMAIL_LINKS_PER_HOUR = 5
 IP_ATTEMPTS_PER_HOUR = 30
+PASSWORD_FAILS_PER_HOUR = 10
 PURGE_EVERY = 50
 
 
@@ -281,3 +317,20 @@ def check_rate_limits(con, email=None):
     if email and db.count_magic_tokens_since(con, email, hour_ago) >= EMAIL_LINKS_PER_HOUR:
         return 'too many links sent to that address — try again in an hour'
     return None
+
+
+def _account_key(handle):
+    """Failed password tries are counted in auth_attempts under a per-account
+    key instead of a client IP — same table, same hourly window, same purge,
+    no new schema. The prefix cannot collide with an IP."""
+    return f'pw:{handle}'
+
+
+def password_locked(con, handle):
+    from datetime import datetime, timedelta, timezone
+    hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+    return db.count_attempts_since(con, _account_key(handle), hour_ago) >= PASSWORD_FAILS_PER_HOUR
+
+
+def record_password_failure(con, handle):
+    db.record_attempt(con, _account_key(handle))

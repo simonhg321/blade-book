@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 
 from bb import paths
 
-SCHEMA_VERSION = 13
+SCHEMA_VERSION = 14
 MAX_PHOTO_SLOTS = 6              # photo slots per knife; 3 → 6 on 2026-09-22 (v13 rebuilds the CHECK)
 MAKER_KEYS = ('crk', 'other')   # mirrors bb.makers.MAKERS — db never imports makers (test pins them equal)
 
@@ -152,7 +152,8 @@ CREATE TABLE IF NOT EXISTS users (
   session_secret TEXT NOT NULL DEFAULT '',
   last_tag_no INTEGER NOT NULL DEFAULT 0,
   featured_knife_id INTEGER,
-  handle_changed_at TEXT
+  handle_changed_at TEXT,
+  password_hash TEXT
 );
 
 -- one row per decode ATTEMPT (billed whether or not the model answered);
@@ -351,6 +352,9 @@ MIGRATIONS = {
     # 2026-09-22: six photo slots. A callable, not SQL — the CHECK can only change
     # via table rebuild, and the rebuild has to look before it leaps (idempotent).
     13: [_rebuild_photos_v13],
+    # 2026-09-23: invited handle+password accounts (scripts/invite.py) — one column,
+    # NULL for every email account. 'duplicate column' tolerated for old workers.
+    14: ['ALTER TABLE users ADD COLUMN password_hash TEXT'],
 }
 
 
@@ -411,6 +415,31 @@ def create_user(con, email, handle, display_name=None, auth_subjects=None, free_
 def get_user(con, user_id):
     return _user_row(con.execute('SELECT * FROM users WHERE id = ?',
                                  (user_id,)).fetchone())
+
+
+# Invited accounts (2026-09-23): a handle + password and NO real email. The
+# users table needs an email, so they get one under an RFC 2606 reserved
+# domain that can never resolve; bb.mail.deliverable() is False for it and
+# every sender checks that before mailing. Only scripts/invite.py creates
+# these — there is no self-serve route on purpose.
+NO_EMAIL_DOMAIN = 'no-email.invalid'
+
+
+def create_password_user(con, handle, display_name, password):
+    from bb import auth   # hashing lives with the rest of the credential code
+    uid = create_user(con, f'{handle}@{NO_EMAIL_DOMAIN}', handle, display_name)
+    con.execute('UPDATE users SET password_hash = ?, verified_at = ? WHERE id = ?',
+                (auth.hash_password(password), now(), uid))
+    con.commit()
+    rotate_session_secret(con, uid)
+    return uid
+
+
+def set_password(con, user_id, password):
+    from bb import auth
+    con.execute('UPDATE users SET password_hash = ? WHERE id = ?',
+                (auth.hash_password(password), user_id))
+    con.commit()
 
 
 def get_user_by_email(con, email):

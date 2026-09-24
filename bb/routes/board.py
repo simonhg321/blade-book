@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 
 from flask import Blueprint, current_app, g, jsonify, request
 
-from bb import auth, board, db, edit, paths, publish
+from bb import auth, board, db, edit, mail, paths, publish
 
 log = logging.getLogger('blade-book.board')
 
@@ -69,6 +69,11 @@ def contact_seller(knife_id):
             return jsonify({'error': 'not found'}), 404
         if k['owner_id'] == g.user['id']:
             return jsonify({'error': "that's your own knife"}), 400
+        if not mail.deliverable(k['owner_email']):
+            # an invited (no-email) seller: the intro cannot land, so say so before
+            # claiming anything or spending the buyer's daily quota
+            return jsonify({'error': f"@{k['owner_handle']} doesn't take email intros — "
+                                     "reach them where you already know them"}), 409
         since = _day_ago()
         if db.board_contacts_since(con, g.user['id'], since, to_user=k['owner_id']) >= board.MAX_PER_SELLER_PER_DAY:
             return jsonify({'error': f"you've reached {board.MAX_PER_SELLER_PER_DAY} intros to this seller "
@@ -94,7 +99,8 @@ def contact_seller(knife_id):
             db.delete_intro(con, intro_id)
             return jsonify({'error': 'could not send — try again'}), 502
         try:
-            mid = mailer.send(**to_buyer)
+            # an invited (no-email) buyer gets no courtesy copy — the seller leg was the intro
+            mid = mailer.send(**to_buyer) if mail.deliverable(to_buyer['to']) else 'sent'
         except Exception as e:  # noqa: BLE001 — seller already notified; keep the claim, tell the buyer
             log.error('board contact %s → %s buyer copy failed: %r', g.user['handle'], k['tag'], e)
             db.mark_intro_sent(con, intro_id, 'partial')

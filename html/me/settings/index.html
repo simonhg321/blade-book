@@ -104,7 +104,7 @@
   function render(s) {
     me = s;
     $('handle').textContent = '@' + s.handle;
-    $('email').textContent = s.email;
+    $('email').textContent = s.email || (s.sign_in === 'password' ? 'none on file — you sign in with a password' : '');
     $('since').textContent = (s.created || '').slice(0, 10);
     $('handlebox').hidden = !s.can_change_handle;
     $('handledone').hidden = !!s.can_change_handle;

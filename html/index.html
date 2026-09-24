@@ -321,6 +321,14 @@ main{padding:40px 0 50px}
     <div id="msg" class="msg" aria-live="polite"></div>
     <small>No passwords. The link works once and expires in 15 minutes.</small>
     <small>By signing in you agree to the <a href="/blade-book/terms/" style="color:var(--muted)">terms</a>.</small>
+    <button id="pw-toggle" type="button" class="link" style="margin-top:.4rem">have a handle and password?</button>
+    <form id="pwform" class="hidden" autocomplete="on">
+      <input id="pw-handle" type="text" name="username" placeholder="handle" required autocomplete="username" autocapitalize="none" spellcheck="false">
+      <input id="pw-pass" type="password" name="password" placeholder="password" required autocomplete="current-password">
+      <button type="submit">Sign in</button>
+      <div id="pw-msg" class="msg" aria-live="polite"></div>
+      <small>Invited accounts only. Everyone else: the email link above.</small>
+    </form>
     <p style="margin-top:1rem"><a href="/blade-book/how/" style="color:var(--accent);font-weight:700">How it works — the one shot →</a></p>
   </section>
 
@@ -453,6 +461,29 @@ main{padding:40px 0 50px}
   }
 
   $('magic').addEventListener('submit', e => { e.preventDefault(); sendLink(); });
+
+  // invited accounts (handle + password, no email on file) — hidden until asked for
+  $('pw-toggle').addEventListener('click', () => {
+    const open = $('pwform').classList.toggle('hidden');
+    if (!open) $('pw-handle').focus();
+  });
+  $('pwform').addEventListener('submit', async e => {
+    e.preventDefault();
+    const btn = $('pwform').querySelector('button[type=submit]');
+    btn.disabled = true; $('pw-msg').textContent = 'Signing in…'; $('pw-msg').className = 'msg';
+    try {
+      const r = await fetch(API + '/password', {
+        method: 'POST', credentials: 'same-origin',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({handle: $('pw-handle').value.trim(), password: $('pw-pass').value})
+      });
+      const body = await r.json().catch(() => ({}));
+      if (r.ok) { location.href = '/blade-book/me/'; return; }
+      $('pw-msg').textContent = body.error || 'Something went wrong.'; $('pw-msg').className = 'msg err';
+    } catch (err) {
+      $('pw-msg').textContent = 'Could not reach the server — check your connection and try again.'; $('pw-msg').className = 'msg err';
+    } finally { btn.disabled = false; }
+  });
   $('resend').addEventListener('click', sendLink);
   $('change').addEventListener('click', () => {
     clearInterval(timer); timer = null;

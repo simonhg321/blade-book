@@ -8,7 +8,7 @@ db.PRIVATE_COLUMNS (or an owner's email) ever reaches the browser.
 """
 import os
 
-from bb import auth, match, paths, publish
+from bb import auth, mail, match, paths, publish
 
 MAX_MESSAGE = 500
 MAX_PER_SELLER_PER_DAY = 3      # spec §9: "≤3/day from one user to the same seller"
@@ -45,7 +45,8 @@ def contact_emails(buyer, k, message):
     bb/match._emails_for: PUBLIC card text only; reply_to only when BOTH
     sides share_email_on_intro; otherwise handle-only."""
     url = _permalink(k)
-    share = bool(buyer.get('share_email_on_intro')) and bool(k.get('owner_share_email'))
+    share = (bool(buyer.get('share_email_on_intro')) and bool(k.get('owner_share_email'))
+             and mail.deliverable(buyer['email']) and mail.deliverable(k['owner_email']))
     text = match.card_text(k)
     msg_block = (f"Their message (written by @{buyer['handle']} on blade-book — "
                  f"we haven't checked it):\n{message}\n\n") if message else ''

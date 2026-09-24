@@ -14,6 +14,13 @@ log = logging.getLogger('blade-book.mail')
 DEFAULT_FROM = 'blade-book <noreply@blade-book.com>'
 
 
+def deliverable(addr):
+    """False for the synthetic address an invited (password) account carries —
+    anything under the RFC 2606 reserved .invalid TLD. Every sender that mails
+    a user asks this first; nothing is ever sent to such an address."""
+    return bool(addr) and not addr.strip().lower().endswith('.invalid')
+
+
 class Mailer:
     def send(self, to, subject, text, html=None, reply_to=None):  # -> message id
         raise NotImplementedError

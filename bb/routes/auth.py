@@ -101,7 +101,7 @@ def _ct_equal(a, b):
 def request_magic_link():
     body = request.get_json(silent=True) or {}
     email = (body.get('email') or '').strip().lower()
-    if not EMAIL_RE.match(email) or len(email) > 254:
+    if not EMAIL_RE.match(email) or len(email) > 254 or not mail.deliverable(email):
         return jsonify({'error': 'enter a valid email'}), 400
     flow = secrets.token_urlsafe(24)
     con = db.connect()
@@ -176,6 +176,39 @@ def confirm_magic_link():
         return _clear_flow_cookie(_landing(auth='expired'), 'bb_magic')
     log.info('magic link sign-in (confirmed): %s (@%s)', user['email'], user['handle'])
     return _clear_flow_cookie(_landing(), 'bb_magic')
+
+
+@bp.post('/password')
+def password_sign_in():
+    """Handle + password, for INVITED accounts only (2026-09-23). Nothing here
+    creates an account — scripts/invite.py on the box is the only way to get a
+    password_hash, so this route cannot be used to register without an email.
+    Unknown handle and wrong password answer identically; the scrypt check runs
+    either way so timing does not tell them apart."""
+    body = request.get_json(silent=True) or {}
+    handle = (body.get('handle') or '').strip().lower().lstrip('@')
+    password = body.get('password') or ''
+    if not handle or not password or len(password) > 256:
+        return jsonify({'error': 'enter your handle and password'}), 400
+    con = db.connect()
+    try:
+        reason = auth.check_rate_limits(con)
+        if reason is None and auth.password_locked(con, handle):
+            reason = 'too many tries for that handle — try again in an hour'
+        if reason:
+            log.warning('password sign-in rate limited for @%s from %s: %s', handle, auth.client_ip(), reason)
+            return jsonify({'error': reason}), 429
+        user = db.get_user_by_handle(con, handle)
+        stored = user['password_hash'] if user else None
+        if not auth.verify_password(password, stored or auth.DUMMY_HASH):
+            auth.record_password_failure(con, handle)
+            log.info('password sign-in failed for @%s from %s', handle, auth.client_ip())
+            return jsonify({'error': 'wrong handle or password'}), 401
+        auth.login(con, user)
+    finally:
+        con.close()
+    log.info('password sign-in: @%s from %s', user['handle'], auth.client_ip())
+    return jsonify(auth.self_view(user))
 
 
 @bp.get('/me')

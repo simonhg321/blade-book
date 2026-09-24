@@ -9,7 +9,7 @@ import time
 
 from flask import Blueprint, current_app, g, jsonify, request, send_file
 
-from bb import account, auth, db, paths, publish
+from bb import account, auth, db, mail, paths, publish
 
 log = logging.getLogger('blade-book.settings')
 
@@ -44,7 +44,8 @@ def _view(u):
             'share_email_on_intro': u['share_email_on_intro'],
             'has_key': bool(u.get('public_key')),
             'featured_knife_id': u.get('featured_knife_id'),
-            'email': u['email'],
+            'email': u['email'] if mail.deliverable(u['email']) else None,
+            'sign_in': 'password' if u.get('password_hash') else 'email',
             'created': u['created'],
             'handle_changed_at': u.get('handle_changed_at'),
             'can_change_handle': not u.get('handle_changed_at'),
