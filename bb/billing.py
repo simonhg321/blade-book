@@ -13,6 +13,13 @@ Never gated: editing, publishing, wants, board, export, delete. A live knife
 never locks. Paid search filters are the only READ gate (bb/routes/search.py).
 No admin bypass here — Simon is flipped 'active' by scripts/sub.py.
 
+SOFT GATE (early access, 2026-09-25): while we cook out the bugs the gate is
+a NOTICE, not a wall. A save that would have been refused goes through with
+Gate.notice set ("please add a knife less than a year old next time") and
+still spends a slot, so the counter is exact the day we flip the wall on.
+Flip: BLADEBOOK_HARD_GATE=1 in /etc/blade-book/.env + restart — Simon's call,
+around 10–15 subscribers. Subscribers and young knives never see the notice.
+
 Billing impls share one method, set_status(con, user_id, status). v1 is
 ManualBilling (an admin flips the column). StripeBilling later: Checkout
 Session + signature-verified, idempotent webhook — same interface.
@@ -28,13 +35,26 @@ FREE_DAYS = 365              # knife-age window AND account-age backstop (spec �
 DEFAULT_PRICE_TEXT = '$4/mo or $36/yr'
 ACTIVE = 'active'
 
-Gate = namedtuple('Gate', 'ok reason charge')
+Gate = namedtuple('Gate', 'ok reason charge notice', defaults=(None,))
 
 REASON_ACCOUNT = ('your account is over a year old — adding knives now needs a subscription '
                   '(early access: email us and we will turn it on)')
 REASON_OLD = ('this knife is older than 12 months (or undated) and your 3 free older-knife '
               'saves are used — adding it needs a subscription (early access: email us and '
               'we will turn it on)')
+NOTICE_ACCOUNT = ('your account is over a year old — saved anyway while we are in early access. '
+                  'Please add a knife less than a year old next time; older knives will need a '
+                  'subscription once early access ends')
+NOTICE_OLD = ('this knife is older than 12 months (or undated) and your 3 free older-knife saves '
+              'are used — saved anyway while we are in early access. Please add a knife less than '
+              'a year old next time; older knives will need a subscription once early access ends')
+TRUE_WORDS = ('1', 'true', 'yes', 'on')
+
+
+def hard_gate():
+    """False (the default) = early access: refusals become notices. Set
+    BLADEBOOK_HARD_GATE=1 to make can_add refuse for real."""
+    return (config.get('BLADEBOOK_HARD_GATE') or '').strip().lower() in TRUE_WORDS
 
 
 def price_text():
@@ -71,24 +91,31 @@ def _knife_is_young(born_on, today):
 
 
 def can_add(user, born_on, today=None):
-    """(ok, reason, charge). charge=True means the caller must spend one
-    free_old_used slot on success. Pure — reads the user dict only."""
+    """(ok, reason, charge, notice). charge=True means the caller must spend
+    one free_old_used slot on success. notice is set only when the soft gate
+    let through a save the hard gate would refuse. Pure — reads the user
+    dict and the BLADEBOOK_HARD_GATE flag only."""
     today = _today(today)
     if is_active(user):
         return Gate(True, None, False)
     if account_days(user, today) >= FREE_DAYS:
-        return Gate(False, REASON_ACCOUNT, False)
+        if hard_gate():
+            return Gate(False, REASON_ACCOUNT, False)
+        old = not _knife_is_young(born_on, today)
+        return Gate(True, None, old, NOTICE_ACCOUNT)
     if _knife_is_young(born_on, today):
         return Gate(True, None, False)
     if int(user.get('free_old_used') or 0) < FREE_OLD_KNIVES:
         return Gate(True, None, True)
-    return Gate(False, REASON_OLD, False)
+    if hard_gate():
+        return Gate(False, REASON_OLD, False)
+    return Gate(True, None, True, NOTICE_OLD)
 
 
 def summary(user, today=None):
     """What the pages show: price + where the caller stands. Own numbers only."""
-    out = {'signed_in': user is not None, 'early_access': True, 'price': price_text(),
-           'contact': contact_email()}
+    out = {'signed_in': user is not None, 'early_access': True, 'hard_gate': hard_gate(),
+           'price': price_text(), 'contact': contact_email()}
     if user is None:
         return out
     days = account_days(user, today)

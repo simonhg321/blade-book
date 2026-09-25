@@ -198,13 +198,15 @@ def save_knife(knife_id):
     bb/billing.can_add): first-year account + knife born within 12 months →
     free; older/undated knife → spends one of 3 free slots; otherwise an
     active subscription. 402 leaves the draft in place. A live knife never
-    locks — re-saving is a no-op and spends nothing."""
+    locks — re-saving is a no-op and spends nothing. Early access (the soft
+    gate, bb/billing.hard_gate() False): a refusal becomes a `notice` on the
+    200 and the save goes through."""
     con = db.connect()
     try:
         k = db.get_knife(con, g.user['id'], knife_id)
         if k is None:
             return _not_found()
-        charge = False
+        charge, notice = False, None
         if k['status'] == 'draft':
             if not k['photos']:                              # a subscription won't fix a missing photo
                 return jsonify({'error': 'add a photo first'}), 400
@@ -215,7 +217,10 @@ def save_knife(knife_id):
                          user['sub_status'], user['free_old_used'], gate.reason)
                 return jsonify({'error': gate.reason, 'gated': True, 'sub_status': user['sub_status'],
                                 'price': billing.price_text(), 'contact': billing.contact_email()}), 402
-            charge = gate.charge
+            charge, notice = gate.charge, gate.notice
+            if notice:
+                log.info('%s save soft-gated for @%s (%s, free_old_used=%s): %s', k['tag'], user['handle'],
+                         user['sub_status'], user['free_old_used'], notice)
         k2, err = db.publish_knife(con, g.user['id'], knife_id)
         if k2 is None:
             return _not_found()
@@ -229,7 +234,10 @@ def save_knife(knife_id):
         con.close()
     log.info('%s saved to the register by @%s', k2['tag'], g.user['handle'])
     publish.schedule(g.user['id'])
-    return jsonify(_register_view(k2, _store()))
+    out = _register_view(k2, _store())
+    if notice:
+        out['notice'] = notice
+    return jsonify(out)
 
 
 @bp.post('/<int:knife_id>/sale')

@@ -48,7 +48,8 @@ def test_users_list_and_flip(client, mailer, con):
     assert r.status_code == 200 and db.get_user(con, u['id'])['sub_status'] == 'lapsed'
 
 
-def test_flip_unlocks_the_gate_end_to_end(client, mailer, con):
+def test_flip_unlocks_the_gate_end_to_end(client, mailer, con, monkeypatch):
+    monkeypatch.setenv('BLADEBOOK_HARD_GATE', '1')
     """The day-one path: a collector hits the 402, the admin flips them, the same draft saves."""
     from tests.test_billing_api import _draft
     victim = signed_in(client, mailer, email='collector@example.com')

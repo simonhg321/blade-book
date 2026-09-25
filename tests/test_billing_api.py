@@ -2,8 +2,20 @@
 """The gate at save (spec §10) and GET /api/billing (plan 10)."""
 import hashlib
 
+import pytest
+
 from bb import db
 from tests.conftest import signed_in
+
+
+@pytest.fixture
+def hard(monkeypatch):
+    monkeypatch.setenv('BLADEBOOK_HARD_GATE', '1')
+
+
+@pytest.fixture
+def soft(monkeypatch):
+    monkeypatch.delenv('BLADEBOOK_HARD_GATE', raising=False)
 
 K = '/blade-book/api/knives'
 BILLING = '/blade-book/api/billing'
@@ -35,7 +47,7 @@ def test_young_knife_saves_free_and_spends_nothing(client, mailer, con):
     assert db.get_user(con, me['id'])['free_old_used'] == 0
 
 
-def test_old_knives_three_free_then_402_and_the_draft_stays(client, mailer, con):
+def test_old_knives_three_free_then_402_and_the_draft_stays(hard, client, mailer, con):
     me = signed_in(client, mailer)
     for i in range(3):
         k = _draft(con, me['id'])
@@ -59,7 +71,7 @@ def test_old_knives_three_free_then_402_and_the_draft_stays(client, mailer, con)
     assert client.post(f"{K}/{k5['id']}/save").status_code == 402
 
 
-def test_account_over_a_year_is_gated_even_for_a_young_knife(client, mailer, con):
+def test_account_over_a_year_is_gated_even_for_a_young_knife(hard, client, mailer, con):
     me = signed_in(client, mailer)
     _user(con, me, created='2020-01-01T00:00:00+00:00')
     k = _draft(con, me['id'], born='2026-08-01')
@@ -67,6 +79,40 @@ def test_account_over_a_year_is_gated_even_for_a_young_knife(client, mailer, con
     assert r.status_code == 402 and 'over a year' in r.get_json()['error']
     db.set_sub_status(con, me['id'], 'active')
     assert client.post(f"{K}/{k['id']}/save").status_code == 200
+
+
+def test_soft_gate_saves_the_fourth_old_knife_with_a_notice(soft, client, mailer, con):
+    """Early access: the gate is a notice, not a wall. The save goes through,
+    the counter still ticks (so flipping the hard gate on later is exact),
+    and the response carries the notice for the page."""
+    me = signed_in(client, mailer)
+    _user(con, me, free_old_used=3)
+    k = _draft(con, me['id'], born=None)
+    r = client.post(f"{K}/{k['id']}/save")
+    assert r.status_code == 200
+    j = r.get_json()
+    assert j['status'] == 'live' and 'less than a year old' in j['notice']
+    assert db.get_user(con, me['id'])['free_old_used'] == 4
+    # an ordinary free save carries no notice
+    k2 = _draft(con, me['id'], born='2026-08-01')
+    assert 'notice' not in client.post(f"{K}/{k2['id']}/save").get_json()
+    # flip the hard gate on → the next old knife is a 402 again
+    import os
+    os.environ['BLADEBOOK_HARD_GATE'] = '1'
+    try:
+        k3 = _draft(con, me['id'])
+        assert client.post(f"{K}/{k3['id']}/save").status_code == 402
+    finally:
+        del os.environ['BLADEBOOK_HARD_GATE']
+
+
+def test_soft_gate_saves_for_an_over_a_year_account(soft, client, mailer, con):
+    me = signed_in(client, mailer)
+    _user(con, me, created='2020-01-01T00:00:00+00:00')
+    k = _draft(con, me['id'], born='2026-08-01')
+    r = client.post(f"{K}/{k['id']}/save")
+    assert r.status_code == 200 and 'over a year old' in r.get_json()['notice']
+    assert db.get_user(con, me['id'])['free_old_used'] == 0
 
 
 def test_live_knife_never_locks_and_resave_never_charges(client, mailer, con):
@@ -104,16 +150,16 @@ def test_missing_photo_beats_the_gate_even_when_fully_gated(client, mailer, con)
     assert db.get_knife(con, me['id'], k['id'])['status'] == 'draft'
 
 
-def test_no_admin_bypass_at_save(client, mailer, con):
+def test_no_admin_bypass_at_save(hard, client, mailer, con):
     me = signed_in(client, mailer, email='admin@example.com')
     _user(con, me, is_admin=1, free_old_used=3)
     k = _draft(con, me['id'])
     assert client.post(f"{K}/{k['id']}/save").status_code == 402
 
 
-def test_billing_summary_anonymous_and_signed_in(client, mailer, con):
+def test_billing_summary_anonymous_and_signed_in(soft, client, mailer, con):
     j = client.get(BILLING).get_json()
-    assert j == {'signed_in': False, 'early_access': True, 'price': '$4/mo or $36/yr',
+    assert j == {'signed_in': False, 'early_access': True, 'hard_gate': False, 'price': '$4/mo or $36/yr',
                  'contact': 'hello@' + 'blade-book.com'}
     me = signed_in(client, mailer)
     _user(con, me, free_old_used=1)
@@ -121,7 +167,7 @@ def test_billing_summary_anonymous_and_signed_in(client, mailer, con):
     assert j['signed_in'] is True and j['sub_status'] == 'free' and j['active'] is False
     assert j['free_old_left'] == 2 and j['free_old_allowance'] == 3 and j['account_days'] == 0
     assert j['account_free_days_left'] == 365
-    assert set(j) == {'signed_in', 'early_access', 'price', 'contact', 'sub_status', 'active', 'free_old_used',
+    assert set(j) == {'signed_in', 'early_access', 'hard_gate', 'price', 'contact', 'sub_status', 'active', 'free_old_used',
                       'free_old_allowance', 'free_old_left', 'account_days', 'account_free_days_left'}
 
 

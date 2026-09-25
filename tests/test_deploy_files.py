@@ -425,7 +425,8 @@ def test_intake_page_gate_wiring():
     html = open(os.path.join(ROOT, 'html', 'me', 'add', 'index.html')).read()
     for needle in ("'/billing'", 'free_old_left', 'account_free_days_left', 'id="paywall"', '<dialog',
                    'res.status === 402', 'res.j.price', 'res.j.contact', 'EARLY ACCESS', "'mailto:' +",
-                   'older than 12 months', 'free older-knife save', 'needs a subscription'):
+                   'older than 12 months', 'free older-knife save', 'needs a subscription',
+                   'hard_gate', 'less than a year old'):
         assert needle in html, needle
     assert 'Free while we are in early access' not in html
     assert '@blade-book' not in html          # the address comes from the API, never the page
