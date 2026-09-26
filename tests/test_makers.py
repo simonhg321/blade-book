@@ -242,3 +242,14 @@ def test_crk_knows_the_annual_sebenza_from_the_handle_engraving():
     assert 'annual' in p and 'engrav' in p and 'special_edition' in p
     assert 'handle engraving' in p
     assert crk.norm('special_edition', ' Annual  2003 ') == 'annual 2003'
+
+
+def test_other_maker_brief_makes_the_printed_model_name_win_over_sku_memory():
+    """2026-09-26: Simon's first Spydercos. A box label reading 'C211TIP / Spydie
+    Chef Pln' was decoded as a Domino (CTS-204P) — the model trusted what it
+    remembered about a SKU over the model name PRINTED on the label, and the
+    knife went live wrong. The brief must say the printed name is the record."""
+    from bb.makers import other
+    p = other.PROMPT.lower()
+    assert 'printed' in p and 'model' in p and 'card_text' in p
+    assert 'never' in p and ('sku' in p or 'part number' in p)

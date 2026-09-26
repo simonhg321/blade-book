@@ -10,7 +10,12 @@ PROMPT = (
     'Any other maker: production, mid-tech or custom. Read the maker name from whatever '
     'is in frame (card, certificate, box, tang stamp, the owner\'s note). Use general '
     'knowledge of that maker only for standard specs when the model is unambiguous; '
-    'otherwise leave the field empty and rate it low.'
+    'otherwise leave the field empty and rate it low. A box label or sticker is the record '
+    'when there is no card: transcribe every printed line into card_text (SKU, model name, '
+    'edge, country, lot) and use the PRINTED model name verbatim for model — never replace a '
+    'printed name with one you recall for that SKU or part number (a label reading '
+    '"Spydie Chef" is a Spydiechef, whatever the SKU suggests). Standard specs (steel, blade '
+    'length, lock) come from that printed model only, rated medium.'
 )
 
 
