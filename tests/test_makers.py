@@ -230,3 +230,15 @@ def test_crk_prompt_keeps_damascus_pattern_out_of_graphic_name():
     assert 'graphic_name' in p and 'damascus_pattern' in p
     assert 'no name' in p or 'unnamed' in p
 
+
+
+def test_crk_knows_the_annual_sebenza_from_the_handle_engraving():
+    """2026-09-26: Simon's cardless K90 — CR logo and '2003' cut into the handle,
+    snakewood inlay — came back 'Mnandi, 2.75 in'. The year engraved beside the
+    logo with a wood inlay is the Annual Sebenza (1999–2011, revived 2023); CRK
+    never made an annual that was not a Sebenza. The brief must say so, and say
+    the engraving is a legitimate born_on source when there is no card."""
+    p = crk.PROMPT.lower()
+    assert 'annual' in p and 'engrav' in p and 'special_edition' in p
+    assert 'handle engraving' in p
+    assert crk.norm('special_edition', ' Annual  2003 ') == 'annual 2003'

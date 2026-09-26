@@ -48,6 +48,7 @@
   #nocard{display:flex;align-items:center;gap:8px;justify-content:center;margin:10px 0 0;font-size:.9rem;color:var(--muted)}
   #save{display:block;width:100%;margin-top:12px;padding:16px 0;font-size:1.1rem;font-weight:800;letter-spacing:.06em;background:var(--ok);color:#fff;border:2px solid var(--ok);border-radius:14px;cursor:pointer}
   #save:disabled{opacity:.45}
+  #guess{font-size:.95rem;font-weight:600;color:#141210;background:#f6e7c6;border-left:4px solid #b8452c;border-radius:6px;padding:10px 12px;margin:10px 0;display:none}
   #agenote{font-size:.85rem;color:#8a5a00;background:#f6e7c6;border-radius:8px;padding:8px 10px;margin-top:8px;display:none}
   #card{margin-top:18px;background:#fff;border:2px solid var(--ink);border-radius:14px;padding:14px;display:none}
   #card.show{display:block}
@@ -111,6 +112,7 @@
   <div id="flags"></div>
   <div id="cardtext"></div>
   <div id="reason"></div>
+  <div id="guess"></div>
   <div id="cardnote">Not right? Save, then edit any field in your register.</div>
 </section>
 <button id="discard" type="button">🗑 discard this draft</button>
@@ -355,6 +357,21 @@
     $('cardtext').textContent = k.card_text || '';
     $('cardtext').style.display = k.card_text ? 'block' : 'none';
     $('reason').textContent = (extra && extra.reasoning) || k.decode_note || '';
+    // No card in frame (or nothing readable on it): say so in one plain sentence
+    // and put the guess in front of the collector before the table of fields.
+    var noCard = extra ? (extra.no_card || !k.card_text) : (!k.card_text && !!k.decode_note);
+    var g = $('guess');
+    if (noCard && any) {
+      var bits = [];
+      if (k.born_on) bits.push(String(k.born_on).slice(0, 4));
+      if (pick(k, 'ext.size')) bits.push(pick(k, 'ext.size').toLowerCase());
+      if (k.model) bits.push(k.model);
+      if (pick(k, 'ext.special_edition')) bits.push('(' + pick(k, 'ext.special_edition') + ')');
+      var inlay = pick(k, 'ext.inlay_material');
+      g.textContent = 'No card read. Our best guess: ' + (bits.join(' ') || 'a ' + (k.maker_name || 'knife')) +
+        (inlay ? ', ' + inlay + ' inlay' : '') + '. Check every line below — you can change any of it after saving.';
+      g.style.display = 'block';
+    } else { g.textContent = ''; g.style.display = 'none'; }
     $('card').classList.toggle('show', any || !!k.card_text);
   }
 

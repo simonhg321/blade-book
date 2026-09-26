@@ -47,7 +47,12 @@ PROMPT = (
     'Blade line may carry the damascus smith and pattern (e.g. "Devin Thomas Damascus, Bronze Spiro Graph" = '
     'damascus_smith Devin Thomas, damascus_pattern Spirograph, bronze etch): that is the blade, never the handle '
     'graphic. graphic_name is only a name the card gives the graphic itself; many Unique Graphics have no name — '
-    'leave it empty rather than reuse a blade or pattern word.'
+    'leave it empty rather than reuse a blade or pattern word. '
+    'ANNUAL SEBENZA: a year engraved into the handle beside the CR logo, with a wood inlay, is the Annual '
+    'Sebenza (one configuration a year, 1999–2011; revived 2023). Every CRK annual is a Sebenza — never call '
+    'it a Mnandi or Inkosi. Set model Sebenza, special_edition "Annual <year>", and when there is no card use '
+    'the engraved year as born_on with born_on_precision "year" and born_on_source "handle engraving". '
+    'Size from the blade: Small about 2.9 in, Large about 3.6 in.'
 )
 
 SKU_PREFIXES = {

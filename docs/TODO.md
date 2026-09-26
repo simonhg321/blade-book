@@ -95,3 +95,10 @@ Small items that don't warrant a plan. Bigger work lives in the plan roadmap
   applied the empty decode over her previous read, reported 0 flags, and only the small reasoning line said why. Detect
   the no-knife case (empty core + reasoning says so, or a dedicated `no_knife` field), keep the prior decode, and show
   it as a flag: "no knife, box or card in photo 1 — that's a cat".
+
+## Parked 2026-09-26 — from Simon's cardless K90 (2003 Annual Sebenza read as a Mnandi)
+- **"Look it up" sub-routine.** When there is no card, or the collector says the guess is wrong, offer a button
+  that takes the photos + the decoder's guess and runs a second pass with web/image search (model, year, inlay,
+  comparable listings), then shows the candidates for the collector to pick from. Opt-in per knife, costs a few
+  cents, never automatic. Shipped today instead: the brief knows annuals, and a cardless decode leads with one plain
+  "No card read. Our best guess: …" line above the field table.
