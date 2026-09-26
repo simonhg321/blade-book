@@ -1229,6 +1229,40 @@ def apply_decode(con, owner_id, knife_id, d):
     return get_knife(con, owner_id, knife_id)
 
 
+def apply_lookup(con, owner_id, knife_id, core_updates, ext_updates, confidence, note_line, detail=None):
+    """Write the web lookup's fills onto the knife (bb/lookup.run): only the
+    given core columns, the given ext keys merged into ext, the whole
+    confidence dict, and one line appended to decode_note. Values go through
+    the same validation as a decode; a bad one is dropped, never stored."""
+    from bb import edit
+    from bb.makers import core as maker_core
+    k = get_knife(con, owner_id, knife_id)
+    if k is None:
+        return None
+    vals = {}
+    for c, v in core_updates.items():
+        if c not in _DECODE_COLUMNS:
+            continue
+        if c in maker_core.CORE_PROPS:
+            try:
+                v = edit._core(c, maker_core.CORE_PROPS[c], v)
+            except edit.EditError:
+                continue
+        vals[c] = v
+    ext = dict(k.get('ext') or {})
+    ext.update({key: val for key, val in ext_updates.items() if key in ext})
+    note = (k.get('decode_note') or '').rstrip()
+    note = (note + '\n' + note_line).strip() if note_line else note
+    sets = ''.join(f'{c} = ?, ' for c in vals)
+    con.execute(f'UPDATE knives SET {sets}ext = ?, confidence = ?, decode_note = ?, updated = ? '
+                'WHERE id = ? AND owner_id = ?',
+                (*vals.values(), json.dumps(ext), json.dumps(confidence), note or None, now(), knife_id, owner_id))
+    # events.type is a fixed CHECK set (schema v1) — a lookup is a 'decoded' event with a lookup detail
+    add_event(con, owner_id, knife_id, 'decoded', detail=f'lookup {detail or ""}'.strip())
+    con.commit()
+    return get_knife(con, owner_id, knife_id)
+
+
 EDITABLE_COLUMNS = frozenset(_DECODE_COLUMNS) | {
     'maker', 'ext', 'price_paid', 'acquired_from', 'acquired_date', 'location', 'notes_private',
     'condition_note', 'notes_public', 'hero_photo'}

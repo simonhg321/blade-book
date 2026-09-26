@@ -49,6 +49,8 @@
   #save{display:block;width:100%;margin-top:12px;padding:16px 0;font-size:1.1rem;font-weight:800;letter-spacing:.06em;background:var(--ok);color:#fff;border:2px solid var(--ok);border-radius:14px;cursor:pointer}
   #save:disabled{opacity:.45}
   #guess{font-size:.95rem;font-weight:600;color:#141210;background:#f6e7c6;border-left:4px solid #b8452c;border-radius:6px;padding:10px 12px;margin:10px 0;display:none}
+  #lookup{font-size:.9rem;color:#4a443c;background:#eef3ee;border-left:4px solid #2f6b3a;border-radius:6px;padding:10px 12px;margin:10px 0;display:none}
+  #lookup a{color:#2f6b3a;margin-right:10px}
   #agenote{font-size:.85rem;color:#8a5a00;background:#f6e7c6;border-radius:8px;padding:8px 10px;margin-top:8px;display:none}
   #card{margin-top:18px;background:#fff;border:2px solid var(--ink);border-radius:14px;padding:14px;display:none}
   #card.show{display:block}
@@ -113,6 +115,7 @@
   <div id="cardtext"></div>
   <div id="reason"></div>
   <div id="guess"></div>
+  <div id="lookup"></div>
   <div id="cardnote">Not right? Save, then edit any field in your register.</div>
 </section>
 <button id="discard" type="button">🗑 discard this draft</button>
@@ -173,6 +176,7 @@
       $('note').value = res.j.notes_private || ''; $('notestat').textContent = '';
       photos = res.j.photos || []; heroSeq = res.j.hero_photo || null;
       renderCard(res.j, null);
+      renderLookup(null);
       render(k);
     });
   }
@@ -334,6 +338,52 @@
     var v = k; path.split('.').forEach(function (p) { v = v == null ? v : v[p]; });
     return v;
   }
+  // The second opinion (bb/lookup): what the web said about a cardless knife,
+  // which blanks it filled, and the pages it read. Links only, never markup.
+  var lookupTimer = null;
+  function pollLookup(id, tries) {
+    // the lookup runs server-side for ~40 s; poll every 5 s for up to 3 min, then give up quietly
+    if (lookupTimer) clearTimeout(lookupTimer);
+    if (tries > 36 || current !== id) return;
+    lookupTimer = setTimeout(function () {
+      api('/knives/' + id + '/lookup').then(function (res) {
+        if (current !== id) return;
+        var st = res.j || {};
+        if (st.status === 'pending') return pollLookup(id, tries + 1);
+        if (st.status === 'done') {
+          // re-read the knife so the card shows the filled fields, then the summary + sources
+          return api('/knives/' + id).then(function (kr) {
+            if (!kr.ok || current !== id) return;
+            renderCard(kr.j, { no_card: true, reasoning: kr.j.decode_note, flags: [] });
+            renderLookup(st);
+          });
+        }
+        renderLookup(st.status === 'error' ? { error: st.error || 'lookup failed' } : null);
+      }).catch(function () {});
+    }, 5000);
+  }
+  function renderLookup(lk) {
+    var box = $('lookup'); while (box.firstChild) box.removeChild(box.firstChild);
+    if (lookupTimer) { clearTimeout(lookupTimer); lookupTimer = null; }
+    if (!lk) { box.style.display = 'none'; return; }
+    if (lk.status === 'pending') { box.textContent = '🔎 Looking this knife up on the web… about a minute. You can keep going; the card updates itself.'; box.style.display = 'block'; pollLookup(current, 0); return; }
+    if (lk.error) { box.textContent = 'We also tried to look this knife up on the web, but the lookup failed. The guess above stands.'; box.style.display = 'block'; return; }
+    var p = document.createElement('div');
+    p.textContent = 'Looked up on the web: ' + (lk.summary || (lk.confirmed ? 'a match was found.' : 'no clear match.')) +
+      (lk.filled && lk.filled.length ? ' Filled in: ' + lk.filled.join(', ').replace(/_/g, ' ') + '.' : ' Nothing new to add.');
+    box.appendChild(p);
+    if (lk.sources && lk.sources.length) {
+      var s = document.createElement('div');
+      s.appendChild(document.createTextNode('Sources: '));
+      lk.sources.forEach(function (src) {
+        if (!/^https?:\/\//i.test(src.url)) return;
+        var a = document.createElement('a'); a.href = src.url; a.target = '_blank'; a.rel = 'noopener';
+        a.textContent = src.title || src.url; s.appendChild(a);
+      });
+      box.appendChild(s);
+    }
+    box.style.display = 'block';
+  }
   function renderCard(k, extra) {
     var rows = $('rows'); while (rows.firstChild) rows.removeChild(rows.firstChild);
     var conf = k['confidence'] || {};
@@ -377,13 +427,14 @@
 
   $('proc').addEventListener('click', function () {
     var id = current; if (!id) return;
-    $('proc').disabled = true; $('save').disabled = true; say('⚡ reading the card… (10–30 s)');
+    $('proc').disabled = true; $('save').disabled = true; say('⚡ reading the ' + ($('nocardbox').checked ? 'knife' : 'card') + '… (10–30 s)');
     api('/knives/' + id + '/decode', { method: 'POST', headers: { 'Content-Type': 'application/json' },
                                        body: JSON.stringify({ no_card: $('nocardbox').checked }) })
       .then(function (res) {
         if (!res.ok) throw new Error(res.j.error || 'decode failed');
         say('✓ decoded' + (res.j.decoded.flags.length ? ' — ' + res.j.decoded.flags.length + ' flag(s)' : ''));
         renderCard(res.j, res.j.decoded);
+        renderLookup(res.j.lookup);
         var age = res.j.decoded.age_months;
         var old = age == null || age >= 12;
         $('agenote').textContent = ''; $('agenote').style.display = 'none';

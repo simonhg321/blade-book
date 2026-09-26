@@ -51,7 +51,7 @@ PROMPT = (
     'ANNUAL SEBENZA: a year engraved into the handle beside the CR logo, with a wood inlay, is the Annual '
     'Sebenza (one configuration a year, 1999–2011; revived 2023). Every CRK annual is a Sebenza — never call '
     'it a Mnandi or Inkosi. Set model Sebenza, special_edition "Annual <year>", and when there is no card use '
-    'the engraved year as born_on with born_on_precision "year" and born_on_source "handle engraving". '
+    'the engraved year as born_on with born_on_precision "year" and born_on_source "engraving" (the handle engraving is the source). '
     'Size from the blade: Small about 2.9 in, Large about 3.6 in.'
 )
 

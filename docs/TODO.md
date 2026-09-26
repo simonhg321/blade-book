@@ -96,9 +96,12 @@ Small items that don't warrant a plan. Bigger work lives in the plan roadmap
   the no-knife case (empty core + reasoning says so, or a dedicated `no_knife` field), keep the prior decode, and show
   it as a flag: "no knife, box or card in photo 1 — that's a cat".
 
-## Parked 2026-09-26 — from Simon's cardless K90 (2003 Annual Sebenza read as a Mnandi)
-- **"Look it up" sub-routine.** When there is no card, or the collector says the guess is wrong, offer a button
-  that takes the photos + the decoder's guess and runs a second pass with web/image search (model, year, inlay,
-  comparable listings), then shows the candidates for the collector to pick from. Opt-in per knife, costs a few
-  cents, never automatic. Shipped today instead: the brief knows annuals, and a cardless decode leads with one plain
-  "No card read. Our best guess: …" line above the field table.
+## Shipped 2026-09-26 — the web lookup (from Simon's cardless K90, a 2003 Annual read as a Mnandi)
+- **bb/lookup.py.** Tick "no birth card" → decode as usual, then a background job (daemon thread, ~40 s, ~$0.15 at
+  effort low, 2 searches) runs two text-only calls: web search over the decoder's description, then a schema
+  extract. Fills BLANKS only, marks them medium, appends "Looked up: … Sources: …" to decode_note, state file at
+  DATA_DIR/lookups/<id>.json, GET /knives/<id>/lookup, the add page polls and re-renders. Opt-out BLADEBOOK_LOOKUP=0.
+- Probed and rejected: one call with photos + web search + forced JSON (tool silently unused, 140k tokens, 105 s);
+  synchronous in the decode request (38 s search stage does not fit gunicorn --timeout 120 with the decode).
+- Open: cost per lookup (~$0.15 vs ~$0.04 decode) — fine opt-in, watch the ledger (`kind: lookup`); a worker
+  restart mid-lookup leaves a pending state that reports "timed out" after 5 min; no retry button yet.

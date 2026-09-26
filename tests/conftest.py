@@ -58,8 +58,30 @@ def decoder():
     return decode.FakeDecoder(ok_result())
 
 
+def lookup_result(**over):
+    """A canned lookup result for FakeLookup (2026-09-26): what the web said
+    about a cardless knife."""
+    r = {'summary': 'Matches the 2003 Annual Sebenza (snakewood).', 'confirmed': True,
+         'fields': {'model': 'Sebenza', 'blade_steel': 'S30V', 'blade_shape': None, 'blade_length_in': 3.625,
+                    'handle_material': None, 'born_on': '2003', 'born_on_precision': 'year',
+                    'size': 'Large', 'generation': None, 'special_edition': 'Annual 2003',
+                    'inlay_material': 'snakewood'},
+         'sources': [{'url': 'https://example.com/annual-2003', 'title': 'Annual Sebenza 2003', 'why': 'same inlay'}]}
+    r.update(over)
+    return r
+
+
 @pytest.fixture
-def app(env, mailer, decoder, monkeypatch):
+def lookup(monkeypatch):
+    """A FakeLookup, run INLINE (lookup.spawn patched) so route tests see the
+    finished state in the decode response's follow-up GET."""
+    from bb import lookup as lookup_mod
+    monkeypatch.setattr(lookup_mod, 'spawn', lambda fn: fn())
+    return lookup_mod.FakeLookup(lookup_result())
+
+
+@pytest.fixture
+def app(env, mailer, decoder, lookup, monkeypatch):
     monkeypatch.setenv('SESSION_KEY', 'test-session-key-not-secret')
     monkeypatch.setenv('BASE_URL', 'http://localhost')
     # Route tests hit the schedule() hooks incidentally; without this they'd
@@ -69,7 +91,7 @@ def app(env, mailer, decoder, monkeypatch):
     # this (same underlying bb.publish module either way).
     monkeypatch.setattr('bb.publish.schedule', lambda owner_id: None)
     from app import create_app
-    return create_app(mailer=mailer, decoder=decoder)
+    return create_app(mailer=mailer, decoder=decoder, lookup=lookup)
 
 
 @pytest.fixture

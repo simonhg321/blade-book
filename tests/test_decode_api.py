@@ -185,3 +185,65 @@ def test_decode_from_thumbnail_sized_photos_flags_it_and_marks_the_date_low(clie
                 content_type='multipart/form-data')
     j = client.post(f'{K}/{kid}/decode').get_json()
     assert j['decoded']['flags'] == [] and j['confidence']['born_on'] == 'high'
+
+
+def test_no_card_runs_the_lookup_and_fills_only_blanks(client, mailer, decoder, lookup):
+    """2026-09-26: tick 'no card' → decode returns at once with lookup pending;
+    the background job (inline here) fills what the decoder left blank, marks it
+    medium, and GET /lookup says what it did."""
+    from tests.conftest import ok_result
+    decoder.result = ok_result(blade_steel='', born_on='', born_on_precision='', born_on_source='',
+                               blade_length_in=None, card_text='', no_card=True, reasoning='no card in frame')
+    decoder.result['ext'].update({'size': '', 'inlay_material': 'burl'})
+    kid = _draft_with_photo(client, mailer)
+    r = client.post(f'{K}/{kid}/decode', json={'no_card': True})
+    assert r.status_code == 200, r.get_json()
+    assert r.get_json()['lookup'] == {'status': 'pending'}
+    assert lookup.calls and lookup.calls[-1][0]['model'] == 'Sebenza' and lookup.calls[-1][0]['ext']['inlay_material'] == 'burl'
+    st = client.get(f'{K}/{kid}/lookup').get_json()
+    assert st['status'] == 'done' and st['confirmed'] is True and 'Annual' in st['summary']
+    assert set(st['filled']) == {'blade_steel', 'blade_length_in', 'born_on', 'born_on_precision', 'size', 'special_edition'}
+    assert st['sources'][0]['url'] == 'https://example.com/annual-2003'
+    j = client.get(f'{K}/{kid}').get_json()
+    assert j['blade_steel'] == 'S30V' and j['born_on'] == '2003' and j['ext']['size'] == 'Large'
+    assert j['ext']['inlay_material'] == 'burl'            # the decoder's own read stands
+    assert j['confidence']['blade_steel'] == 'medium' and j['born_on_source'] == 'lookup'
+    assert 'Looked up' in j['decode_note'] and 'no card in frame' in j['decode_note']
+    # two ledger lines: the decode and the lookup
+    from bb import paths
+    lines = [json.loads(l) for l in open(paths.ai_log()).read().splitlines()[-2:]]
+    assert [l['kind'] for l in lines] == ['decode', 'lookup'] and all(l['ok'] for l in lines)
+
+
+def test_lookup_only_runs_without_a_card(client, mailer, decoder, lookup):
+    kid = _draft_with_photo(client, mailer)
+    r = client.post(f'{K}/{kid}/decode')                                 # card read, tick off
+    assert r.status_code == 200 and 'lookup' not in r.get_json()
+    assert lookup.calls == [] and client.get(f'{K}/{kid}/lookup').get_json() == {'status': 'none'}
+    assert client.post(f'{K}/{kid}/decode', json={'no_card': True}).status_code == 200
+    assert len(lookup.calls) == 1
+    # a re-decode with the card starts clean: the old state is gone
+    assert client.post(f'{K}/{kid}/decode').status_code == 200
+    assert client.get(f'{K}/{kid}/lookup').get_json() == {'status': 'none'}
+
+
+def test_lookup_failure_never_fails_the_decode(client, mailer, decoder, lookup):
+    from bb import lookup as lookup_mod
+    lookup.result = lookup_mod.LookupFailed('search quota')
+    kid = _draft_with_photo(client, mailer)
+    r = client.post(f'{K}/{kid}/decode', json={'no_card': True})
+    assert r.status_code == 200 and r.get_json()['model'] == 'Sebenza'
+    assert client.get(f'{K}/{kid}/lookup').get_json()['status'] == 'error'
+    from bb import paths
+    last = json.loads(open(paths.ai_log()).read().splitlines()[-1])
+    assert last['kind'] == 'lookup' and last['ok'] is False
+
+
+def test_lookup_state_is_owner_only_and_stale_pending_reports_error(client, mailer, decoder, lookup):
+    from bb import lookup as lookup_mod
+    kid = _draft_with_photo(client, mailer)
+    lookup_mod.write_state(kid, status='pending', ts='2020-01-01T00:00:00+00:00')
+    assert client.get(f'{K}/{kid}/lookup').get_json()['status'] == 'error'
+    client.get('/blade-book/api/auth/logout')
+    signed_in(client, mailer, 'b@example.com')
+    assert client.get(f'{K}/{kid}/lookup').status_code == 404

@@ -9,7 +9,7 @@ import time
 
 from flask import Blueprint, Response, current_app, g, jsonify, request
 
-from bb import auth, billing, db, decode, edit, makers, paths, photos, publish
+from bb import auth, billing, db, decode, edit, lookup, makers, paths, photos, publish
 from bb.makers import core as maker_core
 
 log = logging.getLogger('blade-book.knives')
@@ -370,6 +370,15 @@ def decode_knife(knife_id):
                         error=str(e)[:300], latency_ms=ms)
         return jsonify({'error': 'the decoder failed — try again in a minute'}), 502
     decode.log_call(owner, knife_id, d.model, True, decoded=d)
+    # Stage 2b: no card → the second opinion (bb/lookup) in the background.
+    # ~40 s and ~$0.15 at low effort; fills blanks only, marks them medium,
+    # never fails the decode. The page polls GET /knives/<id>/lookup.
+    looked_up = None
+    lookup_impl = current_app.config.get('LOOKUP')
+    lookup.clear_state(knife_id)                    # a re-decode starts clean
+    if (no_card or d.no_card) and lookup_impl is not None and not isinstance(lookup_impl, lookup.NoLookup):
+        guess = dict(d.core); guess['ext'] = dict(d.ext)
+        looked_up = {'status': 'pending'}          # spawned AFTER stage 3: the job reads the stored decode
     if all(max(p.get('width') or 0, p.get('height') or 0) < photos.MIN_LEGIBLE_PX for p in k['photos']):
         # a forum thumbnail (451×600) read as three different dates, each 'high' —
         # the model cannot tell it is guessing, so the route says it (2026-09-23)
@@ -387,13 +396,34 @@ def decode_knife(knife_id):
         con.close()
     log.info('decoded %s for @%s via %s (%d flags, %dms)', k['tag'], g.user['handle'], d.model,
              len(d.flags), d.latency_ms)
+    if looked_up is not None:
+        lookup.write_state(knife_id, status='pending')
+        tag, handle = k['tag'], g.user['handle']
+        lookup.spawn(lambda: lookup.run(lookup_impl, owner, knife_id, guess, note, tag=tag, handle=handle))
     if k['status'] == 'live':
         publish.schedule(owner)
     out = _owner_knife(k2, store)
     out['decoded'] = {'flags': d.flags, 'reasoning': d.reasoning, 'card_text': d.card_text,
                       'no_card': d.no_card, 'model': d.model,
                       'age_months': maker_core.age_months(d.core.get('born_on'))}
+    if looked_up is not None:
+        out['lookup'] = looked_up
     return jsonify(out)
+
+
+@bp.get('/<int:knife_id>/lookup')
+@auth.login_required
+def lookup_state(knife_id):
+    """What the background web lookup did (bb/lookup): {'status': 'pending'|'done'|'error', ...}
+    or {'status': 'none'} when no lookup ran for this knife. Owner only."""
+    con = db.connect()
+    try:
+        if db.get_knife(con, g.user['id'], knife_id) is None:
+            return _not_found()
+    finally:
+        con.close()
+    st = lookup.read_state(knife_id)
+    return jsonify(st or {'status': 'none'})
 
 
 @bp.delete('/<int:knife_id>')

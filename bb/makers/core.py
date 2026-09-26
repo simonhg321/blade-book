@@ -18,7 +18,8 @@ CORE_PROPS = {
     'lock_type': {'type': 'string', 'description': '"framelock", "slipjoint", "fixed"…'},
     'born_on': {'type': 'string', 'description': 'Birth/manufacture date from the card as YYYY-MM-DD, YYYY-MM or YYYY; empty if no date visible'},
     'born_on_precision': {'type': 'string', 'enum': ['day', 'month', 'year', '']},
-    'born_on_source': {'type': 'string', 'enum': ['card', 'box', 'owner', 'inferred', '']},
+    'born_on_source': {'type': 'string', 'enum': ['card', 'box', 'owner', 'engraving', 'lookup', 'inferred', ''],
+                       'description': 'engraving = a year cut into the knife (CRK annuals); lookup = filled from the web'},
     'condition': {'anyOf': [{'type': 'integer', 'enum': [1, 2, 3, 4]}, {'type': 'null'}], 'description': '1 new/unused, 2 excellent, 3 very good, 4 used; null if the knife is not visible'},
     'has_box': {'type': 'boolean'},
     'has_card': {'type': 'boolean', 'description': 'A birth card / certificate is IN FRAME'},
@@ -30,7 +31,8 @@ CORE_PROPS = {
 CORE_FIELDS = tuple(CORE_PROPS)
 
 NO_CARD_LINE = ('The owner states there is NO birth card for this knife — no birth card is in frame. '
-                'Do not invent one; leave born_on empty with born_on_source "" unless a date is printed on the box.')
+                'Do not invent one; leave born_on empty with born_on_source "" unless a date is printed on the box '
+                '(born_on_source "box") or a year is engraved on the knife itself (born_on_source "engraving").')
 
 BASE_PROMPT = (
     'These photos are ALL of the SAME knife, shot by its owner for their private register. '

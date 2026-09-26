@@ -132,7 +132,7 @@ def _too_large(_e):
     return jsonify({'error': 'photo over 20 MB'}), 413
 
 
-def create_app(mailer=None, store=None, decoder=None, billing_impl=None):
+def create_app(mailer=None, store=None, decoder=None, billing_impl=None, lookup=None):
     config.load()
     _setup_logging()
     app = Flask(__name__)
@@ -143,7 +143,7 @@ def create_app(mailer=None, store=None, decoder=None, billing_impl=None):
         secret = secrets.token_hex(32)
         log.warning('SESSION_KEY missing from .env — each gunicorn worker will mint its own '
                     'key and sessions will break across workers/restarts')
-    from bb import auth, billing, decode, mail
+    from bb import auth, billing, decode, lookup as lookup_mod, mail
     from bb import store as store_mod
     app.config.update(
         SECRET_KEY=secret,
@@ -156,6 +156,7 @@ def create_app(mailer=None, store=None, decoder=None, billing_impl=None):
         MAILER=mailer or mail.from_env(),
         STORE=store or store_mod.from_paths(),
         DECODER=decoder or decode.from_env(),
+        LOOKUP=lookup or lookup_mod.from_env(),
         BILLING=billing_impl or billing.from_env(),
         VERSION=_version(),
     )

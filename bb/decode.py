@@ -230,9 +230,11 @@ def cost_usd(model, tin, tout):
     return round(tin / 1e6 * p[0] + tout / 1e6 * p[1], 6)
 
 
-def log_call(owner_id, knife_id, model, ok, decoded=None, error=None, latency_ms=0):
+def log_call(owner_id, knife_id, model, ok, decoded=None, error=None, latency_ms=0, kind='decode'):
+    """One ledger line per paid call. `decoded` is anything with input_tokens /
+    output_tokens / latency_ms (a Decoded, or a lookup.Lookup with kind='lookup')."""
     rec = {'ts': dt.datetime.now(dt.timezone.utc).isoformat(timespec='seconds'),
-           'user': owner_id, 'knife': knife_id, 'model': model, 'ok': ok,
+           'user': owner_id, 'knife': knife_id, 'model': model, 'ok': ok, 'kind': kind,
            'input_tokens': decoded.input_tokens if decoded else 0,
            'output_tokens': decoded.output_tokens if decoded else 0,
            'ms': latency_ms or (decoded.latency_ms if decoded else 0),
