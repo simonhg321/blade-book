@@ -105,3 +105,11 @@ Small items that don't warrant a plan. Bigger work lives in the plan roadmap
   synchronous in the decode request (38 s search stage does not fit gunicorn --timeout 120 with the decode).
 - Open: cost per lookup (~$0.15 vs ~$0.04 decode) — fine opt-in, watch the ledger (`kind: lookup`); a worker
   restart mid-lookup leaves a pending state that reports "timed out" after 5 min; no retry button yet.
+
+## Decided 2026-09-26 — sort by maker (first small build after the Spyderco pile)
+- Register page, owner /me AND public @handle, list and grid: a sort switch maker → year beside search. Maker
+  headers with a count when more than one maker is on the page. Default stays by year for a one-maker register;
+  flips to by-maker automatically once a second maker has more than a couple of knives (a collector never sees a
+  control she does not need). NOT a filter, facet bar or per-maker pages — a display detail inside the shelf
+  (docs/abtesting napkin). ~2 h with tests. Context: Simon's register is CRK + rare birds + Spydercos for sale;
+  the site's face stays CRK, the app stays any-maker, the shelf toggle (curated lens) is the next dashed box.
