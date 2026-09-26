@@ -377,7 +377,11 @@ def decode_knife(knife_id):
     lookup_impl = current_app.config.get('LOOKUP')
     lookup.clear_state(knife_id)                    # a re-decode starts clean
     if (no_card or d.no_card) and lookup_impl is not None and not isinstance(lookup_impl, lookup.NoLookup):
+        # the lookup sees what the decoder READ (label text, its reasoning), not only what it
+        # concluded — a 'Spydie Chef' label decoded as a Domino sent the lookup hunting Dominos (2026-09-26)
         guess = dict(d.core); guess['ext'] = dict(d.ext)
+        guess['label_text'] = d.card_text or ''
+        guess['first_pass_reasoning'] = (d.reasoning or '')[:600]
         looked_up = {'status': 'pending'}          # spawned AFTER stage 3: the job reads the stored decode
     if all(max(p.get('width') or 0, p.get('height') or 0) < photos.MIN_LEGIBLE_PX for p in k['photos']):
         # a forum thumbnail (451×600) read as three different dates, each 'high' —

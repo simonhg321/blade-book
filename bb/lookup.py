@@ -89,6 +89,8 @@ SEARCH_PROMPT = (
     'likely is, which of the empty fields the sources settle and to what value, which remain unknown, and the URL '
     'you took each claim from. Never invent a birth date to the day: year precision at most, from an engraving '
     'or a documented production year. Be brief and concrete.\n\n'
+    'If label_text or first_pass_reasoning quotes a printed model name or SKU, that printed text outranks the '
+    'first pass\'s model field: search for what is PRINTED and say so in the findings.\n\n'
     'First-pass description (JSON, empty = unknown): {guess}\n'
     "Owner's note: {note!r}\n"
 )

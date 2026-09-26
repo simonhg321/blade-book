@@ -76,6 +76,7 @@ def test_build_messages_is_text_only_and_carries_guess_and_note():
     assert len(msgs) == 1 and isinstance(msgs[0]['content'], str)
     text = msgs[0]['content']
     assert '"Mnandi"' in text and 'no papers' in text and 'web search' in text.lower()
+    assert 'printed' in text.lower() and 'label_text' in text
     ex = lookup.build_extract_messages({'model': 'Mnandi'}, 'The 2003 annual used snakewood (https://x.example).')
     assert 'snakewood' in ex[0]['content'] and 'null' in ex[0]['content']
 

@@ -200,6 +200,8 @@ def test_no_card_runs_the_lookup_and_fills_only_blanks(client, mailer, decoder, 
     assert r.status_code == 200, r.get_json()
     assert r.get_json()['lookup'] == {'status': 'pending'}
     assert lookup.calls and lookup.calls[-1][0]['model'] == 'Sebenza' and lookup.calls[-1][0]['ext']['inlay_material'] == 'burl'
+    # the lookup sees what the decoder READ, not only what it concluded (the Spydie Chef / Domino case)
+    assert lookup.calls[-1][0]['first_pass_reasoning'] == 'no card in frame' and lookup.calls[-1][0]['label_text'] == ''
     st = client.get(f'{K}/{kid}/lookup').get_json()
     assert st['status'] == 'done' and st['confirmed'] is True and 'Annual' in st['summary']
     assert set(st['filled']) == {'blade_steel', 'blade_length_in', 'born_on', 'born_on_precision', 'size', 'special_edition'}
