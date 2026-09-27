@@ -171,7 +171,7 @@ File names stay, so the register hero, `og:image`, search, and the board follow 
 - Photo 1 is always the card shot: it is the photo the decode read.
 - The crop is cut from the original, then sized to `DISPLAY_EDGE`. A 12-megapixel card shot leaves about 1,600 pixels across the knife.
 - A cardless knife has no record. The section is left out.
-- `K80_r.jpg` is added to `row` as `img_r`, and to `PUBLIC` output only as a file name.
+- The record's file name joins the public row as `img_r`. Nothing else about photo 1 is published.
 
 ### 2.6 The record on the page
 
@@ -205,7 +205,7 @@ This departs from mark D as drawn on the napkin, where the crop had a single etc
 ### 2.9 Open points for Simon
 
 1. **The mark on the face** (2.7): the full repeat, or the single line from the napkin?
-2. **The kit chips** (2.6): showing "box · card · papers" makes five private fields public for public knives. Show them, or leave them out until the "what my public page shows" switches (vault step 3)?
+2. **The kit chips** (2.6): showing "box · card · papers" publishes five fields that are unpublished today, for public knives only. Show them, or leave them out until the "what my public page shows" switches (vault step 3)?
 3. **Order of work:** Phase 1 first (quick, no risk), or Phase 2 first (the big visual win)?
 
 ---
