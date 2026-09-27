@@ -192,9 +192,9 @@ def test_concurrent_builds_are_serialized(con, tmp_path, monkeypatch):
     user, st, k = _setup(con, tmp_path)
     real_export = publish.export_hero
 
-    def slow_export(store, kk, handle, img_dir):
+    def slow_export(store, kk, handle, img_dir, **kw):
         time.sleep(0.15)
-        return real_export(store, kk, handle, img_dir)
+        return real_export(store, kk, handle, img_dir, **kw)
 
     monkeypatch.setattr(publish, 'export_hero', slow_export)
 
@@ -283,3 +283,15 @@ def test_private_user_deindexed(con, tmp_path):
     con.commit()
     assert publish.build_user(con, db.get_user(con, user['id']), st) == -1
     assert con.execute('SELECT count(*) FROM search_cards').fetchone()[0] == 0
+
+
+def test_build_user_bakes_the_plate_into_the_public_photo(con, tmp_path):
+    from PIL import Image
+    user, st, k = _setup(con, tmp_path)
+    publish.build_user(con, user, st)
+    d = publish.bundle_dir('bundle-guy')
+    tag = db.get_knife(con, user['id'], k['id'])['tag']
+    display = Image.open(os.path.join(d, 'img', f'{tag}.jpg')).convert('RGB')
+    w, h = display.size
+    assert (w, h > 600) == (800, True)
+    assert all(abs(a - b) <= 8 for a, b in zip(display.getpixel((3, h - 3)), (250, 246, 238)))

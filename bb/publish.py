@@ -17,9 +17,10 @@ import shutil
 import threading
 from datetime import datetime, timezone
 
-from PIL import Image, ImageDraw, ImageFont, ImageOps, UnidentifiedImageError
+from PIL import (Image, ImageChops, ImageDraw, ImageFilter, ImageFont, ImageOps,
+                 UnidentifiedImageError)
 
-from bb import auth, db, paths, photos
+from bb import auth, config, db, paths, photos
 
 log = logging.getLogger('blade-book.publish')
 
@@ -95,33 +96,165 @@ DISPLAY_EDGE = 1600
 THUMB_EDGE = 800
 
 
-def _watermark(img, handle):
-    """Diagonal '@handle · blade-book' burned into the display image — makes
-    the photo worthless for scam listings without wrecking it (crkinv port)."""
-    text = f'@{handle} · blade-book'
+# The mark (2026-09-26, Simon: "our watermarks make the knife look less sexy").
+# Two halves. The ETCH is a quiet repeat pressed into the photo — it takes the
+# photo's own tones instead of painting white over them, and it crosses every
+# part of the frame so no crop escapes it. The PLATE is a cream strip under the
+# photo naming the knife and the page it lives on: a pointer a buyer can check,
+# which is what actually beats a scam listing. No mark stops a determined thief.
+FONT_DIR = os.path.join(paths.CODE_DIR, 'html', 'fonts')
+_FALLBACK_FONT = '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
+PLATE_RATIO = 0.082                     # plate height as a share of the photo's width
+PLATE_CREAM, PLATE_INK = (250, 246, 238), (26, 26, 26)
+PLATE_ACCENT, PLATE_MUTED = (184, 69, 44), (107, 102, 92)
+_ETCH_ANGLE = 24
+_SEP = '  ·  '
+
+
+def _font(name, px):
+    """The site's own type, then DejaVu, then PIL's built-in — a publish never
+    fails over a font."""
+    for path in (os.path.join(FONT_DIR, name), _FALLBACK_FONT):
+        try:
+            return ImageFont.truetype(path, px)
+        except OSError:
+            continue
+    return ImageFont.load_default(size=px)
+
+
+def _tracked_width(draw, text, font, gap):
+    return int(sum(draw.textlength(ch, font=font) + gap for ch in text))
+
+
+def _draw_tracked(draw, xy, text, font, fill, gap):
+    x, y = xy
+    for ch in text:
+        draw.text((x, y), ch, font=font, fill=fill)
+        x += draw.textlength(ch, font=font) + gap
+
+
+def _etch_mask(size, text):
+    """L mask of `text` repeated in rows across the whole frame, tilted."""
+    w, h = size
+    px = max(14, int(max(w, h) * 0.0255))
+    gap = max(1, px // 7)
+    font = _font('BebasNeue-Regular.woff2', px)
+    side = int((w * w + h * h) ** 0.5) + 2 * px       # a square that still covers after the tilt
+    probe = ImageDraw.Draw(Image.new('L', (4, 4)))
+    unit = text + '      '
+    unit_w = max(1, _tracked_width(probe, unit, font, gap))
+    row = Image.new('L', (side + unit_w, int(px * 1.3)), 0)
+    _draw_tracked(ImageDraw.Draw(row), (0, 0), unit * (row.width // unit_w + 1), font, 255, gap)
+    layer = Image.new('L', (side, side), 0)
+    for i, y in enumerate(range(0, side, px * 6)):
+        layer.paste(row, (-(unit_w // 2) if i % 2 else 0, y))
+    layer = layer.rotate(_ETCH_ANGLE, resample=Image.BICUBIC)
+    left, top = (side - w) // 2, (side - h) // 2
+    return layer.crop((left, top, left + w, top + h))
+
+
+def _etch(img, mask, strength=0.8):
+    """Overlay-blend the mask as a lit face with a shadowed lower-right edge:
+    the letters read as engraved, in whatever colour the photo already is.
+    0.8 is tuned by eye: louder shouts on a bright table-top photo, quieter
+    disappears on a dark cloth."""
+    body = mask.filter(ImageFilter.GaussianBlur(0.6))
+    shadow = ImageChops.subtract(ImageChops.offset(body, 2, 2), body)
+    light = ImageChops.subtract(ImageChops.offset(body, -1, -1), body)
+    layer = Image.new('L', img.size, 128)
+    layer = ImageChops.add(layer, body.point(lambda v: int(v * 0.17 * strength)))
+    layer = ImageChops.add(layer, light.point(lambda v: int(v * 0.30 * strength)))
+    layer = ImageChops.subtract(layer, shadow.point(lambda v: int(v * 0.38 * strength)))
+    return ImageChops.overlay(img, Image.merge('RGB', (layer,) * 3))
+
+
+def full_name(row):
+    """display_name plus the graphic or edition — 'Large Sebenza 21 — Glorious'.
+    The graphic is what tells one Sebenza from the next."""
+    name = display_name(row)
+    extra = (row.get('graphic_name') or row.get('special_edition') or '').strip()
+    if not extra and row.get('maker', 'crk') != 'crk':
+        extra = (row.get('variant') or '').strip()      # other makers keep it here
+    if extra and extra.lower() not in name.lower():
+        return f'{name} — {extra}'
+    return name
+
+
+def _plate_base():
+    """Host (and path) printed on the plate. PLATE_BASE overrides when the site
+    also answers at a shorter address than BASE_URL + URL_PREFIX."""
+    base = config.get('PLATE_BASE', '') or _public_base()
+    return re.sub(r'^https?://', '', base).rstrip('/')
+
+
+def plate_text(row, handle, gated=False):
+    """The plate's four strings, from the public row only. A gated register
+    names nothing: the key gate keeps model/edition out of whatever travels."""
+    named = bool(row.get('model')) and not gated
+    sub = [f"born {row['born']}" if row.get('born') else '', row.get('maker_name') or ''] if named else []
+    return {'tag': row['tag'],
+            'title': full_name(row).upper() if named else '',
+            'sub': _SEP.join(x for x in sub + [f'@{handle}'] if x),
+            'url': f"{_plate_base()}/@{handle}/{row['tag']}"}
+
+
+def _fit(draw, text, name, px, gap, max_w, floor=0.6):
+    """Shrink, then trim with an ellipsis, until `text` fits `max_w`."""
+    size = px
+    while True:
+        font = _font(name, size)
+        if _tracked_width(draw, text, font, gap) <= max_w or size <= px * floor:
+            break
+        size -= 1
+    while text and _tracked_width(draw, text, font, gap) > max_w:
+        text = text[:-2].rstrip() + '…' if len(text) > 2 else ''
+    return text, font
+
+
+def _plate(img, text):
     w, h = img.size
-    layer = Image.new('RGBA', (w, h), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(layer)
-    size = max(24, w // 24)
-    try:
-        font = ImageFont.truetype(
-            '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', size)
-    except OSError:
-        font = ImageFont.load_default()
-    tw = draw.textlength(text, font=font)
-    step = int(tw) + size * 3
-    for y in range(0, h + step, step):
-        draw.text((w * 0.04, y), text, font=font,
-                  fill=(255, 255, 255, 64),
-                  stroke_width=max(1, size // 16),
-                  stroke_fill=(20, 20, 20, 48))
-    layer = layer.rotate(24, expand=False, center=(w // 2, h // 2))
-    return Image.alpha_composite(img.convert('RGBA'), layer).convert('RGB')
+    ph = max(44, int(w * PLATE_RATIO))
+    pad = max(8, int(w * 0.022))
+    out = Image.new('RGB', (w, h + ph), PLATE_CREAM)
+    out.paste(img, (0, 0))
+    d = ImageDraw.Draw(out)
+    d.line([(0, h), (w, h)], fill=PLATE_INK, width=max(2, w // 500))
+    inner = w - 2 * pad
+    bebas, dm = 'BebasNeue-Regular.woff2', 'DMSans.woff2'
+    # row 1: tag + title on the left, the wordmark on the right
+    mark, mark_font = _fit(d, 'BLADE-BOOK', bebas, int(ph * 0.34), 3, inner // 3)
+    mark_w = _tracked_width(d, mark, mark_font, 3)
+    _draw_tracked(d, (w - pad - mark_w, h + ph * 0.17), mark, mark_font, PLATE_INK, 3)
+    head_w = inner - mark_w - pad
+    tag, tag_font = _fit(d, text['tag'], bebas, int(ph * 0.50), 2, head_w // 3)
+    _draw_tracked(d, (pad, h + ph * 0.13), tag, tag_font, PLATE_ACCENT, 2)
+    tag_w = _tracked_width(d, tag, tag_font, 2) + int(pad * 0.6)
+    title, title_font = _fit(d, text['title'], bebas, int(ph * 0.50), 2, head_w - tag_w)
+    _draw_tracked(d, (pad + tag_w, h + ph * 0.13), title, title_font, PLATE_INK, 2)
+    # row 2: the page it lives on (right) outranks who and when (left)
+    url, url_font = _fit(d, text['url'], dm, int(ph * 0.21), 0, inner)
+    url_w = _tracked_width(d, url, url_font, 0)
+    d.text((w - pad - url_w, h + ph * 0.66), url, font=url_font, fill=PLATE_ACCENT)
+    parts = text['sub'].split(_SEP)
+    while parts:
+        sub, sub_font = _SEP.join(parts), _font(dm, int(ph * 0.21))
+        if _tracked_width(d, sub, sub_font, 0) <= inner - url_w - pad:
+            d.text((pad, h + ph * 0.66), sub, font=sub_font, fill=PLATE_MUTED)
+            break
+        parts.pop(len(parts) // 2 if len(parts) > 2 else 0)   # maker goes first, then the date
+    return out
 
 
-def export_hero(store, k, handle, img_dir):
-    """Re-encoded (EXIF/GPS-free), watermarked display + clean thumb for the
-    knife's hero photo. Returns (hero_name, thumb_name) or (None, None)."""
+def _watermark(img, handle, text):
+    """Etched repeat over the photo + the plate under it."""
+    line = f"@{handle.upper()}{_SEP}BLADE-BOOK{_SEP}{text['tag']}"
+    return _plate(_etch(img, _etch_mask(img.size, line)), text)
+
+
+def export_hero(store, k, handle, img_dir, row=None, gated=False):
+    """Re-encoded (EXIF/GPS-free), marked display + clean thumb for the knife's
+    hero photo. `row` is the knife's public row (the plate is written from it,
+    never from `k`). Returns (hero_name, thumb_name) or (None, None)."""
     photos_ = k.get('photos') or []
     if not photos_:
         return None, None
@@ -147,9 +280,14 @@ def export_hero(store, k, handle, img_dir):
         return None, None
     os.makedirs(img_dir, exist_ok=True)
     out, out_t = f"{k['tag']}.jpg", f"{k['tag']}_t.jpg"
+    # sized so photo + plate together stay inside DISPLAY_EDGE
+    w0, h0 = img.size
+    scale = min(1.0, DISPLAY_EDGE / w0, DISPLAY_EDGE / (h0 + PLATE_RATIO * w0))
     display = img.copy()
-    display.thumbnail((DISPLAY_EDGE, DISPLAY_EDGE))
-    display = _watermark(display, handle)
+    display.thumbnail((max(1, int(w0 * scale)), max(1, int(h0 * scale))))
+    display = _watermark(display, handle, plate_text(row or {'tag': k['tag']}, handle, gated))
+    if max(display.size) > DISPLAY_EDGE:          # a very narrow photo: the plate's floor height
+        display.thumbnail((DISPLAY_EDGE, DISPLAY_EDGE))
     display.save(os.path.join(img_dir, out), 'JPEG', quality=85, optimize=True)
     thumb = img.copy()
     thumb.thumbnail((THUMB_EDGE, THUMB_EDGE))
@@ -725,15 +863,15 @@ def build_user(con, user, store):
                 os.makedirs(img_dir, exist_ok=True)
                 rows = []
                 featured_tag = None
+                key = (user.get('public_key') or '').strip()
+                gated = bool(key)
                 for k in db.public_knives(con, user['id']):
                     row = public_row(k, user)
-                    hero, thumb = export_hero(store, k, handle, img_dir)
+                    hero, thumb = export_hero(store, k, handle, img_dir, row=row, gated=gated)
                     row['img'], row['img_t'] = hero, thumb
                     if user.get('featured_knife_id') and k['id'] == user['featured_knife_id']:
                         featured_tag = row['tag']
                     rows.append(row)
-                key = (user.get('public_key') or '').strip()
-                gated = bool(key)
                 if gated:
                     with open(os.path.join(tmp, 'keys.json'), 'w') as f:
                         json.dump({'hashes': [hashlib.sha256(key.lower().encode()).hexdigest()]}, f)

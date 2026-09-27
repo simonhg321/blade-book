@@ -11,6 +11,7 @@ Paths and the port are NOT here — `BLADEBOOK_*_DIR` / `BLADEBOOK_PORT` are rea
 | `SESSION_KEY` | 01 | 64 hex chars from `openssl rand -hex 32`. Rotating it signs everyone out. |
 | `BASE_URL` | 02 | Public origin, no trailing slash. `https://billboard.instockornot.club` until DNS lands, then `https://blade-book.com`. Magic links and OIDC redirect URIs are built from it, so the OIDC consoles must list `<BASE_URL>/blade-book/api/auth/google/callback` and `/apple/callback`. Also feeds the public bundle: `settings.public_url` and every published page's OG tags are built from it (plan 06). |
 | `RESEND_API_KEY` | 02 | From resend.com. **Unset → LogMailer**: the magic link is written to `/var/log/blade-book/app.log` instead of being emailed (how sign-in works before Resend is wired). |
+| `PLATE_BASE` | mark | Optional. The address printed on the plate under every public photo (`<PLATE_BASE>/@handle/K80`), scheme optional. Set it when the site answers at a shorter address than `BASE_URL` + `/blade-book` — on stark `blade-book.com`. **Unset → `BASE_URL` + `/blade-book` without the scheme.** The cron sweep reads it per run; the app needs a restart. `scripts/deploy_mark.sh` sets it. |
 | `MAIL_FROM` | 02 | Default `blade-book <noreply@blade-book.com>`; the domain must be verified in Resend. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | 02 | Google Cloud console → OAuth client (Web). Both unset → the Google button does not render. |
 | `APPLE_CLIENT_ID` | 02 | The **Services ID** (e.g. `com.blade-book.web`), not the App ID. |

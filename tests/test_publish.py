@@ -400,3 +400,164 @@ def test_head_falls_back_to_site_card_when_no_hero():
     hero = publish._index_html(_rows(), USER, gated=False).split('<body>')[0]
     assert '/@simon-collector/img/K01.jpg">' in hero.split('property="og:image"')[1][:120]
     assert 'og:image:width' not in hero
+
+
+# --- the mark (2026-09-26): etched repeat over the photo + a plate under it ---
+# Simon: "our watermarks make the knife look less sexy" — still marked against
+# scam listings, but the mark takes the photo's own tones and the plate names
+# the knife and the page it lives on.
+
+CREAM = (250, 246, 238)
+
+
+def _flat_jpeg(w, h, rgb):
+    buf = io.BytesIO()
+    Image.new('RGB', (w, h), rgb).save(buf, 'JPEG', quality=95)
+    return buf.getvalue()
+
+
+def _glorious(**over):
+    return _knife(tag='K80', born_on='2014-02-06', variant='21 CGG "Glorious"',
+                  maker_name='Chris Reeve Knives',
+                  ext={'generation': '21', 'size': 'Large', 'handle_treatment': 'CGG',
+                       'graphic_name': 'Glorious'}, **over)
+
+
+def _export(tmp_path, jpeg, row=None, **kw):
+    store = MemStore({'1/1/1.jpg': jpeg})
+    name, tname = publish.export_hero(store, _hero_knife(), 'pub', str(tmp_path), row=row, **kw)
+    return (Image.open(os.path.join(tmp_path, name)).convert('RGB'),
+            Image.open(os.path.join(tmp_path, tname)).convert('RGB'))
+
+
+def _pixels(im):
+    raw = im.convert('RGB').tobytes()
+    return zip(raw[0::3], raw[1::3], raw[2::3])
+
+
+def _near(px, rgb, tol=8):
+    return all(abs(a - b) <= tol for a, b in zip(px, rgb))
+
+
+def test_full_name_carries_the_graphic():
+    row = publish.public_row(_glorious(), USER)
+    assert publish.full_name(row) == 'Large Sebenza 21 — Glorious'
+
+
+def test_full_name_falls_back_to_the_edition_then_the_plain_name():
+    row = publish.public_row(_knife(ext={'generation': '31', 'size': 'Small',
+                                         'special_edition': 'Annual 2025'}), USER)
+    assert publish.full_name(row) == 'Small Sebenza 31 — Annual 2025'
+    assert publish.full_name(publish.public_row(_knife(), USER)) == 'Large Sebenza 31'
+
+
+def test_plate_text_names_the_knife_and_its_page(monkeypatch):
+    monkeypatch.setattr(publish, '_plate_base', lambda: 'blade-book.com')
+    t = publish.plate_text(publish.public_row(_glorious(), USER), 'simon-collector')
+    assert t['tag'] == 'K80'
+    assert t['title'] == 'LARGE SEBENZA 21 — GLORIOUS'
+    assert t['sub'] == 'born February 6, 2014  ·  Chris Reeve Knives  ·  @simon-collector'
+    assert t['url'] == 'blade-book.com/@simon-collector/K80'
+
+
+def test_plate_text_honours_a_hidden_birth_day():
+    row = publish.public_row(_glorious(), dict(USER, hide_born_day=1))
+    sub = publish.plate_text(row, 'simon-collector')['sub']
+    assert 'born February 2014' in sub and '6,' not in sub
+
+
+def test_plate_text_on_a_gated_register_names_nothing():
+    # the key gate keeps model/edition out of anything that travels
+    t = publish.plate_text(publish.public_row(_glorious(), USER), 'simon-collector', gated=True)
+    assert t['title'] == '' and t['sub'] == '@simon-collector'
+    assert 'Glorious' not in ' '.join(t.values()) and 'Sebenza' not in ' '.join(t.values())
+
+
+def test_plate_base_defaults_to_the_public_base_without_the_scheme(monkeypatch):
+    monkeypatch.setattr(publish, '_public_base', lambda: 'https://example.test/blade-book')
+    monkeypatch.setattr(publish.config, 'get', lambda k, d=None: d)
+    assert publish._plate_base() == 'example.test/blade-book'
+    monkeypatch.setattr(publish.config, 'get',
+                        lambda k, d=None: 'https://blade-book.com/' if k == 'PLATE_BASE' else d)
+    assert publish._plate_base() == 'blade-book.com'
+
+
+def test_export_hero_puts_a_cream_plate_under_the_photo(tmp_path):
+    row = publish.public_row(_glorious(), USER)
+    display, thumb = _export(tmp_path, _flat_jpeg(1200, 800, (90, 90, 90)), row=row)
+    w, h = display.size
+    assert w == 1200 and h > 800                       # the photo kept its size; the plate is extra
+    assert _near(display.getpixel((3, h - 3)), CREAM)  # plate margin, clear of any type
+    assert _near(display.getpixel((w - 3, h - 3)), CREAM)
+    assert thumb.size == (800, 533)                    # the thumb stays clean and plateless
+
+
+def test_export_hero_plate_has_type_on_it(tmp_path):
+    row = publish.public_row(_glorious(), USER)
+    display, _ = _export(tmp_path, _flat_jpeg(1200, 800, (90, 90, 90)), row=row)
+    plate = display.crop((0, 802, 1200, display.size[1]))
+    dark = sum(1 for p in _pixels(plate) if max(p) < 90)
+    assert dark > 400                                  # ink on the cream
+
+
+def test_export_hero_with_plate_still_fits_the_display_edge(tmp_path):
+    row = publish.public_row(_glorious(), USER)
+    display, _ = _export(tmp_path, _flat_jpeg(1800, 2400, (90, 90, 90)), row=row)
+    assert max(display.size) <= publish.DISPLAY_EDGE
+
+
+def test_mark_keeps_the_photos_own_colour(tmp_path):
+    # white paint washes a blue cloth toward grey; an etch stays blue
+    display, _ = _export(tmp_path, _flat_jpeg(1200, 800, (30, 60, 160)))
+    photo = display.crop((0, 0, 1200, 800))
+    washed = sum(1 for r, g, b in _pixels(photo) if min(r, g, b) > 0.36 * max(r, g, b))
+    assert washed < 100            # JPEG ringing strays a few; white paint washed 11,000+
+
+
+def test_mark_crosses_every_part_of_the_photo(tmp_path):
+    # crop-resistant: whatever rectangle a thief keeps, the mark is in it
+    display, _ = _export(tmp_path, _flat_jpeg(1200, 800, (120, 120, 120)))
+    for cx in range(4):
+        for cy in range(3):
+            cell = display.crop((cx * 300, cy * 266, cx * 300 + 300, cy * 266 + 266)).convert('L')
+            lo, hi = cell.getextrema()
+            assert hi - lo > 12, (cx, cy)
+
+
+def test_plate_type_never_runs_off_the_plate(tmp_path):
+    k = _knife(tag='K123', model='Extraordinarily Long Model Name That Goes On',
+               maker='other', maker_name='A Very Long Knife Maker Name & Sons Cutlery Works',
+               ext={'graphic_name': 'An Equally Long Graphic Name For Good Measure'})
+    row = publish.public_row(k, USER)
+    store = MemStore({'1/1/1.jpg': _flat_jpeg(900, 1200, (90, 90, 90))})
+    name, _ = publish.export_hero(store, dict(_hero_knife(), tag='K123'),
+                                  'a-handle-of-24-characters'[:24], str(tmp_path), row=row)
+    display = Image.open(os.path.join(tmp_path, name)).convert('RGB')
+    w, h = display.size
+    top = next(y for y in range(h - 1, 0, -1) if not _near(display.getpixel((2, y)), CREAM)) + 3
+    for y in range(top + 2, h):
+        assert _near(display.getpixel((w - 2, y)), CREAM), y   # right margin stays clear
+        assert _near(display.getpixel((1, y)), CREAM), y       # and the left
+
+
+def test_export_hero_survives_a_missing_font(tmp_path, monkeypatch):
+    # a publish must never fail over type
+    monkeypatch.setattr(publish, 'FONT_DIR', str(tmp_path / 'nowhere'))
+    row = publish.public_row(_glorious(), USER)
+    display, _ = _export(tmp_path, _flat_jpeg(1200, 800, (90, 90, 90)), row=row)
+    assert display.size[1] > 800
+
+
+def test_export_hero_without_a_row_still_marks_and_plates(tmp_path):
+    display, _ = _export(tmp_path, _flat_jpeg(1200, 800, (90, 90, 90)))
+    assert display.size[1] > 800 and _near(display.getpixel((3, display.size[1] - 3)), CREAM)
+
+
+def test_full_name_uses_the_variant_for_other_makers():
+    # other makers have no graphic/edition fields; the variant is where it lives
+    k = _knife(maker='mcnees', maker_name='McNees Knives', model='MAC 2',
+               variant='Atomic Shockwave', ext={})
+    assert publish.full_name(publish.public_row(k, USER)) == 'McNees Knives MAC 2 — Atomic Shockwave'
+    # a CRK variant is shorthand for fields already in the name — never appended
+    crk = _knife(variant='31 Inlay', ext={'generation': '31', 'size': 'Large'})
+    assert publish.full_name(publish.public_row(crk, USER)) == 'Large Sebenza 31'
