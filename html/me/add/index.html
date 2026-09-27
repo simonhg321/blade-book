@@ -48,6 +48,9 @@
   #nocard{display:flex;align-items:center;gap:8px;justify-content:center;margin:10px 0 0;font-size:.9rem;color:var(--muted)}
   #save{display:block;width:100%;margin-top:12px;padding:16px 0;font-size:1.1rem;font-weight:800;letter-spacing:.06em;background:var(--ok);color:#fff;border:2px solid var(--ok);border-radius:14px;cursor:pointer}
   #save:disabled{opacity:.45}
+  #showpub{display:flex;align-items:center;gap:10px;margin:14px 0 0;padding:10px 12px;border:2px solid var(--line);border-radius:12px;background:#fff;font-size:.95rem;cursor:pointer}
+  #showpub input{width:20px;height:20px;flex:none}
+  #showpub small{display:block;color:var(--muted);font-size:.8rem}
   #guess{font-size:.95rem;font-weight:600;color:#141210;background:#f6e7c6;border-left:4px solid #b8452c;border-radius:6px;padding:10px 12px;margin:10px 0;display:none}
   #lookup{font-size:.9rem;color:#4a443c;background:#eef3ee;border-left:4px solid #2f6b3a;border-radius:6px;padding:10px 12px;margin:10px 0;display:none}
   #lookup a{color:#2f6b3a;margin-right:10px}
@@ -87,7 +90,7 @@
 
 <div class="shots">
   <b>ONE PHOTO IS ALL IT TAKES</b> — ① BOX + KIT + CARD in one frame (card flat, date legible!).
-  Feel like it? Add up to five more for your public page — hero open, hero closed, details. Entirely optional.<br>
+  Feel like it? Add up to five more — hero open, hero closed, details. Entirely optional. Your public page shows the one you pick as the cover.<br>
   <b>+</b> steps to the next draft, or reserves a new tag at the end.
   <a href="/blade-book/how/" style="color:var(--accent);font-weight:700">full guide with examples →</a>
 </div>
@@ -107,6 +110,7 @@
 <label id="nocard"><input id="nocardbox" type="checkbox"> no birth card for this knife</label>
 <div class="hint">no card? <a href="/blade-book/card/" target="_blank" rel="noopener">print a blank one</a>, write it, and shoot it with the knife</div>
 <div id="agenote"></div>
+<label id="showpub"><input id="showpubbox" type="checkbox"><span>🌐 show it on my public page<small id="showpubwhy">off: private — only you can see it. You can change this any time.</small></span></label>
 <button id="save" type="button" disabled>SAVE TO REGISTER →</button>
 <section id="card" aria-live="polite">
   <h2>Birth card</h2>
@@ -462,7 +466,9 @@
   $('save').addEventListener('click', function () {
     var id = current; if (!id) return;
     $('save').disabled = true; say('saving…');
-    api('/knives/' + id + '/save', { method: 'POST' }).then(function (res) {
+    var show = $('showpubbox').checked;   // born private (2026-09-26): the owner opts in
+    api('/knives/' + id + '/save', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                     body: JSON.stringify({ is_public: show }) }).then(function (res) {
       if (res.status === 402) {
         $('paywall-why').textContent = res.j.error || 'this knife needs a subscription';
         $('paywall-price').textContent = res.j.price || '';
@@ -474,7 +480,7 @@
       }
       if (!res.ok) throw new Error(res.j.error || 'save failed');
       // /me reads this once and tells the owner the public page takes about a minute to build
-      try { sessionStorage.setItem('bbJustSaved', res.j.tag); } catch (e) {}
+      try { sessionStorage.setItem('bbJustSaved', JSON.stringify({ tag: res.j.tag, pub: !!res.j.is_public })); } catch (e) {}
       location.href = '/blade-book/me/#' + res.j.tag;
     }).catch(function (e) { if (e.message !== 'sign in') { say('✗ ' + e.message, true); $('save').disabled = false; } });
   });

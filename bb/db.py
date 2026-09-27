@@ -671,9 +671,11 @@ def _knife_row(con, row):
 def create_draft_knife(con, owner_id, maker='crk'):
     tag = next_tag(con, owner_id)
     ts = now()
+    # born private (Simon, 2026-09-26): the owner shows it — at save, with the toggle,
+    # or by listing it. The column DEFAULT 1 stays for rows written before this.
     cur = con.execute(
-        'INSERT INTO knives (owner_id, tag, maker, status, created, updated) '
-        "VALUES (?, ?, ?, 'draft', ?, ?)", (owner_id, tag, maker, ts, ts))
+        'INSERT INTO knives (owner_id, tag, maker, status, is_public, created, updated) '
+        "VALUES (?, ?, ?, 'draft', 0, ?, ?)", (owner_id, tag, maker, ts, ts))
     con.commit()
     return get_knife(con, owner_id, cur.lastrowid)
 

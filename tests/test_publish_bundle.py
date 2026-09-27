@@ -42,6 +42,7 @@ def _setup(con, tmp_path, **user_over):
     st.put(key, _jpeg_with_exif(800, 600))
     db.add_photo(con, uid, k['id'], 1, key, hashlib.sha256(b'x').hexdigest(), 800, 600)
     db.publish_knife(con, uid, k['id'])
+    db.set_public(con, uid, [k['id']], True)   # born private; these fixtures are public
     return db.get_user(con, uid), st, k
 
 
@@ -106,6 +107,7 @@ def test_build_user_hero_follows_featured_knife_id(con, tmp_path):
     st.put(key2, _jpeg_with_exif(800, 600))
     db.add_photo(con, uid, k2['id'], 1, key2, hashlib.sha256(b'y').hexdigest(), 800, 600)
     db.publish_knife(con, uid, k2['id'])
+    db.set_public(con, uid, [k2['id']], True)   # born private; these fixtures are public
     db.set_user_settings(con, uid, {'featured_knife_id': k2['id']})
     user = db.get_user(con, uid)
 
@@ -131,6 +133,7 @@ def test_unpublishing_the_pinned_hero_clears_the_pin_and_falls_back(con, tmp_pat
     st.put(key2, _jpeg_with_exif(800, 600))
     db.add_photo(con, uid, k2['id'], 1, key2, hashlib.sha256(b'y').hexdigest(), 800, 600)
     db.publish_knife(con, uid, k2['id'])
+    db.set_public(con, uid, [k2['id']], True)   # born private; these fixtures are public
     db.set_user_settings(con, uid, {'featured_knife_id': k2['id']})
     assert db.get_user(con, uid)['featured_knife_id'] == k2['id']
 

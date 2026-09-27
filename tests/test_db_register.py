@@ -60,7 +60,7 @@ def test_set_public_is_bulk_and_owner_scoped(env):
     ka, kb = _knife(con, a), _knife(con, b)
     assert db.set_public(con, a, [ka['id'], kb['id']], False) == 1
     assert db.get_knife(con, a, ka['id'])['is_public'] == 0
-    assert db.get_knife(con, b, kb['id'])['is_public'] == 1
+    assert db.get_knife(con, b, kb['id'])['is_public'] == 0          # born private, untouched by a's bulk
     assert db.set_public(con, a, [], False) == 0
     assert db.set_public(con, a, [ka['id']], True) == 1
 

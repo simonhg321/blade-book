@@ -15,6 +15,7 @@ def _mk_user(con, email='idx@example.com', handle='idx-guy', **over):
 
 
 def _mk_knife(con, uid, model='Sebenza', born='2008-03-14', ext=None, **cols):
+    cols.setdefault('is_public', 1)                  # fixtures are public knives; new ones are born private
     k = db.create_draft_knife(con, uid)
     ext = {'generation': '21', 'size': 'Large', **(ext or {})}
     con.execute("UPDATE knives SET confidence = '{}', model = ?, born_on = ?, "

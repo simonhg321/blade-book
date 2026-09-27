@@ -43,6 +43,7 @@ def _setup(con, tmp_path):
     st.put(key, _jpeg_with_exif(600, 400))
     db.add_photo(con, uid, k['id'], 1, key, hashlib.sha256(b'x').hexdigest(), 600, 400)
     db.publish_knife(con, uid, k['id'])
+    db.set_public(con, uid, [k['id']], True)   # born private; these fixtures are public
     # an event with private-ish free text + a withheld seller note
     db.add_event(con, uid, k['id'], 'edited', detail='LEAK-EVENT-DETAIL-9X7',
                  counterparty='LEAK-COUNTERPARTY-9X7')
@@ -58,6 +59,7 @@ def _setup(con, tmp_path):
     st.put(key2, _jpeg_with_exif(600, 400))
     db.add_photo(con, uid, k2['id'], 1, key2, hashlib.sha256(b'y').hexdigest(), 600, 400)
     db.publish_knife(con, uid, k2['id'])
+    db.set_public(con, uid, [k2['id']], True)   # born private; these fixtures are public
     db.set_sale(con, uid, k2['id'], 'sold', amount=999.0, counterparty='buyer')
 
     return db.get_user(con, uid), st, k, sentinels

@@ -7,6 +7,7 @@ def _user(con, email='pub@example.com', handle='pub'):
 
 
 def _live_knife(con, uid, **cols):
+    cols.setdefault('is_public', 1)                  # fixtures are public knives; new ones are born private
     k = db.create_draft_knife(con, uid)
     con.execute('UPDATE knives SET confidence = ? WHERE id = ?', ('{}', k['id']))
     con.commit()

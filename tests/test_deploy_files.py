@@ -749,3 +749,18 @@ def test_public_copy_says_free_during_early_access():
         assert 'After that blade-book is a subscription' not in page
         assert 'After that, blade-book is the price above' not in page
     assert 'hear it from us first' in faq and 'id="price"' in faq
+
+
+def test_born_private_copy_and_add_page_choice():
+    # 2026-09-26: knives are born private; the add page asks, the copy says so, nothing promises
+    # extra photos on the public page (only the cover goes public).
+    add = _read('html/me/add/index.html')
+    assert 'id="showpubbox" type="checkbox">' in add and 'is_public: show' in add
+    assert 'checked' not in add.split('id="showpubbox"', 1)[1].split('>', 1)[0]      # unticked by default
+    for p in ('html/me/add/index.html', 'html/how/index.html'):
+        assert 'for your public page' not in _read(p) and 'prettier page' not in _read(p)
+    assert 'every knife starts private' in _read('html/index.html')
+    assert 'Every knife starts private' in _read('html/faq/index.html')
+    assert 'Every knife starts private' in _read('html/how/index.html')
+    me = _read('html/me/index.html')
+    assert 'made_public' in me and 'private, only you can see it' in me

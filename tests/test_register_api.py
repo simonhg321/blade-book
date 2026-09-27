@@ -115,7 +115,7 @@ def test_public_toggle_bulk_and_full(client, mailer, app):
     kb = other.post(K + '/').get_json()['id']
     r = client.post(f'{K}/bulk', json={'ids': [k1, k2, kb], 'is_public': True})
     assert r.status_code == 200 and r.get_json()['changed'] == 2                       # kb is not ours
-    assert other.get(f'{K}/{kb}').get_json()['is_public'] == 1
+    assert other.get(f'{K}/{kb}').get_json()['is_public'] == 0             # born private; a's bulk never touched it
     assert client.post(f'{K}/bulk', json={'ids': 'all', 'is_public': True}).status_code == 400
     assert client.post(f'{K}/bulk', json={'ids': list(range(201)), 'is_public': True}).status_code == 400
     r = client.get(f'{K}/full')
@@ -225,3 +225,46 @@ def test_for_sale_gate_admin_bypass_and_listed_at(client, mailer):
     assert r.status_code == 200 and r.get_json()['listed_at']
     r = client.post(f'{K}/{kid}/sale', json={'sale_status': 'keeping'})
     assert r.status_code == 200 and r.get_json()['listed_at'] is None
+
+
+# 2026-09-26, Simon: "by default it should all be private". A new knife is born private;
+# the owner says so to show it — at save, with the toggle, or by listing it.
+
+def test_new_knife_is_born_private(client, mailer):
+    signed_in(client, mailer)
+    kid = _draft_with_photo(client)
+    _processed(kid)
+    j = client.post(f'{K}/{kid}/save').get_json()
+    assert j['status'] == 'live' and j['is_public'] == 0
+
+
+def test_save_can_show_it_on_the_public_page(client, mailer):
+    signed_in(client, mailer)
+    kid = _draft_with_photo(client)
+    _processed(kid)
+    assert client.post(f'{K}/{kid}/save', json={'is_public': True}).get_json()['is_public'] == 1
+    kid2 = _draft_with_photo(client)
+    _processed(kid2)
+    assert client.post(f'{K}/{kid2}/save', json={'is_public': False}).get_json()['is_public'] == 0
+    assert client.post(f'{K}/{kid2}/save', json={'is_public': 'yes'}).status_code == 400
+
+
+def test_resaving_a_live_knife_never_flips_its_visibility(client, mailer):
+    signed_in(client, mailer)
+    kid = _draft_with_photo(client)
+    _processed(kid)
+    client.post(f'{K}/{kid}/save', json={'is_public': True})
+    assert client.post(f'{K}/{kid}/save').get_json()['is_public'] == 1
+
+
+def test_listing_a_private_knife_makes_it_public_and_says_so(client, mailer):
+    signed_in(client, mailer)
+    kid = _draft_with_photo(client)
+    _processed(kid)
+    client.post(f'{K}/{kid}/save')
+    _age_knife(kid)
+    con = db.connect(); con.execute("UPDATE users SET verified_at = '2026-01-01'"); con.commit(); con.close()
+    j = client.post(f'{K}/{kid}/sale', json={'sale_status': 'for_trade'}).get_json()
+    assert j['is_public'] == 1 and j['made_public'] is True
+    j = client.post(f'{K}/{kid}/sale', json={'sale_status': 'keeping'}).get_json()
+    assert j['is_public'] == 1 and 'made_public' not in j            # taking it off the table keeps it shown

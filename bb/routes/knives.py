@@ -201,11 +201,16 @@ def save_knife(knife_id):
     locks — re-saving is a no-op and spends nothing. Early access (the soft
     gate, bb/billing.hard_gate() False): a refusal becomes a `notice` on the
     200 and the save goes through."""
+    body = request.get_json(silent=True) or {}
+    show = body.get('is_public') if isinstance(body, dict) else None
+    if show is not None and not isinstance(show, bool):
+        return jsonify({'error': 'is_public must be true or false'}), 400
     con = db.connect()
     try:
         k = db.get_knife(con, g.user['id'], knife_id)
         if k is None:
             return _not_found()
+        was_draft = k['status'] == 'draft'
         charge, notice = False, None
         if k['status'] == 'draft':
             if not k['photos']:                              # a subscription won't fix a missing photo
@@ -226,6 +231,9 @@ def save_knife(knife_id):
             return _not_found()
         if err:
             return jsonify({'error': err}), 400
+        if was_draft and show is not None:                   # the add page's "show it" choice; a re-save never flips it
+            db.set_public(con, g.user['id'], [knife_id], show)
+            k2 = db.get_knife(con, g.user['id'], knife_id)
         if charge:
             used = db.increment_free_old(con, g.user['id'])
             log.info('%s spent free older-knife slot %d/%d for @%s', k2['tag'], used,
@@ -273,11 +281,19 @@ def sale_knife(knife_id):
                          amount=amount, counterparty=counterparty)
         if k2 is None:
             return _not_found()
+        # the board and wants only see public knives: listing a private one shows it
+        made_public = status in ('for_sale', 'for_trade') and not k2['is_public']
+        if made_public:
+            db.set_public(con, g.user['id'], [knife_id], True)
+            k2 = db.get_knife(con, g.user['id'], knife_id)
     finally:
         con.close()
     log.info('%s sale_status → %s by @%s', k['tag'], status, g.user['handle'])
     publish.schedule(g.user['id'])
-    return jsonify(_register_view(k2, _store()))
+    out = _register_view(k2, _store())
+    if made_public:
+        out['made_public'] = True
+    return jsonify(out)
 
 
 @bp.post('/<int:knife_id>/public')

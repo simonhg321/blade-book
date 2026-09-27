@@ -171,6 +171,7 @@ def _knife_with_photo(con, store, u, tag_photo=b'JPEGBYTES'):
     store.put(key, tag_photo)
     db.add_photo(con, u['id'], k['id'], 1, key, hashlib.sha256(tag_photo).hexdigest(), 800, 600)
     db.publish_knife(con, u['id'], k['id'])
+    db.set_public(con, u['id'], [k['id']], True)                  # born private; this fixture is public
     return db.get_knife(con, u['id'], k['id'])
 
 

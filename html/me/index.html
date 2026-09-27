@@ -363,7 +363,9 @@
       if (s === 'sold') { if (amount !== '') body.amount = Number(amount); if (cp) body.counterparty = cp; }
       json('POST', '/knives/' + k.id + '/sale', body).then(function (res) {
         if (!res.ok) throw new Error(res.j.error || 'could not update');
-        say(k.tag + ' → ' + res.j.sale_status.replace('_', ' ')); return reload();
+        say(k.tag + ' → ' + res.j.sale_status.replace('_', ' ') +
+            (res.j.made_public ? ' — and it’s public now: the board and wants only see public knives' : ''));
+        return reload();
       }).catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); });
     });
     art.querySelector('.pub').addEventListener('change', function (ev) {
@@ -512,7 +514,12 @@
       // Say so once, or a new collector checks their page, sees nothing, and thinks it failed.
       var just = null;
       try { just = sessionStorage.getItem('bbJustSaved'); sessionStorage.removeItem('bbJustSaved'); } catch (e) {}
-      if (just) say(just + ' saved ✓ — its public page is being built and will be up in about a minute');
+      if (just) {
+        var js = { tag: just, pub: true };
+        try { js = JSON.parse(just); } catch (e) {}          // older add page stored the bare tag
+        say(js.pub ? js.tag + ' saved ✓ — its public page is being built and will be up in about a minute'
+                   : js.tag + ' saved ✓ — private, only you can see it. Tick “public on my page” to show it.');
+      }
     });
   }
 
