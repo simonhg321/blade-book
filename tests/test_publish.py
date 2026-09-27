@@ -595,3 +595,24 @@ def test_a_name_with_markup_in_it_is_escaped():
                  publish._index_html([row], USER, gated=False)):
         assert '<b>"Glo"</b>' not in html
         assert '&lt;b&gt;&quot;Glo&quot;&lt;/b&gt;' in html
+
+
+# --- the kit (2026-09-27): what came with the knife, known "yes" only ---
+
+def test_public_row_kit_lists_only_what_is_known_to_be_there():
+    k = _knife(has_box=1, has_card=1, has_papers=0, has_pouch=None, has_lanyard=1,
+               has_spare_hardware=None)
+    assert publish.public_row(k, USER)['kit'] == ['BOX', 'CARD', 'LANYARD']
+    assert publish.public_row(_knife(), USER)['kit'] == []      # columns absent: nothing claimed
+
+
+def test_knife_page_shows_the_kit_as_chips():
+    row = publish.public_row(_knife(has_box=1, has_card=1, has_lanyard=1), USER)
+    html = publish._knife_page(row, 'simon-collector', gated=False)
+    assert ('<p class="kit"><b>CAME WITH</b><span>BOX</span><span>CARD</span>'
+            '<span>LANYARD</span></p>') in html
+
+
+def test_knife_page_without_a_kit_has_no_heading():
+    html = publish._knife_page(publish.public_row(_knife(), USER), 'simon-collector', gated=False)
+    assert 'CAME WITH' not in html and 'class="kit"' not in html

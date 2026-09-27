@@ -32,6 +32,12 @@ PUBLIC_EXT = ('generation', 'size', 'handle_treatment', 'graphic_name',
               'inlay_material', 'damascus_smith', 'damascus_pattern',
               'special_edition')
 
+# The kit: what came with the knife. Only a known "yes" is ever published —
+# a missing chip never says the knife lacks something (spec 1.6).
+PUBLIC_KIT = (('has_box', 'BOX'), ('has_card', 'CARD'), ('has_papers', 'PAPERS'),
+              ('has_pouch', 'POUCH'), ('has_lanyard', 'LANYARD'),
+              ('has_spare_hardware', 'SPARE HARDWARE'))
+
 _MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
            'August', 'September', 'October', 'November', 'December']
 
@@ -71,6 +77,7 @@ def public_row(k, user):
             row['asking_price'] = k['asking_price']
         if k.get('seller_note'):
             row['seller_note'] = k['seller_note']
+    row['kit'] = [label for col, label in PUBLIC_KIT if k.get(col) == 1]
     return row
 
 
@@ -340,6 +347,10 @@ _STYLE = '''
   main { position:relative; }
   a.cta { display:inline-block; background:var(--accent,#b8452c); color:#fff; font-weight:800;
           border-radius:12px; padding:10px 16px; text-decoration:none; margin:8px 0 4px; }
+  .kit { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:10px 0; }
+  .kit b { font-size:.72rem; letter-spacing:.14em; color:#555; margin-right:4px; }
+  .kit span { font-size:.72rem; font-weight:700; letter-spacing:.06em;
+              border:1.5px solid var(--ink,#141210); border-radius:999px; padding:.18rem .55rem; }
 '''
 
 
@@ -447,6 +458,9 @@ def _knife_page(row, handle, gated):
     spec('Graphic / edition', row.get('graphic_name') or row.get('special_edition'))
     spec('Variant', row.get('variant'))
     out += f'<table>{"".join(specs)}</table>\n'
+    if row.get('kit'):
+        out += ('<p class="kit"><b>CAME WITH</b>'
+                + ''.join(f'<span>{e(x)}</span>' for x in row['kit']) + '</p>\n')
     if row.get('notes_public'):
         out += f'<div class="card">{e(row["notes_public"])}</div>\n'
     out += (f'<p><a href="../">← @{e(handle)}’s register</a></p>\n'
