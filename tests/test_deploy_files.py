@@ -834,3 +834,20 @@ def test_every_page_asks_for_the_current_assets():
         for v in re.findall(r'(?:vibe\.css|nav\.js)\?v=(\d+)', open(path).read()):
             seen.setdefault(v, []).append(os.path.relpath(path, ROOT))
     assert set(seen) == {ASSET_V}, {v: fs for v, fs in seen.items() if v != ASSET_V}
+
+
+def test_top_bar_survives_a_narrow_phone_and_a_longer_sign_in_label():
+    """Review: signed in, the pill reads 'my register'; at 360px the brand wrapped
+    and at 320px the page scrolled sideways."""
+    css = _read('html/vibe.css')
+    brand = css[css.index('.bb-top .brand{'):].split('}')[0]
+    assert 'white-space:nowrap' in brand
+    assert '@media (max-width:400px){.bb-top{' in css
+
+
+def test_deploy_page_script_stops_loudly_when_the_app_does_not_come_back():
+    sh = _read('scripts/deploy_page.sh')
+    assert 'sleep 1 && curl' not in sh                   # under set -e an && list hides the failure
+    assert 'if ! supervisorctl restart blade_book' in sh and sh.count('exit 1') >= 2
+    assert 'for i in 1 2 3 4 5 6 7 8 9 10' in sh and 'curl -sf http://127.0.0.1:5004/blade-book/api/healthz' in sh
+    assert sh.index('cp -r') < sh.index('supervisorctl restart') < sh.index('publish_sweep.py --all')

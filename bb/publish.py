@@ -502,6 +502,7 @@ _FLIP_SCRIPT = """
   var x = null, y = null;
   function go(a) { if (a) location.href = a.href; }
   document.addEventListener('keydown', function (ev) {
+    if (ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return;   // Alt/Cmd+Left is the browser's Back
     if (ev.target && /INPUT|TEXTAREA|SELECT/.test(ev.target.tagName)) return;
     if (ev.key === 'ArrowLeft') go(p);
     if (ev.key === 'ArrowRight') go(n);
@@ -509,10 +510,14 @@ _FLIP_SCRIPT = """
   var lead = document.querySelector('.lead');
   if (!lead) return;
   lead.addEventListener('touchstart', function (ev) {
+    if (ev.touches.length > 1) { x = null; return; }                    // two fingers is a pinch, not a swipe
     x = ev.touches[0].clientX; y = ev.touches[0].clientY;
   }, { passive: true });
   lead.addEventListener('touchend', function (ev) {
     if (x === null) return;
+    if (ev.touches.length > 0 || (window.visualViewport && window.visualViewport.scale > 1.01)) {
+      x = null; return;                                                 // still touching, or zoomed in: panning
+    }
     var dx = ev.changedTouches[0].clientX - x, dy = ev.changedTouches[0].clientY - y;
     x = null;
     if (Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dy)) go(dx < 0 ? n : p);

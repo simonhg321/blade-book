@@ -49,7 +49,7 @@ a{color:var(--ink)}
 .bb-nav .btn.link{padding:0}
 /* the top bar (2026-09-27): one nav on every public page */
 .bb-top{display:flex;align-items:center;gap:14px;padding:10px 16px;background:#fff;border-bottom:2px solid var(--ink);text-align:left}
-.bb-top .brand{display:flex;align-items:center;gap:7px;font-family:'Bebas Neue',Impact,sans-serif;font-size:1.35rem;letter-spacing:.04em;font-weight:400;color:var(--ink);text-decoration:none}
+.bb-top .brand{display:flex;align-items:center;gap:7px;white-space:nowrap;font-family:'Bebas Neue',Impact,sans-serif;font-size:1.35rem;letter-spacing:.04em;font-weight:400;color:var(--ink);text-decoration:none}
 .bb-top .brand img{width:22px;height:22px}
 .bb-top .whose{font-size:.86rem;font-weight:400;color:var(--muted);text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .bb-top .whose b{color:var(--ink)}
@@ -57,3 +57,4 @@ a{color:var(--ink)}
 .bb-top nav a{color:var(--ink);font-weight:400;text-decoration:none}
 .bb-top nav a.bb-auth{border:2px solid var(--ink);border-radius:999px;padding:.25rem .7rem;font-weight:700}
 @media (max-width:640px){.bb-top .whose{display:none}.bb-top nav{gap:10px;font-size:.8rem}}
+@media (max-width:400px){.bb-top{gap:8px;padding:10px 10px}.bb-top .brand{font-size:1.1rem;gap:5px}.bb-top .brand img{width:18px;height:18px}.bb-top nav{gap:7px;font-size:.72rem}.bb-top nav a.bb-auth{padding:.2rem .45rem;border-width:1.5px}}

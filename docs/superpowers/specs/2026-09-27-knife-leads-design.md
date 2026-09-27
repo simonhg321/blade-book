@@ -123,7 +123,7 @@ The decoder already records six things per knife. Phase 1 shows them on the knif
 
 - Only a "yes" makes a chip. "No" and "unknown" show nothing: a missing chip never says the knife lacks something.
 - No chips at all, no heading.
-- These six join the public whitelist (`PUBLIC_FIELDS`) for public knives. The leak test is updated to match.
+- They are published as one derived list, `kit`, holding only the labels that are a known yes. The six columns themselves do not join `PUBLIC_FIELDS`: that would publish the "no" answers too.
 - Owners can already correct them on `/me`.
 
 ### 1.7 What Phase 1 does not change

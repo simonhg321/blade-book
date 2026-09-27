@@ -736,3 +736,15 @@ def test_a_tall_photo_never_pushes_the_name_off_the_screen():
     css = publish._KNIFE_STYLE
     assert '.lead img.hero { display:block; margin:0; width:100%; max-height:82vh; object-fit:contain;' in css
     assert '.lead { position:relative; margin:10px 0; background:#15130f;' in css
+
+
+# --- final review fixes (2026-09-27) ---
+
+def test_flip_script_leaves_browser_shortcuts_and_pinches_alone():
+    """Review: Alt/Cmd+Left is the browser's Back, and a pinch on the photo is a
+    zoom — neither may flip the page. Behaviour is proven in a browser
+    (docs/superpowers/plans/2026-09-27-knife-page.md, final review); this pins the guards."""
+    js = publish._FLIP_SCRIPT
+    assert 'ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey' in js
+    assert 'ev.touches.length > 1' in js
+    assert 'visualViewport' in js
