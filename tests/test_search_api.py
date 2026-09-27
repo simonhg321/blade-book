@@ -34,7 +34,20 @@ def test_empty_q_returns_everything(client, con):
     assert j['count'] == 1 and len(j['knives']) == 1
 
 
-def test_filters_402_for_anonymous_and_free(client, con, mailer):
+def test_filters_are_open_to_everyone_during_early_access(client, con, mailer, monkeypatch):
+    """2026-09-26, Simon: 'make sure this stays free and open for now … once we get 50
+    people we can think about charging.' With the hard gate off (the default) the read
+    gate is open too: anonymous and free accounts can use every filter."""
+    monkeypatch.delenv('BLADEBOOK_HARD_GATE', raising=False)
+    _seed(con)
+    assert client.get(S + '?year_from=2005').status_code == 200
+    signed_in(client, mailer, email='free@example.com')
+    assert client.get(S + '?smith=devin').status_code == 200
+    assert client.get(S + '?who_min=2').status_code == 200
+
+
+def test_filters_402_for_anonymous_and_free(client, con, mailer, monkeypatch):
+    monkeypatch.setenv('BLADEBOOK_HARD_GATE', '1')
     _seed(con)
     assert client.get(S + '?year_from=2005').status_code == 402
     signed_in(client, mailer, email='free@example.com')   # sub_status defaults 'free'

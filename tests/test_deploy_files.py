@@ -427,7 +427,7 @@ def test_intake_page_gate_wiring():
     for needle in ("'/billing'", 'free_old_left', 'account_free_days_left', 'id="paywall"', '<dialog',
                    'res.status === 402', 'res.j.price', 'res.j.contact', 'EARLY ACCESS', "'mailto:' +",
                    'older than 12 months', 'free older-knife save', 'needs a subscription',
-                   'hard_gate', 'less than a year old'):
+                   'hard_gate', 'Free during early access'):
         assert needle in html, needle
     assert 'Free while we are in early access' not in html
     assert '@blade-book' not in html          # the address comes from the API, never the page
@@ -719,3 +719,15 @@ def test_signed_in_audit_fixes_2026_09_21():
     me = _read('html/me/index.html')
     assert "' knife' + (" not in me and me.count("' knives')") == 2          # "0 knifes" / "3 knifes made public"
     assert 'a.btn{display:inline-block;text-decoration:none}' in _read('html/me/settings/index.html')
+
+
+def test_public_copy_says_free_during_early_access():
+    """2026-09-26, Simon: free and open for now; charging is a conversation at ~50
+    collectors. The FAQ and the about page must not read like a bill."""
+    faq = _read('html/faq/index.html')
+    about = _read('html/about/index.html')
+    for page in (faq, about):
+        assert 'free during early access' in page.lower()
+        assert 'After that blade-book is a subscription' not in page
+        assert 'After that, blade-book is the price above' not in page
+    assert 'hear it from us first' in faq and 'id="price"' in faq

@@ -13,12 +13,13 @@ Never gated: editing, publishing, wants, board, export, delete. A live knife
 never locks. Paid search filters are the only READ gate (bb/routes/search.py).
 No admin bypass here — Simon is flipped 'active' by scripts/sub.py.
 
-SOFT GATE (early access, 2026-09-25): while we cook out the bugs the gate is
-a NOTICE, not a wall. A save that would have been refused goes through with
-Gate.notice set ("please add a knife less than a year old next time") and
-still spends a slot, so the counter is exact the day we flip the wall on.
-Flip: BLADEBOOK_HARD_GATE=1 in /etc/blade-book/.env + restart — Simon's call,
-around 10–15 subscribers. Subscribers and young knives never see the notice.
+SOFT GATE (early access, 2026-09-25; opened fully 2026-09-26): while the hard
+gate is off blade-book is FREE AND OPEN. A save that would have been refused
+goes through with Gate.notice set (one friendly line, no meter) and still
+spends a slot, so the counter is exact the day we flip the wall on. The read
+gate (search filters) and the free decode cap are open too — see hard_gate()
+callers. Flip: BLADEBOOK_HARD_GATE=1 in /etc/blade-book/.env + restart —
+Simon's call, "once we get 50 people we can think about charging".
 
 Billing impls share one method, set_status(con, user_id, status). v1 is
 ManualBilling (an admin flips the column). StripeBilling later: Checkout
@@ -42,12 +43,10 @@ REASON_ACCOUNT = ('your account is over a year old — adding knives now needs a
 REASON_OLD = ('this knife is older than 12 months (or undated) and your 3 free older-knife '
               'saves are used — adding it needs a subscription (early access: email us and '
               'we will turn it on)')
-NOTICE_ACCOUNT = ('your account is over a year old — saved anyway while we are in early access. '
-                  'Please add a knife less than a year old next time; older knives will need a '
-                  'subscription once early access ends')
-NOTICE_OLD = ('this knife is older than 12 months (or undated) and your 3 free older-knife saves '
-              'are used — saved anyway while we are in early access. Please add a knife less than '
-              'a year old next time; older knives will need a subscription once early access ends')
+# Early access copy (2026-09-26, Simon: "free and open for now … once we get 50 people we
+# can think about charging"). No meter, no bill, no nag: one friendly line.
+NOTICE_ACCOUNT = ('blade-book is free during early access. We will tell you before that changes.')
+NOTICE_OLD = ('blade-book is free during early access. We will tell you before that changes.')
 TRUE_WORDS = ('1', 'true', 'yes', 'on')
 
 

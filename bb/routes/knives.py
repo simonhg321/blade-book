@@ -346,7 +346,9 @@ def decode_knife(knife_id):
         maker = k.get('maker') or 'crk'
         if maker not in makers.MAKERS:
             return jsonify({'error': 'unknown maker'}), 400
-        cap = PAID_DECODES_PER_DAY if g.user.get('sub_status') == 'active' else FREE_DECODES_PER_DAY
+        # early access (hard gate off): everyone gets the paid cap — a box of knives is not stopped at 20
+        paid = g.user.get('sub_status') == 'active' or not billing.hard_gate()
+        cap = PAID_DECODES_PER_DAY if paid else FREE_DECODES_PER_DAY
         if db.decodes_today(con, owner) >= cap:
             return jsonify({'error': f'{cap} decodes today already — try again tomorrow'}), 429
         if db.decodes_last_minute(con, owner) >= db.DECODES_PER_MINUTE:

@@ -66,8 +66,28 @@ def test_decode_unauth_is_401(client):
     assert client.post(f'{K}/1/decode').status_code == 401
 
 
+def test_free_accounts_get_the_paid_decode_cap_during_early_access(client, mailer, decoder, monkeypatch):
+    """Free and open (2026-09-26): with the hard gate off a free account decodes up
+    to the paid cap, so a collector with a box of knives is not stopped at 20."""
+    from bb.routes import knives as kr
+    monkeypatch.delenv('BLADEBOOK_HARD_GATE', raising=False)
+    monkeypatch.setattr(db, 'DECODES_PER_MINUTE', 10 ** 6)
+    kid = _draft_with_photo(client, mailer)
+    con = db.connect()
+    for _ in range(kr.FREE_DECODES_PER_DAY):
+        db.record_decode_call(con, 1, kid)
+    con.close()
+    assert client.post(f'{K}/{kid}/decode').status_code == 200
+    con = db.connect()
+    for _ in range(kr.PAID_DECODES_PER_DAY):
+        db.record_decode_call(con, 1, kid)
+    con.close()
+    assert client.post(f'{K}/{kid}/decode').status_code == 429
+
+
 def test_decode_daily_cap_free_vs_paid(client, mailer, decoder, monkeypatch):
     from bb.routes import knives as kr
+    monkeypatch.setenv('BLADEBOOK_HARD_GATE', '1')
     monkeypatch.setattr(db, 'DECODES_PER_MINUTE', 10 ** 6)             # daily cap under test, not the burst limiter
     kid = _draft_with_photo(client, mailer)
     con = db.connect()

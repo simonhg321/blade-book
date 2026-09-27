@@ -105,8 +105,8 @@ def test_soft_gate_lets_a_fourth_old_knife_in_with_a_notice_and_still_counts_it(
     g = billing.can_add(_user(free_old_used=3), born, TODAY)
     assert g.ok and g.reason is None
     assert g.charge, 'the free ride still ticks the counter so the hard gate is right when we flip it'
-    assert 'less than a year old' in g.notice and 'early access' in g.notice.lower()
-    assert 'subscription' in g.notice
+    assert 'free during early access' in g.notice.lower() and 'tell you before' in g.notice.lower()
+    assert 'subscription' not in g.notice and '3 free' not in g.notice     # no meter, no bill (2026-09-26)
     # slots 1–3 are ordinary free saves: no notice
     assert billing.can_add(_user(free_old_used=2), born, TODAY).notice is None
 
@@ -114,7 +114,7 @@ def test_soft_gate_lets_a_fourth_old_knife_in_with_a_notice_and_still_counts_it(
 def test_soft_gate_lets_an_over_a_year_account_in_with_a_notice(soft):
     g = billing.can_add(_user(created_days_ago=400), '2026-09-01', TODAY)
     assert g.ok and g.reason is None and not g.charge
-    assert 'over a year old' in g.notice and 'less than a year old' in g.notice
+    assert 'free during early access' in g.notice.lower()
     g = billing.can_add(_user(created_days_ago=400, free_old_used=3), '2008-01-01', TODAY)
     assert g.ok and g.charge and g.notice
 

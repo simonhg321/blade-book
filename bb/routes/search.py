@@ -2,13 +2,14 @@
 """GET /blade-book/api/search — public, auth optional (spec §9).
 Free: text search + card-lite results + aggregate counts.
 Paid (sub_status 'active' or admin): year range, damascus smith/pattern,
-special edition, who-has-≥N. The ONLY read gate in the product (spec §10).
+special edition, who-has-≥N. The ONLY read gate in the product (spec §10),
+and only when billing.hard_gate() is on — free and open during early access.
 The write gate is bb/billing.can_add at save."""
 import logging
 
 from flask import Blueprint, jsonify, request
 
-from bb import auth, db, paths, search
+from bb import auth, billing, db, paths, search
 
 bp = Blueprint('search', __name__, url_prefix=paths.API_PREFIX + '/search')
 log = logging.getLogger('blade-book.search')
@@ -21,7 +22,7 @@ def search_route():
     con = db.connect()
     try:
         wants_filters = any(request.args.get(p) for p in FILTER_PARAMS)
-        if wants_filters:
+        if wants_filters and billing.hard_gate():        # early access: filters are open to everyone
             user = auth.current_user(con)
             if not (user and (user.get('sub_status') == 'active' or user.get('is_admin'))):
                 return jsonify({'error': "filters are early-access — email us and we'll turn them on"}), 402

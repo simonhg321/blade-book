@@ -186,12 +186,12 @@
   // warning back every time, using the last billing summary we fetched).
   // Early access (billing.hard_gate false): the gate is a notice, not a wall —
   // the save goes through, the copy just asks for a younger knife next time.
-  var ASK_YOUNG = ' Please add a knife less than a year old next time; older knives will need a subscription once early access ends.';
+  var FREE_NOW = 'Free during early access. We will tell you before that changes.';
   function applyAccountNote() {
     if (billing && billing.ok && !billing.j.active && billing.j.account_free_days_left === 0) {
       $('agenote').textContent = billing.j.hard_gate
         ? 'Your account is over a year old — saving new knives needs a subscription.'
-        : 'Your account is over a year old. Early access: we will save it anyway.' + ASK_YOUNG;
+        : FREE_NOW;
       $('agenote').style.display = 'block';
     }
   }
@@ -448,9 +448,9 @@
             // with free_old_left > 0, so that check must come first here too.
             if (b.j.active) $('agenote').textContent = born + 'older than 12 months. Covered by your subscription.';
             else if (b.j.account_free_days_left === 0) applyAccountNote();
+            else if (!b.j.hard_gate) $('agenote').textContent = '';        // early access: no meter, no countdown
             else if (b.j.free_old_left > 0) $('agenote').textContent = born + 'older than 12 months. Saving uses 1 of your ' + b.j.free_old_allowance + ' free older-knife saves (' + b.j.free_old_left + ' left).';
-            else if (b.j.hard_gate) $('agenote').textContent = born + 'older than 12 months and your free older-knife saves are used — saving needs a subscription.';
-            else $('agenote').textContent = born + 'older than 12 months and your free older-knife saves are used. Early access: we will save it anyway.' + ASK_YOUNG;
+            else $('agenote').textContent = born + 'older than 12 months and your free older-knife saves are used — saving needs a subscription.';
             $('agenote').style.display = $('agenote').textContent ? 'block' : 'none';
           }).catch(function () {});
         } else applyAccountNote();

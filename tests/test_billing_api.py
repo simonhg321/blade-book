@@ -91,7 +91,7 @@ def test_soft_gate_saves_the_fourth_old_knife_with_a_notice(soft, client, mailer
     r = client.post(f"{K}/{k['id']}/save")
     assert r.status_code == 200
     j = r.get_json()
-    assert j['status'] == 'live' and 'less than a year old' in j['notice']
+    assert j['status'] == 'live' and 'free during early access' in j['notice'].lower()
     assert db.get_user(con, me['id'])['free_old_used'] == 4
     # an ordinary free save carries no notice
     k2 = _draft(con, me['id'], born='2026-08-01')
@@ -111,7 +111,7 @@ def test_soft_gate_saves_for_an_over_a_year_account(soft, client, mailer, con):
     _user(con, me, created='2020-01-01T00:00:00+00:00')
     k = _draft(con, me['id'], born='2026-08-01')
     r = client.post(f"{K}/{k['id']}/save")
-    assert r.status_code == 200 and 'over a year old' in r.get_json()['notice']
+    assert r.status_code == 200 and 'free during early access' in r.get_json()['notice'].lower()
     assert db.get_user(con, me['id'])['free_old_used'] == 0
 
 

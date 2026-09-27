@@ -19,6 +19,7 @@ W = '/blade-book/api/wants'
 # --- H1: decode quota counts ATTEMPTS and survives knife deletion ---------------
 
 def test_decode_cap_survives_knife_deletion(client, mailer, decoder, monkeypatch):
+    monkeypatch.setenv('BLADEBOOK_HARD_GATE', '1')   # the free cap under test; early access lifts it
     monkeypatch.setattr(db, 'DECODES_PER_MINUTE', 10 ** 6)          # the daily cap is what's under test
     kid = _draft_with_photo(client, mailer)
     for _ in range(kr.FREE_DECODES_PER_DAY):
@@ -31,6 +32,7 @@ def test_decode_cap_survives_knife_deletion(client, mailer, decoder, monkeypatch
 
 
 def test_failed_decodes_count_toward_cap(client, mailer, app, monkeypatch):
+    monkeypatch.setenv('BLADEBOOK_HARD_GATE', '1')   # the free cap under test; early access lifts it
     monkeypatch.setattr(db, 'DECODES_PER_MINUTE', 10 ** 6)
     app.config['DECODER'] = decode.FakeDecoder(decode.DecodeError('model refused'))
     kid = _draft_with_photo(client, mailer)
