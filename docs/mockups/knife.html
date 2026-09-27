@@ -1,0 +1,255 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>blade-book — the knife leads (napkin)</title>
+<link rel="stylesheet" href="/vibe.css">
+<style>
+  body{background:var(--cream)}
+  h1,h2,h3{font-family:'Bebas Neue',sans-serif;font-weight:400;letter-spacing:.03em;line-height:1;margin:0}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 16px}
+  /* ── napkin chrome: what this page is, and the jump links ── */
+  .napkin{background:var(--ink);color:var(--cream);padding:18px 0 16px}
+  .napkin h1{font-size:clamp(2rem,6vw,3.2rem)}
+  .napkin h1 em{font-style:normal;color:#f0a58f}
+  .napkin p{margin:6px 0 0;color:#cfc8b8;max-width:60ch;font-size:.95rem}
+  .jump{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  .jump a{color:var(--cream);text-decoration:none;border:1.5px solid #6b665c;border-radius:999px;padding:.35rem .8rem;font-size:.82rem;font-weight:700;letter-spacing:.04em}
+  section{padding:34px 0;border-bottom:2px solid var(--ink)}
+  .kick{font-size:.72rem;letter-spacing:.2em;text-transform:uppercase;color:var(--accent);font-weight:700;margin:0 0 6px}
+  section>.wrap>h2{font-size:clamp(1.9rem,5vw,2.8rem);margin-bottom:6px}
+  .lede{color:var(--muted);max-width:66ch;margin:0 0 18px}
+  .note{font-size:.84rem;color:var(--muted);margin:8px 0 0}
+  .note b{color:var(--ink)}
+
+  /* ── 1 · the knife page a stranger lands on ── */
+  .frame{border:2px solid var(--ink);border-radius:18px;overflow:hidden;background:var(--cream);box-shadow:0 14px 40px rgba(0,0,0,.12)}
+  .bar{display:flex;align-items:center;gap:14px;padding:10px 14px;background:#fff;border-bottom:2px solid var(--ink)}
+  .bar .brand{display:flex;align-items:center;gap:7px;font-family:'Bebas Neue',sans-serif;font-size:1.35rem;letter-spacing:.04em;text-decoration:none}
+  .bar .brand img{width:22px;height:22px}
+  .bar .whose{font-size:.86rem;color:var(--muted);text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bar .whose b{color:var(--ink)}
+  .bar nav{margin-left:auto;display:flex;gap:14px;font-size:.86rem;align-items:center}
+  .bar nav a{text-decoration:none}
+  .bar nav a.in{border:2px solid var(--ink);border-radius:999px;padding:.25rem .7rem;font-weight:700}
+  .lead{position:relative;background:#15130f}
+  .lead img{display:block;width:100%;max-height:78vh;object-fit:contain;margin:0 auto}
+  .flip{position:absolute;top:50%;transform:translateY(-50%);width:46px;height:64px;border:0;border-radius:12px;background:rgba(250,246,238,.92);color:var(--ink);font-size:1.5rem;font-weight:700;cursor:pointer;display:grid;place-items:center;text-decoration:none;box-shadow:0 4px 14px rgba(0,0,0,.35)}
+  .flip.prev{left:10px}.flip.next{right:10px}
+  .count{position:absolute;left:50%;top:12px;transform:translateX(-50%);background:rgba(21,19,15,.72);color:var(--cream);font-size:.74rem;letter-spacing:.14em;padding:.3rem .7rem;border-radius:999px;white-space:nowrap}
+  .body{display:grid;grid-template-columns:1.25fr 1fr;gap:28px;padding:22px 22px 26px}
+  .tag{color:var(--accent);font-weight:700;letter-spacing:.14em;margin:0 0 2px}
+  .body h2{font-size:clamp(2.2rem,5.4vw,3.4rem)}
+  .body h2 span{color:var(--accent)}
+  .by{color:var(--muted);margin:8px 0 14px;font-size:.95rem}
+  .by a{color:var(--ink);font-weight:700}
+  .spec{width:100%;border-collapse:collapse;font-size:.95rem}
+  .spec th{text-align:left;font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);padding:9px 0;width:40%;border-bottom:1px solid var(--line);font-weight:700}
+  .spec td{padding:9px 0;border-bottom:1px solid var(--line);font-weight:600}
+  .record{background:#fff;border:2px solid var(--ink);border-radius:14px;padding:12px}
+  .record h3{font-size:1.25rem;display:flex;justify-content:space-between;align-items:baseline}
+  .record h3 small{font-family:'DM Sans',sans-serif;font-size:.7rem;letter-spacing:.12em;color:var(--ok);font-weight:700}
+  .record p{font-size:.84rem;color:var(--muted);margin:4px 0 10px}
+  .record img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;object-position:50% 58%;border-radius:8px;border:1px solid var(--line)}
+  .record a{display:block;position:relative}
+  .record a::after{content:'see the whole card shot ↗';position:absolute;right:8px;bottom:8px;background:rgba(21,19,15,.78);color:var(--cream);font-size:.72rem;font-weight:700;letter-spacing:.06em;padding:.28rem .6rem;border-radius:999px}
+  .kit{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+  .kit span{font-size:.72rem;font-weight:700;letter-spacing:.06em;border:1.5px solid var(--ink);border-radius:999px;padding:.18rem .55rem}
+  .more{padding:0 22px 24px}
+  .more h3{font-size:1.3rem;margin-bottom:10px;display:flex;justify-content:space-between;align-items:baseline}
+  .more h3 a{font-family:'DM Sans',sans-serif;font-size:.84rem;color:var(--accent);font-weight:700;text-decoration:none}
+  .strip{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(150px,1fr);gap:10px;overflow-x:auto;padding-bottom:6px;scroll-snap-type:x mandatory}
+  .strip a{scroll-snap-align:start}
+  .join{margin:0 22px 24px;background:var(--ink);color:var(--cream);border-radius:14px;padding:16px 18px;display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+  .join b{font-family:'Bebas Neue',sans-serif;font-weight:400;font-size:1.5rem;letter-spacing:.03em}
+  .join span{display:block;font-size:.86rem;color:#cfc8b8}
+  .join .btn{text-decoration:none}
+
+  /* knife tile — used by the strip and the shelf */
+  .tile{display:block;text-decoration:none;border:2px solid var(--ink);border-radius:12px;overflow:hidden;background:#fff}
+  .tile img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;background:#15130f}
+  .tile div{padding:7px 9px 9px;font-size:.8rem;line-height:1.25}
+  .tile div b{display:block;font-size:.84rem}
+  .tile div i{font-style:normal;color:var(--accent);font-weight:700}
+  .tile div span{color:var(--muted);font-size:.74rem}
+
+  /* ── 2 · the shelf, today vs knife-leads ── */
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+  .two h3{font-size:1.4rem;margin-bottom:10px}
+  .two h3 small{font-family:'DM Sans',sans-serif;font-size:.78rem;color:var(--muted);letter-spacing:0;margin-left:6px}
+  .shelf{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+
+  /* ── 3 · the marks ── */
+  .marks{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  figure{margin:0;background:#fff;border:2px solid var(--ink);border-radius:14px;overflow:hidden}
+  figure.pick{border-color:var(--accent);box-shadow:0 0 0 3px rgba(184,69,44,.18)}
+  figure a{display:block;background:#15130f}
+  figure img{display:block;width:100%}
+  figcaption{padding:11px 13px 13px;font-size:.86rem;color:var(--muted)}
+  figcaption b{display:block;font-family:'Bebas Neue',sans-serif;font-weight:400;font-size:1.35rem;letter-spacing:.03em;color:var(--ink)}
+  figcaption b em{font-style:normal;font-family:'DM Sans',sans-serif;font-size:.66rem;font-weight:700;letter-spacing:.14em;background:var(--accent);color:#fff;border-radius:999px;padding:.18rem .5rem;vertical-align:middle;margin-left:6px}
+  .pc{display:grid;grid-template-columns:auto 1fr;gap:2px 8px;margin-top:6px;font-size:.8rem}
+  .pc i{font-style:normal;font-weight:700;color:var(--ok)}
+  .pc i.no{color:var(--accent)}
+  .recs{display:grid;grid-template-columns:1fr 1fr;gap:18px;max-width:820px}
+  .honest{background:#fff;border-left:5px solid var(--warn);padding:12px 14px;border-radius:0 10px 10px 0;max-width:70ch;font-size:.9rem;margin-top:18px}
+
+  /* ── 4 · open questions ── */
+  ol.q{max-width:70ch;padding-left:1.2rem;margin:0}
+  ol.q li{margin:0 0 10px}
+  ol.q li b{display:block}
+  ol.q li span{color:var(--muted);font-size:.9rem}
+
+  @media (max-width:760px){
+    .body{grid-template-columns:1fr;padding:16px 14px 18px;gap:18px}
+    .more,.join{margin-left:14px;margin-right:14px}.more{padding:0 0 18px}
+    .bar .whose{display:none}
+    .bar nav{gap:10px;font-size:.8rem}
+    .two,.marks{grid-template-columns:1fr}
+    .shelf{grid-template-columns:repeat(2,1fr)}
+    .flip{width:38px;height:54px}
+  }
+</style>
+
+<header class="napkin"><div class="wrap">
+  <h1>The knife <em>leads.</em></h1>
+  <p>A napkin, not a build. One knife page as a stranger would land on it from a forum link, the shelf it opens onto, and four ways to mark a photo. Real photos, K80 and its neighbours. Nothing here is live.</p>
+  <div class="jump"><a href="#page">1 · the page</a><a href="#shelf">2 · the shelf</a><a href="#marks">3 · the marks</a><a href="#open">4 · open questions</a></div>
+</div></header>
+
+<section id="page"><div class="wrap">
+  <p class="kick">1 · the front door</p>
+  <h2>A stranger taps a link. This is what they get.</h2>
+  <p class="lede">Look, check, wander, want one — in that order. The knife first, the card under it as the proof, the next knife one tap away.</p>
+
+  <div class="frame">
+    <div class="bar">
+      <a class="brand" href="#page"><img src="/mark.svg" alt="">BLADE-BOOK</a>
+      <a class="whose" href="#shelf">in <b>@simon-collector</b>’s register · 81 knives</a>
+      <nav><a href="#page">search</a><a href="#page">the board</a><a class="in" href="#page">sign in</a></nav>
+    </div>
+    <div class="lead">
+      <img src="knife/d-etched-plate.jpg" alt="Large Sebenza 21 — Glorious">
+      <span class="count">K80 · 74 OF 81</span>
+      <a class="flip prev" href="#page" aria-label="previous knife">‹</a>
+      <a class="flip next" href="#page" aria-label="next knife">›</a>
+    </div>
+    <div class="body">
+      <div>
+        <p class="tag">K80</p>
+        <h2>Large Sebenza 21 — <span>Glorious</span></h2>
+        <p class="by">born February 6, 2014 · in <a href="#shelf">@simon-collector</a>’s register since September 2026</p>
+        <table class="spec">
+          <tr><th>Maker</th><td>Chris Reeve Knives</td></tr>
+          <tr><th>Graphic</th><td>CGG “Glorious”</td></tr>
+          <tr><th>Blade</th><td>Drop point · S35VN</td></tr>
+          <tr><th>Handle</th><td>Titanium</td></tr>
+        </table>
+      </div>
+      <div class="record">
+        <h3>The record <small>✓ CARD READ</small></h3>
+        <p>The birth card, as it came in the box. Every line above was read from it.</p>
+        <a href="knife/record.jpg"><img src="knife/record.jpg" alt="K80 birth card, box and kit" loading="lazy"></a>
+        <div class="kit"><span>BOX</span><span>CARD</span><span>PAPERS</span><span>CLOTH</span><span>LANYARD</span></div>
+      </div>
+    </div>
+    <div class="more">
+      <h3>More from this register <a href="#shelf">all 81 →</a></h3>
+      <div class="strip">
+        <a class="tile" href="#page"><img src="knife/tile-K79.jpg" alt=""><div><b><i>K79</i> Small Sebenza 31</b>Annual 2024 “Galactic Bacon”</div></a>
+        <a class="tile" href="#page"><img src="knife/tile-K82.jpg" alt=""><div><b><i>K82</i> Large Sebenza Regular</b>2007 Edition</div></a>
+        <a class="tile" href="#page"><img src="knife/tile-K89.jpg" alt=""><div><b><i>K89</i> Large Sebenza 31</b>Lunar Landing</div></a>
+        <a class="tile" href="#page"><img src="knife/tile-K75.jpg" alt=""><div><b><i>K75</i> Small Sebenza 31</b>Night Sky</div></a>
+        <a class="tile" href="#page"><img src="knife/tile-K78.jpg" alt=""><div><b><i>K78</i> Small Sebenza 31</b>Annual 2023</div></a>
+      </div>
+    </div>
+    <div class="join">
+      <div><b>Your knives deserve a page like this.</b><span>One photo of the knife with its card. We read the card.</span></div>
+      <a class="btn accent" href="#page">START YOUR REGISTER</a>
+    </div>
+  </div>
+  <p class="note"><b>On a phone</b> the arrows become a swipe. <b>The crop</b> is cut from the card shot you already took — we propose it, the owner says yes or nudges the box. A real beauty shot replaces it whenever they add one.</p>
+</div></section>
+
+<section id="shelf"><div class="wrap">
+  <p class="kick">2 · the shelf</p>
+  <h2>Same eight knives. Same photos.</h2>
+  <p class="lede">Nothing was re-shot. The right side is the left side, cropped to the knife, with the name of the graphic put back.</p>
+  <div class="two">
+    <div>
+      <h3>Today <small>five of these are called “Small Sebenza 31”</small></h3>
+      <div class="shelf">
+        <a class="tile" href="#shelf"><img src="/@simon-collector/img/K75_t.jpg" alt=""><div><b>Small Sebenza 31</b><span>born June 23, 2026</span></div></a>
+        <a class="tile" href="#shelf"><img src="/@simon-collector/img/K76_t.jpg" alt=""><div><b>Small Sebenza 31</b><span>born June 8, 2026</span></div></a>
+        <a class="tile" href="#shelf"><img src="/@simon-collector/img/K77_t.jpg" alt=""><div><b>Small Sebenza 31</b><span>born November 24, 2025</span></div></a>
+        <a class="tile" href="#shelf"><img src="/@simon-collector/img/K78_t.jpg" alt=""><div><b>Small Sebenza 31</b><span>born September 26, 2023</span></div></a>
+        <a class="tile" href="#shelf"><img src="/@simon-collector/img/K79_t.jpg" alt=""><div><b>Small Sebenza 31</b><span>born July 8, 2024</span></div></a>
+        <a class="tile" href="#shelf"><img src="/@simon-collector/img/K82_t.jpg" alt=""><div><b>Large Sebenza Regular</b><span>born October 29, 2007</span></div></a>
+        <a class="tile" href="#shelf"><img src="/@simon-collector/img/K84_t.jpg" alt=""><div><b>McNees Knives MAC 2</b><span>born circa 2023</span></div></a>
+        <a class="tile" href="#shelf"><img src="/@simon-collector/img/K89_t.jpg" alt=""><div><b>Large Sebenza 31</b><span>born January 27, 2021</span></div></a>
+      </div>
+    </div>
+    <div>
+      <h3>The knife leads</h3>
+      <div class="shelf">
+        <a class="tile" href="#shelf"><img src="knife/tile-K75.jpg" alt=""><div><b><i>K75</i> Night Sky</b><span>Small Sebenza 31 · 2026</span></div></a>
+        <a class="tile" href="#shelf"><img src="knife/tile-K76.jpg" alt=""><div><b><i>K76</i> Small Sebenza 31</b><span>inlay · 2026</span></div></a>
+        <a class="tile" href="#shelf"><img src="knife/tile-K77.jpg" alt=""><div><b><i>K77</i> Annual 2025</b><span>Small Sebenza 31 · 2025</span></div></a>
+        <a class="tile" href="#shelf"><img src="knife/tile-K78.jpg" alt=""><div><b><i>K78</i> Annual 2023</b><span>Small Sebenza 31 · 2023</span></div></a>
+        <a class="tile" href="#shelf"><img src="knife/tile-K79.jpg" alt=""><div><b><i>K79</i> Galactic Bacon</b><span>Small Sebenza 31 · Annual 2024</span></div></a>
+        <a class="tile" href="#shelf"><img src="knife/tile-K82.jpg" alt=""><div><b><i>K82</i> 2007 Edition</b><span>Large Sebenza Regular · 2007</span></div></a>
+        <a class="tile" href="#shelf"><img src="knife/tile-K84.jpg" alt=""><div><b><i>K84</i> Atomic Shockwave</b><span>McNees MAC 2 · 2023</span></div></a>
+        <a class="tile" href="#shelf"><img src="knife/tile-K89.jpg" alt=""><div><b><i>K89</i> Lunar Landing</b><span>Large Sebenza 31 · 2021</span></div></a>
+      </div>
+    </div>
+  </div>
+  <p class="note"><b>Rough crops.</b> I boxed these by eye in a minute; a couple clip the tip or the lanyard. That is the owner’s nudge to make.</p>
+</div></section>
+
+<section id="marks"><div class="wrap">
+  <p class="kick">3 · the marks</p>
+  <h2>Four ways to mark the knife.</h2>
+  <p class="lede">Same crop each time. Tap any one for full size — judge them big, that is how a scammer would lift them.</p>
+  <div class="marks">
+    <figure>
+      <a href="knife/a-today.jpg"><img src="knife/a-today.jpg" alt="" loading="lazy"></a>
+      <figcaption><b>A · Today</b>White bold type, diagonal, repeated. The stock-photo look.
+        <div class="pc"><i>+</i><span>hard to crop out</span><i class="no">−</i><span>runs over the graphic; reads as “sample”</span></div></figcaption>
+    </figure>
+    <figure>
+      <a href="knife/b-etched.jpg"><img src="knife/b-etched.jpg" alt="" loading="lazy"></a>
+      <figcaption><b>B · Etched</b>One line in the site’s own type, pressed into the photo so it takes the photo’s tones.
+        <div class="pc"><i>+</i><span>reads like the embossing on the cloth</span><i class="no">−</i><span>quiet; easy to miss at thumbnail size</span></div></figcaption>
+    </figure>
+    <figure>
+      <a href="knife/c-plate.jpg"><img src="knife/c-plate.jpg" alt="" loading="lazy"></a>
+      <figcaption><b>C · The plate</b>Photo untouched. A cream plate under it names the knife and the page it lives on.
+        <div class="pc"><i>+</i><span>prettiest; a buyer can check the link</span><i class="no">−</i><span>one crop and it is gone</span></div></figcaption>
+    </figure>
+    <figure class="pick">
+      <a href="knife/d-etched-plate.jpg"><img src="knife/d-etched-plate.jpg" alt="" loading="lazy"></a>
+      <figcaption><b>D · Etched + plate <em>SKY’S PICK</em></b>The plate does the talking, the etch stays if the plate is cropped.
+        <div class="pc"><i>+</i><span>looks owned, not stamped</span><i class="no">−</i><span>the etch is still the weaker half</span></div></figcaption>
+    </figure>
+  </div>
+
+  <h2 style="margin-top:34px;font-size:clamp(1.6rem,4vw,2.2rem)">The card shot carries the heavy mark.</h2>
+  <p class="lede">The full card shot is what a scammer wants: knife, card and kit in one frame. It sits lower on the page now, so it can carry more.</p>
+  <div class="recs">
+    <figure><a href="knife/record-today.jpg"><img src="knife/record-today.jpg" alt="" loading="lazy"></a><figcaption><b>Today</b>Three white lines.</figcaption></figure>
+    <figure class="pick"><a href="knife/record.jpg"><img src="knife/record.jpg" alt="" loading="lazy"></a><figcaption><b>Napkin</b>Etched repeat over everything, plate below.</figcaption></figure>
+  </div>
+  <p class="honest"><b>The honest part.</b> No watermark stops a determined thief; tools erase them in seconds now. A mark stops the lazy one. What actually protects a buyer is the page: “ask the seller for their blade-book link” is a check a scammer cannot pass. The plate teaches that habit every time a photo travels.</p>
+</div></section>
+
+<section id="open" style="border-bottom:0"><div class="wrap">
+  <p class="kick">4 · yours to call</p>
+  <h2>Open questions</h2>
+  <ol class="q">
+    <li><b>Which mark?</b><span>A, B, C or D — or a mix, such as plate only on the knife and the etch on the card shot.</span></li>
+    <li><b>Who finds the knife in the photo?</b><span>We propose a box and the owner nudges it, or the owner draws it. We never pick a face for them.</span></li>
+    <li><b>The name: graphic first, or model first?</b><span>“Lunar Landing · Large Sebenza 31” or “Large Sebenza 31 — Lunar Landing”.</span></li>
+    <li><b>Does the card shot stay public by default?</b><span>It is the proof, and it is also the scammer’s prize. It could show only to signed-in collectors.</span></li>
+    <li><b>Flip order.</b><span>Next and previous follow the shelf: by maker, by birth date, or the owner’s own order.</span></li>
+  </ol>
+</div></section>
