@@ -51,3 +51,13 @@ a{color:var(--ink)}
 .bb-nav a{color:var(--muted);text-decoration:none}
 .bb-nav a.add{color:var(--accent);font-weight:700}
 .bb-nav .btn.link{padding:0}
+/* the top bar (2026-09-27): one nav on every public page */
+.bb-top{display:flex;align-items:center;gap:14px;padding:10px 16px;background:#fff;border-bottom:2px solid var(--ink);text-align:left}
+.bb-top .brand{display:flex;align-items:center;gap:7px;font-family:'Bebas Neue',Impact,sans-serif;font-size:1.35rem;letter-spacing:.04em;font-weight:400;color:var(--ink);text-decoration:none}
+.bb-top .brand img{width:22px;height:22px}
+.bb-top .whose{font-size:.86rem;font-weight:400;color:var(--muted);text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.bb-top .whose b{color:var(--ink)}
+.bb-top nav{margin-left:auto;display:flex;gap:14px;align-items:center;font-size:.86rem;white-space:nowrap}
+.bb-top nav a{color:var(--ink);font-weight:400;text-decoration:none}
+.bb-top nav a.bb-auth{border:2px solid var(--ink);border-radius:999px;padding:.25rem .7rem;font-weight:700}
+@media (max-width:640px){.bb-top .whose{display:none}.bb-top nav{gap:10px;font-size:.8rem}}
