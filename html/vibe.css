@@ -39,10 +39,6 @@ a{color:var(--ink)}
 .bb-foot img,.bb-foot svg{vertical-align:-4px;margin-right:2px}
 .bb-foot a{color:var(--muted);text-decoration:underline}
 .bb-foot a.bb-auth{color:var(--accent);font-weight:700;text-decoration:none}
-/* top twin of the strip, for long public pages (the board) whose footer is many screens down */
-.bb-strip{margin:0 0 18px;text-align:center;font-size:.78rem;color:var(--muted);line-height:1.8}
-.bb-strip a{color:var(--muted);text-decoration:underline}
-.bb-strip a.bb-auth{color:var(--accent);font-weight:700;text-decoration:none}
 .bb-head{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:6px 10px;margin-bottom:6px}
 .bb-head h1{font-size:2.2rem;margin:0;white-space:nowrap}
 .bb-head h1 .bbmark{vertical-align:-4px;margin-right:6px}

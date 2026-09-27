@@ -569,24 +569,26 @@ def test_public_pages_share_the_footer_strip():
     assert "' knives'" in _read('html/search/index.html') and 'knifes' not in _read('html/search/index.html')
 
 
-def test_board_carries_a_top_strip_too():
-    """The board is the one public page whose footer sits many screens down
-    (a full-photo card per listing), so it gets the strip at the top as well:
-    same six links, same order, same sign-in hook — and no other public page
-    grows a second nav."""
-    html = _read('html/board/index.html')
-    assert html.count('class="bb-strip"') == 1
-    strip = html[html.index('class="bb-strip"'):html.index('</nav>')]
-    pos = [strip.index(n) for n in STRIP_LINKS]
-    assert pos == sorted(pos), pos
-    assert html.index('class="bb-strip"') < html.index('id="cards"') < html.index('class="bb-foot"')
-    assert html.count('class="bb-auth"') == 2          # nav.js flips both to "my register"
+TOP_BAR_PAGES = ('board/index.html', 'search/index.html', 'how/index.html',
+                 'faq/index.html', 'about/index.html', 'terms/index.html')
+
+
+def test_public_pages_share_the_top_bar():
+    """One bar (2026-09-27), byte for byte what publish._topbar() writes on the
+    generated pages — so the static and generated halves cannot drift."""
+    from bb import publish
+    bar = publish._topbar().strip()
+    for rel in TOP_BAR_PAGES:
+        html = _read('html/' + rel)
+        assert html.count(bar) == 1, rel
+        # these pages are tagless HTML5 (no <body>): the bar is the first thing rendered
+        assert html.index('</style>') < html.index(bar) < html.index('<div class="page">') < html.index('<header>'), rel
+        assert html.rstrip().endswith('</div>'), rel               # .page wraps through to the end
+        assert html.count('class="bb-auth"') == 2, rel          # bar + footer; nav.js flips both
+        assert 'body{max-width' not in html.replace(' ', ''), rel   # the box moved to .page
     for rel in PUBLIC_PAGES:
-        if rel != 'board/index.html':
-            assert 'bb-strip' not in _read('html/' + rel), rel
-    css = _read('html/vibe.css')
-    for sel in ('.bb-strip{', '.bb-strip a{', '.bb-strip a.bb-auth{'):
-        assert sel in css, sel
+        assert 'bb-strip' not in _read('html/' + rel), rel      # the board's old strip is retired
+    assert '.bb-strip' not in _read('html/vibe.css')
 
 
 APP_PAGES = {'me/add/index.html': 'ADD A KNIFE', 'me/wants/index.html': 'YOUR WANTS',
