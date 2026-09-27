@@ -72,9 +72,9 @@ One bar on every public page, replacing four different navs.
 - `sign in` keeps class `bb-auth`, so `nav.js` still turns it into "my register".
 - Generated pages get it from one function in `bb/publish.py` (`_topbar(handle=None, count=None)`).
 - Static pages (`html/search`, `html/board`, `html/how`, `html/faq`, `html/about`, `html/terms`) get the same markup by hand. A test compares each page's bar with `_topbar()` so they cannot drift.
-- The landing keeps its hero. Its nav items match the bar.
+- The landing keeps its hero and its own nav: the bar's three links plus "how it works".
 - The footer strip stays as it is.
-- The register's full-bleed hero keeps its look. The bar sits over it, light on dark.
+- The register's full-bleed hero keeps its look. Search and the board join sign in at its top right, light on dark.
 
 ### 1.3 The knife page
 
@@ -87,7 +87,7 @@ Top to bottom:
 5. The spec table, as today.
 6. The owner's public story, when there is one.
 7. **The record** (Phase 2 fills this in).
-8. **More from this register:** the next five knives, as tiles.
+8. **More from this register:** the next five knives, as tiles. Near the end of the shelf the strip wraps to the start so it stays full; the arrows never wrap.
 9. "Your knives deserve a page like this" and the start button.
 
 ### 1.4 Next and previous
