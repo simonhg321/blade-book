@@ -81,7 +81,8 @@ def test_generated_pages_share_the_footer_strip(con, tmp_path):
     page = open(os.path.join(d, k['tag'], 'index.html')).read()
     _assert_strip(idx)
     _assert_strip(page)
-    assert '<p class="signin"><a class="bb-auth" href="/blade-book/me/">sign in</a></p>' in idx     # hero sign-in stays
+    assert ('<p class="signin"><a href="/blade-book/search/">search</a><a href="/blade-book/board/">the board</a>'
+            '<a class="bb-auth" href="/blade-book/me/">sign in</a></p>') in idx     # hero sign-in stays, with company
     assert 'Keep a register like this' in idx and 'Keep a register like this' in page   # CTA stays
 
 

@@ -382,6 +382,25 @@ def _foot():
             '<script src="/blade-book/nav.js?v=20260927" defer></script>\n')
 
 
+def _topbar(handle=None, count=None):
+    """The one top bar (2026-09-27). With no arguments this is, byte for byte,
+    the markup the static pages under html/ carry — tests/test_deploy_files.py
+    holds them to it. Styled by `.bb-top` in vibe.css. The mark is an <img>
+    here (not the inline svg) so static and generated pages can match exactly."""
+    e = html_mod.escape
+    whose = ''
+    if handle:
+        n = '' if count is None else f' · {int(count)} {"knives" if count != 1 else "knife"}'
+        whose = (f'<a class="whose" href="/blade-book/@{e(handle)}/">in <b>@{e(handle)}</b>’s '
+                 f'register{n}</a>')
+    return ('<div class="bb-top"><a class="brand" href="/blade-book/">'
+            '<img src="/blade-book/mark.svg" alt="" width="22" height="22">BLADE-BOOK</a>'
+            + whose +
+            '<nav aria-label="blade-book"><a href="/blade-book/search/">search</a>'
+            '<a href="/blade-book/board/">the board</a>'
+            '<a class="bb-auth" href="/blade-book/me/">sign in</a></nav></div>\n')
+
+
 def _head(title, desc, og_image, noindex, extra_style='', url=''):
     """Document head through `<body>`. Callers open their own `<main>` (the
     register index puts a full-bleed hero BEFORE main).
@@ -507,11 +526,14 @@ _INDEX_STYLE = """
   .hero .count { color:#ece4d4; font-weight:600; text-shadow:0 1px 8px rgba(0,0,0,.6); }
   .hero.plain .count { color:#555; text-shadow:none; }
   /* top-right, out of the text column — it used to stack on top of the mark (audit 2026-09-19) */
-  .hero .signin { position:absolute; top:14px; right:18px; margin:0; z-index:3; color:#fff; }
-  .hero .signin a { color:#fff; border:2px solid rgba(255,255,255,.85); border-radius:10px; padding:6px 12px;
-                    font-size:.85rem; font-weight:700; text-decoration:none; background:rgba(0,0,0,.25); }
-  .hero.plain .signin a { color:var(--accent,#b8452c); border-color:var(--accent,#b8452c); background:none; }
-  .hero.plain .signin { color:var(--accent,#b8452c); }
+  .hero .signin { position:absolute; top:14px; right:18px; margin:0; z-index:3; color:#fff;
+                  display:flex; gap:14px; align-items:center; }
+  .hero .signin a { color:#fff; font-size:.85rem; font-weight:400; text-decoration:none;
+                    text-shadow:0 1px 8px rgba(0,0,0,.6); }
+  .hero .signin a.bb-auth { border:2px solid rgba(255,255,255,.85); border-radius:10px; padding:6px 12px;
+                            font-weight:700; background:rgba(0,0,0,.25); text-shadow:none; }
+  .hero.plain .signin a { color:var(--accent,#b8452c); text-shadow:none; }
+  .hero.plain .signin a.bb-auth { border-color:var(--accent,#b8452c); background:none; }
   /* the mark is the way home — a flex child, so pin it to its own width or the
      whole row becomes the click target */
   .hero .home { display:inline-block; align-self:flex-start; line-height:0; border-radius:8px; }
@@ -723,7 +745,9 @@ def _index_html(rows, user, gated, featured_tag=None):
                 '<div class="hero-photo"></div>\n')
     else:
         out += '<header class="hero plain">\n'
-    out += ('<p class="signin"><a class="bb-auth" href="/blade-book/me/">sign in</a></p>\n'
+    out += ('<p class="signin"><a href="/blade-book/search/">search</a>'
+            '<a href="/blade-book/board/">the board</a>'
+            '<a class="bb-auth" href="/blade-book/me/">sign in</a></p>\n'
             f'<a class="home" href="/blade-book/" aria-label="blade-book home" title="blade-book">'
             f'{_mark_svg(46)}</a>\n<p class="tag">BLADE-BOOK REGISTER</p>\n<h1>@{e(handle)}</h1>\n'
             f'<p class="count">{count}</p>\n')

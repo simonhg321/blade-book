@@ -616,3 +616,32 @@ def test_knife_page_shows_the_kit_as_chips():
 def test_knife_page_without_a_kit_has_no_heading():
     html = publish._knife_page(publish.public_row(_knife(), USER), 'simon-collector', gated=False)
     assert 'CAME WITH' not in html and 'class="kit"' not in html
+
+
+# --- one top bar (2026-09-27) ---
+
+def test_topbar_goes_home_search_board_sign_in_in_that_order():
+    bar = publish._topbar()
+    assert bar.startswith('<div class="bb-top">') and bar.rstrip().endswith('</div>')
+    pos = [bar.index(n) for n in ('class="brand" href="/blade-book/"',
+                                  'href="/blade-book/search/">search<',
+                                  'href="/blade-book/board/">the board<',
+                                  'class="bb-auth" href="/blade-book/me/">sign in<')]
+    assert pos == sorted(pos)
+    assert 'whose' not in bar and bar.count('bb-auth') == 1
+
+
+def test_topbar_on_a_register_says_whose_it_is():
+    bar = publish._topbar('simon-collector', 75)
+    assert ('<a class="whose" href="/blade-book/@simon-collector/">in <b>@simon-collector</b>’s '
+            'register · 75 knives</a>') in bar
+    assert '· 1 knife</a>' in publish._topbar('simon-collector', 1)
+
+
+def test_register_hero_offers_search_and_the_board_beside_sign_in():
+    html = publish._index_html([_glorious_row()], USER, gated=False)
+    assert ('<p class="signin"><a href="/blade-book/search/">search</a>'
+            '<a href="/blade-book/board/">the board</a>'
+            '<a class="bb-auth" href="/blade-book/me/">sign in</a></p>') in html
+    css = publish._INDEX_STYLE
+    assert '.hero .signin a.bb-auth {' in css          # only sign-in wears the border
