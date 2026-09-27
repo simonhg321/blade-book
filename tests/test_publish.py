@@ -645,3 +645,85 @@ def test_register_hero_offers_search_and_the_board_beside_sign_in():
             '<a class="bb-auth" href="/blade-book/me/">sign in</a></p>') in html
     css = publish._INDEX_STYLE
     assert '.hero .signin a.bb-auth {' in css          # only sign-in wears the border
+
+
+# --- the knife page (2026-09-27): look, check, wander, want one ---
+
+def _shelf(n):
+    rows = []
+    for i in range(1, n + 1):
+        k = _glorious()
+        k['tag'] = f'K{i:02d}'
+        r = publish.public_row(k, USER)
+        r['img'], r['img_t'] = f'K{i:02d}.jpg', f'K{i:02d}_t.jpg'
+        rows.append(r)
+    return rows
+
+
+def test_neighbours_follow_register_order_and_do_not_wrap():
+    rows = _shelf(8)
+    first, mid, last = (publish._neighbours(rows, i) for i in (0, 3, 7))
+    assert first['prev'] is None and first['next']['tag'] == 'K02'
+    assert mid['prev']['tag'] == 'K03' and mid['next']['tag'] == 'K05'
+    assert last['next'] is None and last['prev']['tag'] == 'K07'
+    assert (mid['pos'], mid['total']) == (4, 8)
+
+
+def test_the_strip_is_the_next_five_and_wraps_to_stay_full():
+    rows = _shelf(8)
+    assert [r['tag'] for r in publish._neighbours(rows, 0)['more']] == ['K02', 'K03', 'K04', 'K05', 'K06']
+    assert [r['tag'] for r in publish._neighbours(rows, 6)['more']] == ['K08', 'K01', 'K02', 'K03', 'K04']
+    assert [r['tag'] for r in publish._neighbours(_shelf(3), 1)['more']] == ['K03', 'K01']
+
+
+def test_a_register_of_one_has_no_arrows_and_no_strip():
+    rows = _shelf(1)
+    nav = publish._neighbours(rows, 0)
+    assert nav == {'pos': 1, 'total': 1, 'prev': None, 'next': None, 'more': []}
+    html = publish._knife_page(rows[0], 'simon-collector', gated=False, nav=nav)
+    assert 'class="flip' not in html and 'class="more"' not in html
+    assert '<span class="count">K01 · 1 of 1</span>' in html
+
+
+def test_knife_page_opens_with_the_bar_and_flips_both_ways():
+    rows = _shelf(8)
+    html = publish._knife_page(rows[3], 'simon-collector', gated=False, nav=publish._neighbours(rows, 3))
+    body = html.split('<body>')[1]
+    assert body.lstrip().startswith('<div class="bb-top">')
+    assert 'in <b>@simon-collector</b>’s register · 8 knives' in body
+    assert '<a class="flip prev" rel="prev" href="../K03/"' in body
+    assert '<a class="flip next" rel="next" href="../K05/"' in body
+    assert '<span class="count">K04 · 4 of 8</span>' in body
+    assert 'born February 6, 2014 · in <a href="../">@simon-collector</a>’s register' in body
+    strip = body.split('class="more"')[1]
+    assert strip.count('class="tile"') == 5 and 'href="../K05/"' in strip and '../img/K05_t.jpg' in strip
+    assert 'Your knives deserve a page like this.' in body and 'href="/blade-book/how/"' in body
+
+
+def test_a_knife_with_no_photo_still_flips():
+    rows = _shelf(3)
+    rows[1]['img'] = rows[1]['img_t'] = None
+    html = publish._knife_page(rows[1], 'simon-collector', gated=False, nav=publish._neighbours(rows, 1))
+    assert '<div class="lead plain">' in html and '<img class="hero"' not in html
+    assert 'rel="prev" href="../K01/"' in html and 'rel="next" href="../K03/"' in html
+
+
+def test_a_neighbour_with_no_thumb_gets_a_placeholder_not_a_broken_image():
+    rows = _shelf(3)
+    rows[2]['img'] = rows[2]['img_t'] = None
+    html = publish._knife_page(rows[0], 'simon-collector', gated=False, nav=publish._neighbours(rows, 0))
+    tile = html.split('href="../K03/"')[-1].split('</a>')[0]
+    assert '<span class="noimg"></span>' in tile and '<img' not in tile
+
+
+def test_flip_labels_and_tiles_escape_names():
+    rows = _shelf(3)
+    rows[1]['graphic_name'] = '<b>"Glo"</b>'
+    html = publish._knife_page(rows[0], 'simon-collector', gated=False, nav=publish._neighbours(rows, 0))
+    assert '<b>"Glo"</b>' not in html and '&lt;b&gt;&quot;Glo&quot;&lt;/b&gt;' in html
+
+
+def test_the_flip_script_only_follows_links_that_exist():
+    js = publish._FLIP_SCRIPT
+    assert 'a.flip.prev' in js and 'a.flip.next' in js
+    assert 'innerHTML' not in js and 'fetch(' not in js and 'eval' not in js

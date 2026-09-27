@@ -432,9 +432,96 @@ def _head(title, desc, og_image, noindex, extra_style='', url=''):
             f'<style>{_STYLE}{extra_style}</style>\n</head>\n<body>\n')
 
 
-def _knife_page(row, handle, gated):
+MORE_TILES = 5
+
+
+def _neighbours(rows, i):
+    """Where knife `i` sits on the shelf. Arrows follow register order and stop
+    at the ends; the strip is the next few knives and wraps so it stays full."""
+    n = len(rows)
+    more = [rows[(i + d) % n] for d in range(1, min(MORE_TILES, n - 1) + 1)]
+    return {'pos': i + 1, 'total': n,
+            'prev': rows[i - 1] if i > 0 else None,
+            'next': rows[i + 1] if i + 1 < n else None,
+            'more': more}
+
+
+def _tile(row, prefix):
+    e = html_mod.escape
+    img = (f'<img src="{prefix}img/{e(row["img_t"])}" alt="" loading="lazy">' if row.get('img_t')
+           else '<span class="noimg"></span>')
+    return (f'<a class="tile" href="{prefix}{e(row["tag"])}/">{img}'
+            f'<span><b>{e(row["tag"])}</b>{e(full_name(row))}</span></a>')
+
+
+_KNIFE_STYLE = """
+  main { max-width:920px; }
+  .lead { position:relative; margin:10px 0; }
+  .lead img.hero { display:block; margin:0; }
+  .lead .count { position:absolute; left:50%; top:12px; transform:translateX(-50%);
+                 background:rgba(21,19,15,.72); color:#faf6ee; font-size:.72rem;
+                 letter-spacing:.14em; padding:.3rem .7rem; border-radius:999px; white-space:nowrap; }
+  a.flip { position:absolute; top:50%; transform:translateY(-50%); width:44px; height:60px;
+           border-radius:12px; background:rgba(250,246,238,.92); color:var(--ink,#141210);
+           font-size:1.6rem; display:grid; place-items:center; box-shadow:0 4px 14px rgba(0,0,0,.35); }
+  a.flip.prev { left:10px; }
+  a.flip.next { right:10px; }
+  .lead.plain { display:flex; justify-content:space-between; align-items:center; gap:10px; min-height:60px; }
+  .lead.plain .count, .lead.plain a.flip { position:static; transform:none; }
+  .by { color:#555; margin:.2rem 0 .8rem; }
+  .more h2 { font-family:'Bebas Neue',Impact,sans-serif; font-weight:400; letter-spacing:.04em;
+             font-size:1.3rem; margin:26px 0 10px; display:flex; justify-content:space-between;
+             align-items:baseline; }
+  .more h2 a { font-family:'DM Sans',sans-serif; font-size:.84rem; }
+  .strip { display:grid; grid-auto-flow:column; grid-auto-columns:minmax(150px,1fr); gap:10px;
+           overflow-x:auto; padding-bottom:6px; }
+  a.tile { display:block; border:2px solid var(--ink,#141210); border-radius:12px; overflow:hidden;
+           background:#fff; color:var(--ink,#141210); font-weight:400; }
+  a.tile img, a.tile .noimg { display:block; width:100%; aspect-ratio:4/3; object-fit:cover;
+                              background:#15130f; }
+  a.tile span { display:block; padding:7px 9px 9px; font-size:.8rem; line-height:1.25; }
+  a.tile b { color:var(--accent,#b8452c); margin-right:5px; }
+  .join { background:var(--ink,#141210); color:#faf6ee; border-radius:14px; padding:16px 18px;
+          margin:24px 0 4px; display:flex; gap:14px; align-items:center;
+          justify-content:space-between; flex-wrap:wrap; }
+  .join b { display:block; font-family:'Bebas Neue',Impact,sans-serif; font-weight:400;
+            font-size:1.5rem; letter-spacing:.03em; }
+  .join span { font-size:.86rem; color:#cfc8b8; }
+  .join a.cta { margin:0; }
+  @media (max-width: 699px) { a.flip { width:38px; height:54px; } }
+"""
+
+# Swipe and arrow keys are conveniences only: both follow the prev/next links
+# already on the page, so the page flips with JavaScript off.
+_FLIP_SCRIPT = """
+(function () {
+  var p = document.querySelector('a.flip.prev'), n = document.querySelector('a.flip.next');
+  var x = null, y = null;
+  function go(a) { if (a) location.href = a.href; }
+  document.addEventListener('keydown', function (ev) {
+    if (ev.target && /INPUT|TEXTAREA|SELECT/.test(ev.target.tagName)) return;
+    if (ev.key === 'ArrowLeft') go(p);
+    if (ev.key === 'ArrowRight') go(n);
+  });
+  var lead = document.querySelector('.lead');
+  if (!lead) return;
+  lead.addEventListener('touchstart', function (ev) {
+    x = ev.touches[0].clientX; y = ev.touches[0].clientY;
+  }, { passive: true });
+  lead.addEventListener('touchend', function (ev) {
+    if (x === null) return;
+    var dx = ev.changedTouches[0].clientX - x, dy = ev.changedTouches[0].clientY - y;
+    x = null;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dy)) go(dx < 0 ? n : p);
+  }, { passive: true });
+})();
+"""
+
+
+def _knife_page(row, handle, gated, nav=None):
     e = html_mod.escape
     name = full_name(row)
+    nav = nav or {'pos': 1, 'total': 1, 'prev': None, 'next': None, 'more': []}
     if gated:
         # chat-preview link unfurls are the accidental-leak channel the key
         # gate exists for — keep the model/edition out of <title>/og:title.
@@ -448,11 +535,27 @@ def _knife_page(row, handle, gated):
         f"born {row['born']}" if row.get('born') else None) if b]
     desc = '' if gated else (' · '.join(desc_bits) or 'From a private register on blade-book.')
     og_image = (f"{_public_base()}/@{handle}/img/{row['img']}" if row.get('img') and not gated else '')
-    out = _head(title, desc, og_image, noindex=gated,
-                url=f"{_public_base()}/@{handle}/{row['tag']}/") + '<main>\n'
-    out += f'<p class="tag">{e(row["tag"])}</p>\n<h1>{e(name)}</h1>\n'
+    out = _head(title, desc, og_image, noindex=gated, extra_style=_KNIFE_STYLE,
+                url=f"{_public_base()}/@{handle}/{row['tag']}/")
+    out += _topbar(handle, nav['total']) + '<main>\n'
+
+    def flip(rel, r, glyph, word):
+        if not r:
+            return '<span></span>' if not row.get('img') else ''
+        return (f'<a class="flip {rel}" rel="{rel}" href="../{e(r["tag"])}/" '
+                f'aria-label="{word} knife: {e(r["tag"])} {e(full_name(r))}">{glyph}</a>')
+
+    prev_a = flip('prev', nav['prev'], '‹', 'previous')
+    next_a = flip('next', nav['next'], '›', 'next')
+    count = f'<span class="count">{e(row["tag"])} · {nav["pos"]} of {nav["total"]}</span>'
     if row.get('img'):
-        out += f'<img class="hero" src="../img/{e(row["img"])}" alt="{e(name)}">\n'
+        out += (f'<div class="lead"><img class="hero" src="../img/{e(row["img"])}" alt="{e(name)}">'
+                f'{count}{prev_a}{next_a}</div>\n')
+    else:
+        out += f'<div class="lead plain">{prev_a}{count}{next_a}</div>\n'
+    out += f'<p class="tag">{e(row["tag"])}</p>\n<h1>{e(name)}</h1>\n'
+    born = f'born {e(row["born"])} · ' if row.get('born') else ''
+    out += f'<p class="by">{born}in <a href="../">@{e(handle)}</a>’s register</p>\n'
     if row.get('for_sale'):
         price = f" · ${row['asking_price']:g}" if row.get('asking_price') else ''
         out += f'<p class="sale">FOR SALE{price}</p>\n'
@@ -482,9 +585,15 @@ def _knife_page(row, handle, gated):
                 + ''.join(f'<span>{e(x)}</span>' for x in row['kit']) + '</p>\n')
     if row.get('notes_public'):
         out += f'<div class="card">{e(row["notes_public"])}</div>\n'
-    out += (f'<p><a href="../">← @{e(handle)}’s register</a></p>\n'
-            '<p><a class="cta" href="/blade-book/how/">Keep a register like this — how it works →</a></p>\n'
-            + _foot() + '</main>\n')
+    if nav['more']:
+        out += (f'<section class="more"><h2>More from this register '
+                f'<a href="../">all {nav["total"]} →</a></h2>\n<div class="strip">'
+                + ''.join(_tile(r, '../') for r in nav['more']) + '</div></section>\n')
+    out += ('<div class="join"><div><b>Your knives deserve a page like this.</b>'
+            '<span>One photo of the knife with its card. We read the card.</span></div>'
+            '<a class="cta" href="/blade-book/how/">START YOUR REGISTER</a></div>\n'
+            + _foot() + '</main>\n'
+            f'<script>{_FLIP_SCRIPT}</script>\n')
     out += _gate_snippet('../') if gated else ''
     return out + '</body>\n</html>\n'
 
@@ -866,11 +975,11 @@ def build_user(con, user, store):
                 if gated:
                     with open(os.path.join(tmp, 'keys.json'), 'w') as f:
                         json.dump({'hashes': [hashlib.sha256(key.lower().encode()).hexdigest()]}, f)
-                for row in rows:
+                for i, row in enumerate(rows):
                     page_dir = os.path.join(tmp, row['tag'])
                     os.makedirs(page_dir)
                     with open(os.path.join(page_dir, 'index.html'), 'w') as f:
-                        f.write(_knife_page(row, handle, gated))
+                        f.write(_knife_page(row, handle, gated, nav=_neighbours(rows, i)))
                 with open(os.path.join(tmp, 'index.html'), 'w') as f:
                     f.write(_index_html(rows, user, gated, featured_tag=featured_tag))
                 with open(os.path.join(tmp, 'knives.json'), 'w') as f:

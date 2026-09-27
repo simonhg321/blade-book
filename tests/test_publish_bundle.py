@@ -83,7 +83,8 @@ def test_generated_pages_share_the_footer_strip(con, tmp_path):
     _assert_strip(page)
     assert ('<p class="signin"><a href="/blade-book/search/">search</a><a href="/blade-book/board/">the board</a>'
             '<a class="bb-auth" href="/blade-book/me/">sign in</a></p>') in idx     # hero sign-in stays, with company
-    assert 'Keep a register like this' in idx and 'Keep a register like this' in page   # CTA stays
+    assert 'Keep a register like this' in idx                     # the register's CTA stays
+    assert 'Your knives deserve a page like this.' in page        # the knife page's own (2026-09-27)
 
 
 def test_rebuild_drops_stale_pages(con, tmp_path):
@@ -296,3 +297,24 @@ def test_build_user_bakes_the_plate_into_the_public_photo(con, tmp_path):
     w, h = display.size
     assert (w, h > 600) == (800, True)
     assert all(abs(a - b) <= 8 for a, b in zip(display.getpixel((3, h - 3)), (250, 246, 238)))
+
+
+def test_build_user_wires_each_knife_page_to_its_neighbours(con, tmp_path):
+    user, st, k = _setup(con, tmp_path)
+    k2 = db.create_draft_knife(con, user['id'])
+    con.execute("UPDATE knives SET confidence = '{}', model = 'Mnandi' WHERE id = ?", (k2['id'],))
+    con.commit()
+    key2 = f"{user['id']}/{k2['id']}/1.jpg"
+    st.put(key2, _jpeg_with_exif(800, 600))
+    db.add_photo(con, user['id'], k2['id'], 1, key2, hashlib.sha256(b'y').hexdigest(), 800, 600)
+    db.publish_knife(con, user['id'], k2['id'])
+    db.set_public(con, user['id'], [k2['id']], True)
+    publish.build_user(con, user, st)
+    d = publish.bundle_dir('bundle-guy')
+    t1 = db.get_knife(con, user['id'], k['id'])['tag']
+    t2 = db.get_knife(con, user['id'], k2['id'])['tag']
+    p1 = open(os.path.join(d, t1, 'index.html')).read()
+    p2 = open(os.path.join(d, t2, 'index.html')).read()
+    assert f'rel="next" href="../{t2}/"' in p1 and 'rel="prev"' not in p1
+    assert f'rel="prev" href="../{t1}/"' in p2 and 'rel="next"' not in p2
+    assert '· 2 knives' in p1
