@@ -332,10 +332,28 @@ def test_register_page_wiring():
 
 def test_register_page_hero_pin_wiring():
     html = _read('html/me/index.html')
-    for needle in ('featured_knife_id: pinned ? null : k.id', 'register hero', '★ HERO',
+    for needle in ('featured_knife_id: pinned ? null : k.id', 'face of my register', '★ REGISTER FACE',
                    'not public', 'is_public && !k.hidden_at'):
         assert needle in html, needle
     assert 'innerHTML' not in html
+
+
+def test_register_face_pin_confirms_first():
+    # 2026-09-26: a stray tap on the card's ★ swapped Simon's whole register face to a
+    # Spyderco box label, silently. The pin must go through a dialog showing the photo.
+    html = _read('html/me/index.html')
+    for needle in ('<dialog id="facedlg"', "$('facedlg').showModal()", 'id="faceok"',
+                   'id="facecancel"', 'id="facebar"'):
+        assert needle in html, needle
+    # the button itself never PATCHes — only the dialog's confirm does
+    btn = html.split("var heroBtn = art.querySelector('.facebtn');", 1)[1].split('var form =', 1)[0]
+    assert "json('PATCH'" not in btn
+    # the root cause: the cover <img> also carries class "hero", so querySelector('.hero')
+    # grabbed the PHOTO — tapping a cover pinned the knife and the real button never showed
+    assert "querySelector('.hero')" not in html
+    assert 'class="btn alt facebtn"' in html
+    # ★ means the register face only — covers use a different mark
+    assert '★ choose covers' not in html
 
 
 def test_register_page_has_public_section():

@@ -53,13 +53,24 @@
   #pubsec input{margin-right:6px}
   #pubsec button{margin-top:6px;margin-right:6px}
   #pubsec .muted{margin-top:10px}
+  #facebar{display:flex;align-items:center;gap:10px;background:#fff;border:2px solid var(--ink);border-radius:12px;padding:8px 10px;margin-bottom:10px;font-size:.9rem}
+  #facebar img{width:48px;height:48px;object-fit:cover;border-radius:8px;border:1px solid var(--line);flex:none}
+  #facebar .lbl{font-size:.7rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);display:block}
+  #facebar b{color:var(--accent)}
+  dialog{border:2px solid var(--ink);border-radius:14px;padding:16px;max-width:420px;width:92vw;background:#fff;color:var(--ink)}
+  dialog::backdrop{background:rgba(0,0,0,.35)}
+  dialog h2{margin:0 0 8px;font-size:1.1rem}
+  dialog p{color:var(--muted);margin:0 0 10px;font-size:.9rem}
+  dialog img{width:100%;max-height:50vh;object-fit:contain;border-radius:10px;background:var(--soft);display:block;margin-bottom:10px}
+  dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
 </style>
 
 <header class="bb-head">
   <h1 class="bb-display"><img class="bbmark" src="/blade-book/mark.svg" alt="" width="30">MY REGISTER</h1>
   <nav class="bb-nav"><a class="add" href="/blade-book/me/add/">+ add</a><a href="/blade-book/me/">register</a><a href="/blade-book/me/wants/">wants</a><a href="/blade-book/me/settings/">settings</a><a href="/blade-book/board/">board</a><a href="/blade-book/">home</a><a id="adminlink" href="/blade-book/admin/" hidden>admin</a><button id="signout" class="btn link" type="button">sign out</button></nav>
 </header>
-<div class="who"><span id="handle"></span> · <span id="count"></span> · <a class="takedata" href="/blade-book/api/settings/export.csv" download>⬇ take my data (.csv)</a><span id="coverwrap" hidden> · <a id="coverlink" class="takedata" href="/blade-book/me/covers/">★ choose covers</a></span></div>
+<div class="who"><span id="handle"></span> · <span id="count"></span> · <a class="takedata" href="/blade-book/api/settings/export.csv" download>⬇ take my data (.csv)</a><span id="coverwrap" hidden> · <a id="coverlink" class="takedata" href="/blade-book/me/covers/">choose covers</a></span></div>
+<div id="facebar" hidden><img id="faceimg" alt="" hidden><span><span class="lbl">★ Face of your register</span><span id="facetxt"></span></span></div>
 <input id="q" type="search" placeholder="search your register — everything, private notes too" autocomplete="off">
 <div id="bulkbar" class="hidden"><span id="bulkn"></span>
   <button id="bulkpub" class="btn alt" type="button">make public</button>
@@ -80,12 +91,19 @@
 <div id="drafts"></div>
 <div id="cards"></div>
 
+<dialog id="facedlg">
+  <h2 id="facetitle"></h2>
+  <img id="facedlgimg" alt="">
+  <p id="facewhy"></p>
+  <div class="row"><button class="btn link" type="button" id="facecancel">cancel</button><button class="btn accent" type="button" id="faceok">make it the face</button></div>
+</dialog>
+
 <template id="tpl">
   <article class="knife card">
     <div class="top"><input type="checkbox" class="sel" title="select"><span class="tag bb-display"></span><span class="title"></span><span class="badges"></span></div>
     <div class="photos"></div>
     <div class="toggles"><label><input type="checkbox" class="pub"> public on my page</label>
-      <button class="btn alt hero" type="button" hidden>★ register hero</button></div>
+      <button class="btn alt facebtn" type="button" hidden>☆ face of my register</button></div>
     <details class="more"><summary>details · sale · edit</summary>
       <table><tbody class="rows"></tbody></table>
       <div class="flags"></div>
@@ -166,7 +184,7 @@
   function badges(k) {
     var out = [];
     if (k.id === featuredId) {
-      if (isHeroEligible(k)) out.push(['★ HERO', 'accent']);
+      if (isHeroEligible(k)) out.push(['★ REGISTER FACE', 'accent']);
       else out.push(['★ pinned, but not public — fallback hero in use', '']);
     }
     if (k.hidden_at) out.push(['hidden — under review', 'warn']);
@@ -354,19 +372,12 @@
         k.is_public = res.j.is_public; render();
       }).catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); });
     });
-    var heroBtn = art.querySelector('.hero');
+    var heroBtn = art.querySelector('.facebtn');
     var pinned = k.id === featuredId;
     if (pinned || isHeroEligible(k)) {
       heroBtn.hidden = false;
-      heroBtn.textContent = pinned ? 'unpin' : '★ register hero';
-      heroBtn.addEventListener('click', function () {
-        json('PATCH', '/settings', { featured_knife_id: pinned ? null : k.id }).then(function (res) {
-          if (!res.ok) { say('✗ ' + (res.j.error || 'could not update'), true); return; }
-          featuredId = res.j.featured_knife_id;
-          say(pinned ? k.tag + ' unpinned' : '★ ' + k.tag + ' is now your register hero');
-          render();
-        }).catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); });
-      });
+      heroBtn.textContent = pinned ? '★ unpin as face' : '☆ face of my register';
+      heroBtn.addEventListener('click', function () { askFace(k, pinned); });
     }
     var form = art.querySelector('.form');
     art.querySelector('.edit').addEventListener('click', function () {
@@ -414,8 +425,58 @@
     if (!live.length) { var e = el('div', 'empty', 'Your register is empty.'); var a2 = el('a', 'btn accent', '📷 add the first knife'); a2.href = '/blade-book/me/add/'; e.appendChild(a2); c.appendChild(e); }
     else if (!shown.length) c.appendChild(el('div', 'empty', 'nothing matches “' + q + '”'));
     shown.forEach(function (k) { c.appendChild(renderOne(k)); });
+    renderFace();
     syncBulk();
     window.scrollTo(0, y);
+  }
+
+  function coverSrc(k) {
+    var seq = k.hero_photo || k.photos[0].seq;
+    var p = k.photos.filter(function (x) { return x.seq === seq; })[0] || k.photos[0];
+    return API + '/knives/' + k.id + '/photos/' + p.seq + (p.has_thumb ? '/thumb' : '/original') + '?v=' + (p.sha256 || '').slice(0, 8);
+  }
+
+  // The face is the big photo on top of the public register and the preview when the link
+  // is shared. One tap used to swap it silently (K93, 2026-09-26) — now it always asks.
+  var faceKnife = null, facePinned = false;
+  function askFace(k, pinned) {
+    faceKnife = k; facePinned = pinned;
+    $('facetitle').textContent = pinned ? 'Unpin ' + k.tag + ' as your register face?'
+                                        : 'Make ' + k.tag + ' the face of your register?';
+    $('facewhy').textContent = pinned
+      ? 'Your public page will lead with your first public knife instead, until you pick another.'
+      : 'This photo goes big at the top of your public page, and it’s the preview people see when your link is shared.';
+    var img = $('facedlgimg');
+    if (k.photos.length) { img.src = coverSrc(k); img.alt = k.tag + ' cover'; img.hidden = false; } else img.hidden = true;
+    $('faceok').textContent = pinned ? 'unpin' : 'make it the face';
+    $('facedlg').showModal();
+  }
+  $('facecancel').addEventListener('click', function () { $('facedlg').close(); });
+  $('faceok').addEventListener('click', function () {
+    var k = faceKnife, pinned = facePinned; $('facedlg').close();
+    json('PATCH', '/settings', { featured_knife_id: pinned ? null : k.id }).then(function (res) {
+      if (!res.ok) { say('✗ ' + (res.j.error || 'could not update'), true); return; }
+      featuredId = res.j.featured_knife_id;
+      say(pinned ? k.tag + ' unpinned — your public page updates in about 30 seconds'
+                 : '★ ' + k.tag + ' is the face of your register — your public page updates in about 30 seconds');
+      render();
+    }).catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); });
+  });
+
+  function renderFace() {
+    var k = knives.filter(function (x) { return x.id === featuredId; })[0];
+    var bar = $('facebar'), img = $('faceimg');
+    bar.hidden = !knives.some(function (x) { return x.status === 'live'; });
+    if (k && isHeroEligible(k)) {
+      img.src = coverSrc(k); img.alt = k.tag; img.hidden = false;
+      clear($('facetxt'));
+      $('facetxt').appendChild(el('b', null, k.tag + ' '));
+      $('facetxt').appendChild(document.createTextNode(title(k)));
+    } else {
+      img.hidden = true;
+      $('facetxt').textContent = k ? k.tag + ' is pinned but not public — your first public knife shows instead'
+                                   : 'none picked — your first public knife shows. Tap ☆ on a knife to choose.';
+    }
   }
 
   function syncBulk() {
@@ -443,7 +504,7 @@
       // knives with a second photo whose public page still leads with photo 1 — usually the paperwork flat-lay
       var nCover = knives.filter(function (k) { return k.status === 'live' && (k.photos || []).length > 1 && !k.hero_photo; }).length;
       $('coverwrap').hidden = !knives.some(function (k) { return (k.photos || []).length > 1; });
-      $('coverlink').textContent = '★ choose covers' + (nCover ? ' (' + nCover + ')' : '');
+      $('coverlink').textContent = 'choose covers' + (nCover ? ' (' + nCover + ')' : '');
       if (!didScroll && location.hash && document.getElementById(location.hash.slice(1))) {
         document.getElementById(location.hash.slice(1)).scrollIntoView(); didScroll = true;
       }
