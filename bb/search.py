@@ -32,7 +32,7 @@ def _card(row, handle):
     c = {f: row.get(f) for f in CARD_FIELDS if row.get(f) not in (None, '')}
     c['tag'] = row['tag']
     c['handle'] = handle
-    c['name'] = publish.display_name(row)
+    c['name'] = publish.full_name(row)
     return c
 
 
@@ -68,7 +68,7 @@ def reindex_user(con, user, rows):
              row.get('damascus_pattern') or '', row.get('special_edition') or '',
              row.get('for_sale') or 0, json.dumps(_card(row, handle))))
         text = ' '.join(str(row.get(f) or '') for f in FTS_FIELDS)
-        text = f"{text} {handle} {publish.display_name(row)}"
+        text = f"{text} {handle} {publish.full_name(row)}"
         con.execute('INSERT INTO search_fts (rowid, text) VALUES (?, ?)', (kid, text))
     con.commit()
     return len(rows)

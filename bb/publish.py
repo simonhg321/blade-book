@@ -404,14 +404,13 @@ def _head(title, desc, og_image, noindex, extra_style='', url=''):
 
 def _knife_page(row, handle, gated):
     e = html_mod.escape
-    name = display_name(row)
+    name = full_name(row)
     if gated:
         # chat-preview link unfurls are the accidental-leak channel the key
         # gate exists for — keep the model/edition out of <title>/og:title.
         title = f'{row["tag"]} — blade-book'
     else:
-        title_bits = [name] + ([row['special_edition']] if row.get('special_edition') else [])
-        title = ' · '.join(title_bits) + f' — @{handle}'
+        title = f'{name} — @{handle}'
     desc_bits = [b for b in (
         row.get('blade_steel'),
         ' '.join(x for x in (row.get('damascus_smith'), row.get('damascus_pattern')) if x) or None,
@@ -715,7 +714,7 @@ def _index_html(rows, user, gated, featured_tag=None):
             f'{_mark_svg(46)}</a>\n<p class="tag">BLADE-BOOK REGISTER</p>\n<h1>@{e(handle)}</h1>\n'
             f'<p class="count">{count}</p>\n')
     if hero_row:
-        fname = display_name(hero_row)
+        fname = full_name(hero_row)
         fborn = f'<span class="fborn">born {e(hero_row["born"])}</span>' if hero_row.get('born') else ''
         fbadge = ''
         if hero_row.get('for_sale'):
@@ -745,7 +744,7 @@ def _index_html(rows, user, gated, featured_tag=None):
             '<button type="button" data-sort="born">born</button><button type="button" data-sort="tag">tag</button></div>\n'
             '<div id="reg" class="list">\n')
     for row in rows:
-        name = display_name(row)
+        name = full_name(row)
         badge = '<span></span>'
         if row.get('for_sale'):
             price = f" · ${row['asking_price']:g}" if row.get('asking_price') else ''

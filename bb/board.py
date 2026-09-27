@@ -28,7 +28,7 @@ def card(k):
     c['id'] = k['id']
     c['tag'] = k['tag']
     c['handle'] = k['owner_handle']
-    c['name'] = publish.display_name(row)
+    c['name'] = publish.full_name(row)
     c['listed_at'] = k.get('listed_at') or k.get('updated') or ''
     thumb = f"{k['tag']}_t.jpg"
     if k.get('photos') and os.path.exists(os.path.join(publish.bundle_dir(k['owner_handle']), 'img', thumb)):

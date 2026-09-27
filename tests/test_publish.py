@@ -549,3 +549,49 @@ def test_the_photo_itself_is_untouched(tmp_path):
     for band, want in zip(photo.split(), (30, 60, 160)):
         lo, hi = band.getextrema()
         assert want - 4 <= lo and hi <= want + 4, (lo, hi, want)
+
+
+# --- names carry the graphic (2026-09-27): model first, then the graphic ---
+
+def _glorious_row(**over):
+    row = publish.public_row(_glorious(**over), USER)
+    row['img'], row['img_t'] = 'K80.jpg', 'K80_t.jpg'
+    return row
+
+
+def test_knife_page_name_carries_the_graphic():
+    html = publish._knife_page(_glorious_row(), 'simon-collector', gated=False)
+    assert '<h1>Large Sebenza 21 — Glorious</h1>' in html
+    assert '<title>Large Sebenza 21 — Glorious — @simon-collector</title>' in html
+    assert 'alt="Large Sebenza 21 — Glorious"' in html
+
+
+def test_gated_knife_page_head_still_names_nothing():
+    html = publish._knife_page(_glorious_row(), 'simon-collector', gated=True)
+    head = html.split('</head>')[0]
+    assert 'Glorious' not in head and 'Sebenza' not in head
+
+
+def test_register_rows_and_the_feat_card_carry_the_graphic():
+    html = publish._index_html([_glorious_row()], USER, gated=False)
+    assert 'data-name="Large Sebenza 21 — Glorious"' in html
+    feat = html.split('class="feat"')[1].split('</a>')[0]
+    assert 'Large Sebenza 21 — Glorious' in feat
+
+
+def test_search_and_board_cards_carry_the_graphic():
+    from bb import board, search
+    assert search._card(_glorious_row(), 'simon-collector')['name'] == 'Large Sebenza 21 — Glorious'
+    k = dict(_glorious(), owner_handle='simon-collector', owner_hide_born_day=0, photos=[])
+    assert board.card(k)['name'] == 'Large Sebenza 21 — Glorious'
+
+
+def test_a_name_with_markup_in_it_is_escaped():
+    k = _glorious()
+    k['ext']['graphic_name'] = '<b>"Glo"</b>'
+    row = publish.public_row(k, USER)
+    row['img'], row['img_t'] = 'K80.jpg', 'K80_t.jpg'
+    for html in (publish._knife_page(row, 'simon-collector', gated=False),
+                 publish._index_html([row], USER, gated=False)):
+        assert '<b>"Glo"</b>' not in html
+        assert '&lt;b&gt;&quot;Glo&quot;&lt;/b&gt;' in html
