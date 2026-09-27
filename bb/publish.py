@@ -456,8 +456,10 @@ def _tile(row, prefix):
 
 _KNIFE_STYLE = """
   main { max-width:920px; }
-  .lead { position:relative; margin:10px 0; }
-  .lead img.hero { display:block; margin:0; }
+  .lead { position:relative; margin:10px 0; background:#15130f; border-radius:14px;
+          border:2px solid var(--ink,#141210); overflow:hidden; }
+  .lead img.hero { display:block; margin:0; width:100%; max-height:82vh; object-fit:contain;
+                   border:0; border-radius:0; }
   .lead .count { position:absolute; left:50%; top:12px; transform:translateX(-50%);
                  background:rgba(21,19,15,.72); color:#faf6ee; font-size:.72rem;
                  letter-spacing:.14em; padding:.3rem .7rem; border-radius:999px; white-space:nowrap; }
@@ -466,7 +468,8 @@ _KNIFE_STYLE = """
            font-size:1.6rem; display:grid; place-items:center; box-shadow:0 4px 14px rgba(0,0,0,.35); }
   a.flip.prev { left:10px; }
   a.flip.next { right:10px; }
-  .lead.plain { display:flex; justify-content:space-between; align-items:center; gap:10px; min-height:60px; }
+  .lead.plain { display:flex; justify-content:space-between; align-items:center; gap:10px; min-height:60px;
+                background:none; border:0; overflow:visible; }
   .lead.plain .count, .lead.plain a.flip { position:static; transform:none; }
   .by { color:#555; margin:.2rem 0 .8rem; }
   .more h2 { font-family:'Bebas Neue',Impact,sans-serif; font-weight:400; letter-spacing:.04em;

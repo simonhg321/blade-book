@@ -727,3 +727,12 @@ def test_the_flip_script_only_follows_links_that_exist():
     js = publish._FLIP_SCRIPT
     assert 'a.flip.prev' in js and 'a.flip.next' in js
     assert 'innerHTML' not in js and 'fetch(' not in js and 'eval' not in js
+
+
+def test_a_tall_photo_never_pushes_the_name_off_the_screen():
+    """Look step, 2026-09-27: a portrait card shot at full column width was ~1300px
+    tall on a desktop, so the name and specs sat below the fold. The lead is capped
+    to the viewport and letterboxed on the dark ground instead."""
+    css = publish._KNIFE_STYLE
+    assert '.lead img.hero { display:block; margin:0; width:100%; max-height:82vh; object-fit:contain;' in css
+    assert '.lead { position:relative; margin:10px 0; background:#15130f;' in css
