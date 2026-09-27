@@ -17,8 +17,7 @@ import shutil
 import threading
 from datetime import datetime, timezone
 
-from PIL import (Image, ImageChops, ImageDraw, ImageFilter, ImageFont, ImageOps,
-                 UnidentifiedImageError)
+from PIL import Image, ImageDraw, ImageFont, ImageOps, UnidentifiedImageError
 
 from bb import auth, config, db, paths, photos
 
@@ -96,18 +95,14 @@ DISPLAY_EDGE = 1600
 THUMB_EDGE = 800
 
 
-# The mark (2026-09-26, Simon: "our watermarks make the knife look less sexy").
-# Two halves. The ETCH is a quiet repeat pressed into the photo — it takes the
-# photo's own tones instead of painting white over them, and it crosses every
-# part of the frame so no crop escapes it. The PLATE is a cream strip under the
-# photo naming the knife and the page it lives on: a pointer a buyer can check,
-# which is what actually beats a scam listing. No mark stops a determined thief.
+# The mark (2026-09-27, Simon: "just a subtle something that hooks it to us").
+# The photo is untouched. A cream PLATE under it names the knife and the page
+# it lives on. Photos of these knives are everywhere; scam-proofing is not the job.
 FONT_DIR = os.path.join(paths.CODE_DIR, 'html', 'fonts')
 _FALLBACK_FONT = '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
 PLATE_RATIO = 0.082                     # plate height as a share of the photo's width
 PLATE_CREAM, PLATE_INK = (250, 246, 238), (26, 26, 26)
 PLATE_ACCENT, PLATE_MUTED = (184, 69, 44), (107, 102, 92)
-_ETCH_ANGLE = 24
 _SEP = '  ·  '
 
 
@@ -131,41 +126,6 @@ def _draw_tracked(draw, xy, text, font, fill, gap):
     for ch in text:
         draw.text((x, y), ch, font=font, fill=fill)
         x += draw.textlength(ch, font=font) + gap
-
-
-def _etch_mask(size, text):
-    """L mask of `text` repeated in rows across the whole frame, tilted."""
-    w, h = size
-    px = max(14, int(max(w, h) * 0.0255))
-    gap = max(1, px // 7)
-    font = _font('BebasNeue-Regular.woff2', px)
-    side = int((w * w + h * h) ** 0.5) + 2 * px       # a square that still covers after the tilt
-    probe = ImageDraw.Draw(Image.new('L', (4, 4)))
-    unit = text + '      '
-    unit_w = max(1, _tracked_width(probe, unit, font, gap))
-    row = Image.new('L', (side + unit_w, int(px * 1.3)), 0)
-    _draw_tracked(ImageDraw.Draw(row), (0, 0), unit * (row.width // unit_w + 1), font, 255, gap)
-    layer = Image.new('L', (side, side), 0)
-    for i, y in enumerate(range(0, side, px * 6)):
-        layer.paste(row, (-(unit_w // 2) if i % 2 else 0, y))
-    layer = layer.rotate(_ETCH_ANGLE, resample=Image.BICUBIC)
-    left, top = (side - w) // 2, (side - h) // 2
-    return layer.crop((left, top, left + w, top + h))
-
-
-def _etch(img, mask, strength=0.8):
-    """Overlay-blend the mask as a lit face with a shadowed lower-right edge:
-    the letters read as engraved, in whatever colour the photo already is.
-    0.8 is tuned by eye: louder shouts on a bright table-top photo, quieter
-    disappears on a dark cloth."""
-    body = mask.filter(ImageFilter.GaussianBlur(0.6))
-    shadow = ImageChops.subtract(ImageChops.offset(body, 2, 2), body)
-    light = ImageChops.subtract(ImageChops.offset(body, -1, -1), body)
-    layer = Image.new('L', img.size, 128)
-    layer = ImageChops.add(layer, body.point(lambda v: int(v * 0.17 * strength)))
-    layer = ImageChops.add(layer, light.point(lambda v: int(v * 0.30 * strength)))
-    layer = ImageChops.subtract(layer, shadow.point(lambda v: int(v * 0.38 * strength)))
-    return ImageChops.overlay(img, Image.merge('RGB', (layer,) * 3))
 
 
 def full_name(row):
@@ -245,12 +205,6 @@ def _plate(img, text):
     return out
 
 
-def _watermark(img, handle, text):
-    """Etched repeat over the photo + the plate under it."""
-    line = f"@{handle.upper()}{_SEP}BLADE-BOOK{_SEP}{text['tag']}"
-    return _plate(_etch(img, _etch_mask(img.size, line)), text)
-
-
 def export_hero(store, k, handle, img_dir, row=None, gated=False):
     """Re-encoded (EXIF/GPS-free), marked display + clean thumb for the knife's
     hero photo. `row` is the knife's public row (the plate is written from it,
@@ -285,7 +239,7 @@ def export_hero(store, k, handle, img_dir, row=None, gated=False):
     scale = min(1.0, DISPLAY_EDGE / w0, DISPLAY_EDGE / (h0 + PLATE_RATIO * w0))
     display = img.copy()
     display.thumbnail((max(1, int(w0 * scale)), max(1, int(h0 * scale))))
-    display = _watermark(display, handle, plate_text(row or {'tag': k['tag']}, handle, gated))
+    display = _plate(display, plate_text(row or {'tag': k['tag']}, handle, gated))
     if max(display.size) > DISPLAY_EDGE:          # a very narrow photo: the plate's floor height
         display.thumbnail((DISPLAY_EDGE, DISPLAY_EDGE))
     display.save(os.path.join(img_dir, out), 'JPEG', quality=85, optimize=True)

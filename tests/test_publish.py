@@ -402,10 +402,7 @@ def test_head_falls_back_to_site_card_when_no_hero():
     assert 'og:image:width' not in hero
 
 
-# --- the mark (2026-09-26): etched repeat over the photo + a plate under it ---
-# Simon: "our watermarks make the knife look less sexy" — still marked against
-# scam listings, but the mark takes the photo's own tones and the plate names
-# the knife and the page it lives on.
+# --- the mark (2026-09-27): the photo untouched, a plate under it ---
 
 CREAM = (250, 246, 238)
 
@@ -506,24 +503,6 @@ def test_export_hero_with_plate_still_fits_the_display_edge(tmp_path):
     assert max(display.size) <= publish.DISPLAY_EDGE
 
 
-def test_mark_keeps_the_photos_own_colour(tmp_path):
-    # white paint washes a blue cloth toward grey; an etch stays blue
-    display, _ = _export(tmp_path, _flat_jpeg(1200, 800, (30, 60, 160)))
-    photo = display.crop((0, 0, 1200, 800))
-    washed = sum(1 for r, g, b in _pixels(photo) if min(r, g, b) > 0.36 * max(r, g, b))
-    assert washed < 100            # JPEG ringing strays a few; white paint washed 11,000+
-
-
-def test_mark_crosses_every_part_of_the_photo(tmp_path):
-    # crop-resistant: whatever rectangle a thief keeps, the mark is in it
-    display, _ = _export(tmp_path, _flat_jpeg(1200, 800, (120, 120, 120)))
-    for cx in range(4):
-        for cy in range(3):
-            cell = display.crop((cx * 300, cy * 266, cx * 300 + 300, cy * 266 + 266)).convert('L')
-            lo, hi = cell.getextrema()
-            assert hi - lo > 12, (cx, cy)
-
-
 def test_plate_type_never_runs_off_the_plate(tmp_path):
     k = _knife(tag='K123', model='Extraordinarily Long Model Name That Goes On',
                maker='other', maker_name='A Very Long Knife Maker Name & Sons Cutlery Works',
@@ -561,3 +540,12 @@ def test_full_name_uses_the_variant_for_other_makers():
     # a CRK variant is shorthand for fields already in the name — never appended
     crk = _knife(variant='31 Inlay', ext={'generation': '31', 'size': 'Large'})
     assert publish.full_name(publish.public_row(crk, USER)) == 'Large Sebenza 31'
+
+
+def test_the_photo_itself_is_untouched(tmp_path):
+    # Simon 2026-09-27: "a subtle something that hooks it to us" — the plate, nothing on the knife
+    display, _ = _export(tmp_path, _flat_jpeg(1200, 800, (30, 60, 160)))
+    photo = display.crop((0, 0, 1200, 790))            # clear of the plate's rule line
+    for band, want in zip(photo.split(), (30, 60, 160)):
+        lo, hi = band.getextrema()
+        assert want - 4 <= lo and hi <= want + 4, (lo, hi, want)
