@@ -6,11 +6,10 @@
 <link rel="apple-touch-icon" href="/blade-book/apple-touch-icon.png">
 <link rel="stylesheet" href="/blade-book/vibe.css?v=20260904">
 <style>
-  body{max-width:560px;margin:0 auto;padding:14px 14px 60px}
+  body{margin:0;padding:0 0 60px}
   .who{color:var(--muted);font-size:.9rem;margin-bottom:10px}
   .who .takedata{color:inherit;text-decoration:underline;text-underline-offset:3px}
   .who .takedata:hover{color:var(--ink)}
-  #q{width:100%;font:inherit;padding:.7rem .9rem;border:2px solid var(--ink);border-radius:10px;background:#fff;margin-bottom:10px}
   #bulkbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--soft);border-radius:10px;padding:8px 10px;margin-bottom:10px;font-size:.9rem}
   #status{text-align:center;color:var(--muted);min-height:1.3em;margin:6px 0;font-size:.9rem}
   #status.err{color:var(--accent);font-weight:700}
@@ -46,13 +45,6 @@
   .danger{margin-top:12px;text-align:center}
   .empty{text-align:center;color:var(--muted);padding:40px 0}
   .empty a{display:inline-block;margin-top:12px}
-  #pubsec{margin-bottom:10px}
-  #pubsec summary{cursor:pointer;font-weight:700;padding:6px 0}
-  #pubsec p{margin:8px 0}
-  #pubsec label{display:block;margin:8px 0;font-size:.95rem;color:var(--ink)}
-  #pubsec input{margin-right:6px}
-  #pubsec button{margin-top:6px;margin-right:6px}
-  #pubsec .muted{margin-top:10px}
   #facebar{display:flex;align-items:center;gap:10px;background:#fff;border:2px solid var(--ink);border-radius:12px;padding:8px 10px;margin-bottom:10px;font-size:.9rem}
   #facebar img{width:48px;height:48px;object-fit:cover;border-radius:8px;border:1px solid var(--line);flex:none}
   #facebar .lbl{font-size:.7rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);display:block}
@@ -63,33 +55,154 @@
   dialog p{color:var(--muted);margin:0 0 10px;font-size:.9rem}
   dialog img{width:100%;max-height:50vh;object-fit:contain;border-radius:10px;background:var(--soft);display:block;margin-bottom:10px}
   dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
+  /* ── the vault (2026-09-26, docs/superpowers/plans/2026-09-26-vault.md) ──
+     every class here is v-prefixed: the card's .hero/.photos names stay the card's (see c0d01c3) */
+  .vband{position:relative;overflow:hidden;background:#15130f;color:#faf6ee;padding:16px 16px 64px}
+  .vband::before{content:'';position:absolute;inset:-40px;background:var(--vhero,none) center/cover;filter:blur(28px) brightness(.45) saturate(1.2);transform:scale(1.1)}
+  .vband>*{position:relative}
+  .vtop{display:flex;justify-content:space-between;align-items:center;gap:10px;max-width:1180px;margin:0 auto}
+  .vbrand{display:flex;align-items:center;gap:8px;font-size:1.5rem;color:#faf6ee;text-decoration:none}
+  .vbrand .bbmark{background:#faf6ee;border-radius:4px}
+  .vnav{display:flex;gap:14px;align-items:center;font-size:.88rem;flex-wrap:wrap;justify-content:flex-end}
+  .vnav a,.vnav .btn.link{color:#e9e2d2;text-decoration:none;padding:0;font-size:.88rem}
+  .vnav a.add{color:#fff;background:var(--accent);padding:.45rem .85rem;border-radius:999px;font-weight:700}
+  .vhero{max-width:1180px;margin:20px auto 0;display:grid;grid-template-columns:1fr auto;gap:24px;align-items:end}
+  .vkick{font-size:.76rem;letter-spacing:.2em;color:#e7c9bb}
+  .vhero h1{font-size:clamp(2.4rem,7vw,4.6rem);margin:6px 0 4px;line-height:.95;overflow-wrap:anywhere}
+  .vstats{display:flex;gap:4px 18px;flex-wrap:wrap;font-size:.95rem;color:#d9d2c3}
+  .vstats b{font-family:'Bebas Neue',sans-serif;font-size:1.7rem;color:#fff;font-weight:400;margin-right:4px;letter-spacing:.03em}
+  .vface{width:210px;border-radius:14px;overflow:hidden;border:2px solid rgba(255,255,255,.85);box-shadow:0 18px 40px rgba(0,0,0,.5);background:#000}
+  .vface img{display:block;width:100%;aspect-ratio:4/5;object-fit:cover}
+  .vface div{background:#faf6ee;color:var(--ink);padding:8px 10px;font-size:.8rem}
+  .vface div span{display:block;font-size:.66rem;letter-spacing:.16em;color:var(--muted)}
+  .vface b{color:var(--accent)} .vface i{font-style:normal}
+  .vlens{max-width:1180px;margin:-30px auto 0;padding:0 16px;position:relative;z-index:2}
+  .vseg{display:inline-flex;background:#fff;border:2px solid var(--ink);border-radius:999px;padding:4px;box-shadow:0 6px 18px rgba(0,0,0,.12)}
+  .vseg button{font:inherit;font-weight:700;letter-spacing:.03em;border:0;background:none;padding:.6rem 1.1rem;border-radius:999px;cursor:pointer;color:var(--muted)}
+  .vseg button.on{background:var(--ink);color:#fff}
+  .vmain{max-width:1180px;margin:0 auto;padding:14px 16px 0}
+  #pubnote{background:#dfeee3;color:var(--ok);border-radius:12px;padding:10px 14px;margin-bottom:12px;font-size:.92rem;font-weight:600}
+  #pubnote a{color:var(--ok)}
+  .vshows{margin:4px 0 14px}
+  .vshows>summary{list-style:none;cursor:pointer;background:#fff;border:2px solid var(--ink);border-radius:16px;padding:12px 16px;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+  .vshows>summary::-webkit-details-marker{display:none}
+  .vshows>summary .bb-display{font-size:1.3rem}
+  .vshows>summary .now{color:var(--muted);font-size:.85rem;flex:1}
+  .vshows>summary .chev{color:var(--accent);font-weight:700;font-size:.85rem}
+  .vshows[open]>summary{border-radius:16px 16px 0 0;border-bottom:1px dashed var(--line)}
+  .vshows-body{background:#fff;border:2px solid var(--ink);border-top:0;border-radius:0 0 16px 16px;padding:6px 16px 14px}
+  .vshows-body p{margin:8px 0} .vshows-body label{display:block;margin:8px 0;font-size:.95rem}
+  .vshows-body input{margin-right:6px} .vshows-body button{margin-top:6px;margin-right:6px}
+  .vshows-body input#pagekey{margin:4px 0 0;width:100%;font:inherit;padding:.5rem .6rem;border:1px solid var(--line);border-radius:8px}
+  .vbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+  .vchip{font:inherit;font-size:.85rem;font-weight:700;border:2px solid var(--ink);background:#fff;border-radius:999px;padding:.4rem .8rem;cursor:pointer;color:var(--ink)}
+  .vchip.on{background:var(--ink);color:#fff}
+  .vchip i{font-style:normal;color:var(--muted);font-weight:400;margin-left:3px} .vchip.on i{color:#cfc8b8}
+  #vselect.on{background:var(--accent);border-color:var(--accent)}
+  #q{flex:1;min-width:200px;font:inherit;padding:.5rem .9rem;border:2px solid var(--line);border-radius:999px;background:#fff}
+  .vgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:16px}
+  .vtile{background:#fff;border:2px solid var(--ink);border-radius:14px;overflow:hidden;cursor:pointer;transition:transform .15s;display:flex;flex-direction:column}
+  .vtile:hover{transform:translateY(-3px)}
+  .vtile.sel{outline:4px solid var(--accent);outline-offset:2px}
+  .vt-ph{position:relative;aspect-ratio:1;background:var(--soft)}
+  .vt-ph img{width:100%;height:100%;object-fit:cover;display:block}
+  .vtile.priv .vt-ph img{filter:grayscale(.55) brightness(.92)}
+  .vt-none{display:flex;height:100%;align-items:center;justify-content:center;color:var(--muted);font-size:.85rem}
+  .vt-tag{position:absolute;left:10px;top:10px;background:rgba(250,246,238,.94);font-family:'Bebas Neue',sans-serif;font-size:1.3rem;padding:0 .45rem;border-radius:7px;line-height:1.35}
+  .vt-vis{position:absolute;right:10px;top:10px;border:0;font:inherit;font-size:.74rem;font-weight:700;letter-spacing:.06em;padding:.4rem .65rem;border-radius:999px;cursor:pointer}
+  .vt-vis.pub{background:#fff;color:var(--ok)} .vt-vis.pri{background:var(--ink);color:#fff}
+  .vt-face{position:absolute;left:10px;bottom:10px;background:var(--accent);color:#fff;font-size:.7rem;font-weight:700;letter-spacing:.1em;padding:.25rem .55rem;border-radius:999px}
+  .vt-sale{position:absolute;right:10px;bottom:10px;background:var(--warn);color:#3b2a00;font-size:.7rem;font-weight:700;letter-spacing:.08em;padding:.25rem .55rem;border-radius:999px;text-transform:uppercase}
+  .vt-flag{position:absolute;left:10px;right:10px;bottom:38px;background:#f6e7c6;color:#8a5a00;font-size:.7rem;font-weight:700;padding:.25rem .5rem;border-radius:8px;text-align:center}
+  .vt-meta{padding:10px 12px 12px}
+  .vt-meta b{display:block;font-size:1rem;line-height:1.2}
+  .vt-meta em{font-style:normal;color:var(--accent)}
+  .vt-meta span{display:block;color:var(--muted);font-size:.82rem;margin-top:3px}
+  .vt-add{border:2px dashed var(--line);border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);min-height:240px;text-decoration:none;gap:6px;text-align:center;padding:10px}
+  .vt-add b{font-size:2.4rem;color:var(--accent);line-height:1}
+  .vempty{grid-column:1/-1;text-align:center;color:var(--muted);padding:24px 0}
+  .vscrim{position:fixed;inset:0;background:rgba(20,18,14,.55);z-index:10}
+  .vsheet{position:fixed;z-index:11;background:var(--cream);overflow:auto;right:0;top:0;bottom:0;width:min(760px,100%);box-shadow:-20px 0 50px rgba(0,0,0,.3)}
+  .vs-head{position:sticky;top:0;background:var(--cream);border-bottom:2px solid var(--ink);padding:14px 18px 12px;display:flex;gap:14px;align-items:flex-start;z-index:2}
+  .vs-tag{font-size:3rem;line-height:.9;color:var(--accent)}
+  .vs-head h2{margin:0;font-size:1.25rem;line-height:1.15}
+  .vs-head h2 em{font-style:normal;color:var(--accent)}
+  .vs-head p{margin:3px 0 0;color:var(--muted);font-size:.88rem}
+  .vs-x{margin-left:auto;font:inherit;font-size:1.8rem;line-height:1;border:0;background:none;cursor:pointer;color:var(--muted);padding:0 4px}
+  .vs-body{padding:14px 18px 40px}
+  .vs-body .knife.card{border:0;padding:0;background:none;margin:0}
+  .vs-body .knife .top .sel,.vs-body .knife .top .tag,.vs-body .knife .top .title{display:none}
+  .vs-body .photos{grid-template-columns:2fr 1fr 1fr}
+  body.vlock{overflow:hidden}
+  @media (max-width:760px){
+    .vtop{flex-wrap:wrap}
+    .vnav{justify-content:flex-start;gap:6px 14px;width:100%}
+    .vnav a.add{position:absolute;right:0;top:0}
+    .vhero{grid-template-columns:1fr}
+    .vface{display:none!important}
+    .vgrid{grid-template-columns:1fr 1fr;gap:10px}
+    .vt-meta{padding:8px 9px 10px} .vt-meta b{font-size:.9rem}
+    .vt-tag{font-size:1.05rem}
+    .vt-vis{font-size:.66rem;padding:.35rem .5rem}
+    .vseg button{padding:.55rem .8rem;font-size:.85rem}
+    .vshows>summary{display:grid;grid-template-columns:1fr auto;gap:2px 10px}
+    .vshows>summary .now{grid-column:1/-1;grid-row:2}
+    .vsheet{top:6vh;border-radius:18px 18px 0 0;width:100%}
+    .vs-tag{font-size:2.4rem}
+  }
+  @media (min-width:761px){ #facebar{display:none!important} }
 </style>
 
-<header class="bb-head">
-  <h1 class="bb-display"><img class="bbmark" src="/blade-book/mark.svg" alt="" width="30">MY REGISTER</h1>
-  <nav class="bb-nav"><a class="add" href="/blade-book/me/add/">+ add</a><a href="/blade-book/me/">register</a><a href="/blade-book/me/wants/">wants</a><a href="/blade-book/me/settings/">settings</a><a href="/blade-book/board/">board</a><a href="/blade-book/">home</a><a id="adminlink" href="/blade-book/admin/" hidden>admin</a><button id="signout" class="btn link" type="button">sign out</button></nav>
+<header class="vband" id="vband">
+  <div class="vtop"><a class="vbrand bb-display" href="/blade-book/"><img class="bbmark" src="/blade-book/mark.svg" alt="" width="26">BLADE-BOOK</a>
+    <nav class="vnav"><a href="/blade-book/me/wants/">wants</a><a href="/blade-book/board/">board</a><a href="/blade-book/search/">search</a><a href="/blade-book/me/settings/">settings</a><a id="adminlink" href="/blade-book/admin/" hidden>admin</a><button id="signout" class="btn link" type="button">sign out</button><a class="add" href="/blade-book/me/add/">+ add a knife</a></nav></div>
+  <div class="vhero">
+    <div><div class="vkick">🔒 MY VAULT · ONLY YOU SEE THIS</div>
+      <h1 class="bb-display" id="vhandle">MY REGISTER</h1>
+      <div class="vstats" id="vstats"></div></div>
+    <div class="vface" id="vface" hidden><img id="vfaceimg" alt=""><div><span>★ FACE OF YOUR REGISTER</span><b id="vfacetag"></b> <i id="vfacettl"></i></div></div>
+  </div>
 </header>
+<div class="vlens"><div class="vseg"><button id="lensvault" class="on" type="button">🔒 My vault</button><button id="lenspub" type="button">🌐 As the public sees it</button></div></div>
+
+<main class="vmain">
 <div class="who"><span id="handle"></span> · <span id="count"></span> · <a class="takedata" href="/blade-book/api/settings/export.csv" download>⬇ take my data (.csv)</a><span id="coverwrap" hidden> · <a id="coverlink" class="takedata" href="/blade-book/me/covers/">choose covers</a></span></div>
 <div id="facebar" hidden><img id="faceimg" alt="" hidden><span><span class="lbl">★ Face of your register</span><span id="facetxt"></span></span></div>
-<input id="q" type="search" placeholder="search your register — everything, private notes too" autocomplete="off">
-<div id="bulkbar" class="hidden"><span id="bulkn"></span>
-  <button id="bulkpub" class="btn alt" type="button">make public</button>
-  <button id="bulkpriv" class="btn alt" type="button">make private</button>
-  <button id="bulkclear" class="btn link" type="button">clear</button></div>
-<div id="status" aria-live="polite"></div>
-<details id="pubsec" class="card">
-  <summary>YOUR PUBLIC PAGE</summary>
-  <p><a id="publink" target="_blank" rel="noopener"></a></p>
+<div id="pubnote" hidden>🌐 This is what visitors see — private knives, drafts and your notes stay out. <a id="pubnotelink" target="_blank" rel="noopener">open my public page ↗</a></div>
+<details id="pubsec" class="vshows">
+  <summary><span class="bb-display">WHAT MY PUBLIC PAGE SHOWS</span><span class="now" id="pubnow"></span><span class="chev">edit ›</span></summary>
+  <div class="vshows-body">
+  <p>YOUR PUBLIC PAGE: <a id="publink" target="_blank" rel="noopener"></a></p>
   <label><input type="checkbox" id="hideday"> hide birth <em>day</em> (show month + year only)</label>
   <label><input type="checkbox" id="privprof"> hide the whole page</label>
   <label>page key (optional — visitors need it once):
     <input id="pagekey" placeholder="no key — page is open" autocomplete="off"></label>
   <button id="savekey" class="btn" type="button">set key</button>
   <button id="clearkey" class="btn" type="button" hidden>remove key</button>
+  <p class="muted">🔒 Never public, no switch: what you paid, who from, where it’s kept, private notes, your email.</p>
   <p class="muted">Changes appear on your public page about 30 seconds after your last save.</p>
+  </div>
 </details>
+<div class="vbar">
+  <button class="vchip on" type="button" data-f="all">All <i id="nall"></i></button><button class="vchip" type="button" data-f="shown">🌐 Shown <i id="nshown"></i></button><button class="vchip" type="button" data-f="priv">🔒 Private <i id="npriv"></i></button><button class="vchip" type="button" data-f="sale">For sale · trade <i id="nsale"></i></button><button class="vchip" type="button" id="vselect">select</button>
+  <input id="q" type="search" placeholder="search your vault — private notes too" autocomplete="off">
+</div>
+<div id="bulkbar" class="hidden"><span id="bulkn"></span>
+  <button id="bulkpub" class="btn alt" type="button">make public</button>
+  <button id="bulkpriv" class="btn alt" type="button">make private</button>
+  <button id="bulkclear" class="btn link" type="button">clear</button></div>
+<div id="status" aria-live="polite"></div>
 <div id="drafts"></div>
-<div id="cards"></div>
+<div id="cards" class="vgrid"></div>
+</main>
+
+<div class="vscrim" id="vscrim" hidden></div>
+<aside class="vsheet" id="vsheet" hidden aria-label="knife">
+  <div class="vs-head"><div class="vs-tag bb-display" id="vstag"></div>
+    <div><h2 id="vsttl"></h2><p id="vssub"></p></div>
+    <button class="vs-x" id="vsx" type="button" aria-label="close">×</button></div>
+  <div class="vs-body" id="vsbody"></div>
+</aside>
 
 <dialog id="facedlg">
   <h2 id="facetitle"></h2>
@@ -198,6 +311,125 @@
     var e = k.ext || {};
     var brand = (k.maker || 'crk') !== 'crk' && k.maker_name && (k.model || '').toLowerCase().indexOf(k.maker_name.split(' ')[0].toLowerCase()) === -1 ? k.maker_name : '';
     return [brand, e.size, k.model, e.generation, k.blade_shape ? '· ' + k.blade_shape : '', k.blade_steel ? '· ' + k.blade_steel : ''].filter(Boolean).join(' ') || 'untitled';
+  }
+
+  // --- the shelf (vault, 2026-09-26): what a collector reads on a tile ---
+  var filter = 'all', lens = 'vault', selecting = false, sheetId = null, publicUrl = '';
+  // same rule as db.public_knives: sold / consigned pieces left the collection and leave the public page
+  function isGone(k) { return k.sale_status === 'sold' || k.sale_status === 'consigned'; }
+  function isShown(k) { return !!(k.status === 'live' && k.is_public && !k.hidden_at && !isGone(k)); }
+  function shelfTitle(k) {
+    var e = k.ext || {};
+    var brand = (k.maker || 'crk') !== 'crk' && k.maker_name && (k.model || '').toLowerCase().indexOf(k.maker_name.split(' ')[0].toLowerCase()) === -1 ? k.maker_name : '';
+    var main = [brand, e.size, k.model, e.generation].filter(Boolean).join(' ') || 'untitled';
+    var flair = e.graphic_name || e.special_edition || k.variant || e.damascus_pattern || '';
+    if (flair && main.toLowerCase().indexOf(String(flair).toLowerCase()) !== -1) flair = '';
+    return [main, flair];
+  }
+  var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  function bornLabel(k) {
+    var b = String(k.born_on || ''); if (!b) return 'undated';
+    var p = b.split('-');
+    if (p.length >= 3 && MONTHS[+p[1] - 1]) return 'born ' + MONTHS[+p[1] - 1] + ' ' + (+p[2]) + ', ' + p[0];
+    if (p.length === 2 && MONTHS[+p[1] - 1]) return 'born ' + MONTHS[+p[1] - 1] + ' ' + p[0];
+    return 'born ' + p[0];
+  }
+  function shelfCounts(list) {
+    var c = { all: 0, shown: 0, priv: 0, sale: 0 };
+    list.forEach(function (k) {
+      c.all++; if (isShown(k)) c.shown++; if (!k.is_public) c.priv++;
+      if (k.sale_status === 'for_sale' || k.sale_status === 'for_trade') c.sale++;
+    });
+    return c;
+  }
+  function passes(k) {
+    if (lens === 'public') return isShown(k);
+    if (filter === 'shown') return isShown(k);
+    if (filter === 'priv') return !k.is_public;
+    if (filter === 'sale') return k.sale_status === 'for_sale' || k.sale_status === 'for_trade';
+    return true;
+  }
+  function setPublic(k, on) {
+    return json('POST', '/knives/' + k.id + '/public', { is_public: on }).then(function (res) {
+      if (!res.ok) throw new Error(res.j.error || 'could not update');
+      k.is_public = res.j.is_public;
+      if (!on && featuredId === k.id) featuredId = null;       // the server clears a private face pin too
+      say(k.tag + (on ? ' is shown on your public page — live in about 30 seconds' : ' is private now — only you can see it'));
+      render();
+    }).catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); });
+  }
+
+  function renderTile(k) {
+    var t = el('article', 'vtile' + (isShown(k) ? '' : ' priv') + (selected[k.id] ? ' sel' : '')); t.id = k.tag;
+    var ph = el('div', 'vt-ph');
+    if (k.photos.length) { var im = el('img'); im.src = coverSrc(k); im.alt = k.tag; im.loading = 'lazy'; ph.appendChild(im); }
+    else ph.appendChild(el('div', 'vt-none', 'no photo'));
+    ph.appendChild(el('span', 'vt-tag', k.tag));
+    if (lens === 'vault') {
+      var shown = isShown(k);
+      var v = el('button', 'vt-vis ' + (shown ? 'pub' : 'pri'), shown ? '🌐 SHOWN' : '🔒 PRIVATE'); v.type = 'button';
+      v.title = shown ? 'shown on your public page — tap to make it private' : 'private — tap to show it on your public page';
+      if (k.hidden_at) { v.disabled = true; v.textContent = '⚠ UNDER REVIEW'; }
+      else if (isGone(k)) { v.disabled = true; v.className = 'vt-vis pri'; v.textContent = (k.sale_status === 'sold' ? 'SOLD' : 'AT A DEALER') + ' — OFF THE PAGE'; }
+      v.addEventListener('click', function (e) { e.stopPropagation(); setPublic(k, !k.is_public); });
+      ph.appendChild(v);
+    }
+    if (k.id === featuredId && isHeroEligible(k)) ph.appendChild(el('span', 'vt-face', '★ FACE'));
+    if (k.sale_status === 'for_sale' || k.sale_status === 'for_trade') ph.appendChild(el('span', 'vt-sale', k.sale_status === 'for_sale' ? 'for sale' : 'for trade'));
+    if (k.hidden_at && lens === 'vault') ph.appendChild(el('span', 'vt-flag', 'hidden — under review'));
+    t.appendChild(ph);
+    var m = el('div', 'vt-meta'), tt = shelfTitle(k), b = el('b', null, tt[0]);
+    if (tt[1]) b.appendChild(el('em', null, ' — ' + tt[1]));
+    m.appendChild(b); m.appendChild(el('span', null, bornLabel(k))); t.appendChild(m);
+    t.addEventListener('click', function () {
+      if (selecting) { if (selected[k.id]) delete selected[k.id]; else selected[k.id] = true; render(); return; }
+      openSheet(k);
+    });
+    return t;
+  }
+
+  function renderBand(live) {
+    var c = shelfCounts(live), st = $('vstats'); clear(st);
+    var years = live.map(function (k) { return parseInt(String(k.born_on || '').slice(0, 4), 10); }).filter(function (y) { return y > 1900; });
+    var parts = [[c.all, c.all === 1 ? 'knife' : 'knives'], [c.shown, 'shown'], [c.priv, 'private']];
+    if (years.length) parts.push([Math.min.apply(null, years) + (Math.max.apply(null, years) !== Math.min.apply(null, years) ? '–' + Math.max.apply(null, years) : ''), 'born']);
+    parts.forEach(function (p) { var sp = el('span'); sp.appendChild(el('b', null, String(p[0]))); sp.appendChild(document.createTextNode(p[1])); st.appendChild(sp); });
+    var face = live.filter(function (k) { return k.id === featuredId && isHeroEligible(k); })[0];
+    var bg = face || live.filter(function (k) { return isShown(k) && k.photos.length; })[0];
+    $('vband').style.setProperty('--vhero', bg ? 'url("' + coverSrc(bg) + '")' : 'none');
+    $('vface').hidden = !face;
+    if (face) {
+      $('vfaceimg').src = coverSrc(face); $('vfacetag').textContent = face.tag;
+      var ft = shelfTitle(face); $('vfacettl').textContent = ft[0] + (ft[1] ? ' — ' + ft[1] : '');
+    }
+    $('nall').textContent = c.all; $('nshown').textContent = c.shown; $('npriv').textContent = c.priv; $('nsale').textContent = c.sale;
+  }
+
+  function setLens(name) {
+    lens = name;
+    $('lensvault').classList.toggle('on', lens === 'vault'); $('lenspub').classList.toggle('on', lens === 'public');
+    $('pubnote').hidden = lens !== 'public';
+    document.querySelector('.vbar').hidden = lens === 'public';
+    $('pubsec').hidden = lens === 'public';
+    if (lens === 'public') { selecting = false; $('vselect').classList.remove('on'); }
+    render();
+  }
+
+  function openSheet(k) {
+    sheetId = k.id;
+    $('vstag').textContent = k.tag;
+    var tt = shelfTitle(k), h = $('vsttl'); clear(h); h.appendChild(document.createTextNode(tt[0] + ' '));
+    if (tt[1]) h.appendChild(el('em', null, '— ' + tt[1]));
+    $('vssub').textContent = bornLabel(k) + (k.maker_name ? ' · ' + k.maker_name : '') + (isShown(k) ? ' · 🌐 shown' : ' · 🔒 private');
+    openMap[k.id] = true;
+    var body = $('vsbody'); clear(body);
+    var art = renderOne(k); art.removeAttribute('id');          // the tile owns id=K89
+    body.appendChild(art);
+    $('vsheet').hidden = false; $('vscrim').hidden = false; document.body.classList.add('vlock');
+  }
+  function closeSheet() {
+    sheetId = null; $('vsheet').hidden = true; $('vscrim').hidden = true; document.body.classList.remove('vlock');
+    if (location.hash) history.replaceState(null, '', location.pathname);
   }
 
   function renderRows(tbody, k) {
@@ -417,16 +649,26 @@
     var drafts = knives.filter(function (k) { return k.status === 'draft'; });
     $('count').textContent = live.length + (live.length === 1 ? ' knife' : ' knives') + (drafts.length ? ' · ' + drafts.length + ' draft' + (drafts.length === 1 ? '' : 's') : '');
     var d = $('drafts'); clear(d);
-    drafts.forEach(function (k) {
+    if (lens === 'vault') drafts.forEach(function (k) {
       var a = el('a'); a.href = '/blade-book/me/add/';
       a.appendChild(el('b', null, k.tag)); a.appendChild(document.createTextNode(' · draft · ' + (k.photos.length ? k.photos.length + ' photo' + (k.photos.length > 1 ? 's' : '') : 'no photo yet') + ' — finish in add →'));
       d.appendChild(a);
     });
+    renderBand(live);
     var c = $('cards'); clear(c);
-    var shown = live.filter(function (k) { return matches(k, q); });
-    if (!live.length) { var e = el('div', 'empty', 'Your register is empty.'); var a2 = el('a', 'btn accent', '📷 add the first knife'); a2.href = '/blade-book/me/add/'; e.appendChild(a2); c.appendChild(e); }
-    else if (!shown.length) c.appendChild(el('div', 'empty', 'nothing matches “' + q + '”'));
-    shown.forEach(function (k) { c.appendChild(renderOne(k)); });
+    var shown = live.filter(function (k) { return passes(k) && matches(k, q); });
+    if (!live.length) c.appendChild(el('div', 'vempty', 'Your vault is empty — one photo starts it.'));
+    else if (!shown.length) c.appendChild(el('div', 'vempty', q ? 'nothing matches “' + q + '”' : 'nothing here'));
+    shown.forEach(function (k) { c.appendChild(renderTile(k)); });
+    if (lens === 'vault') {
+      var add = el('a', 'vt-add'); add.href = '/blade-book/me/add/';
+      add.appendChild(el('b', null, '+')); add.appendChild(document.createTextNode('add a knife — one photo is enough'));
+      c.appendChild(add);
+    }
+    if (sheetId !== null) {
+      var open = knives.filter(function (k) { return k.id === sheetId; })[0];
+      if (open) { var st = $('vsheet').scrollTop; openSheet(open); $('vsheet').scrollTop = st; } else closeSheet();
+    }
     renderFace();
     syncBulk();
     window.scrollTo(0, y);
@@ -473,7 +715,7 @@
       img.src = coverSrc(k); img.alt = k.tag; img.hidden = false;
       clear($('facetxt'));
       $('facetxt').appendChild(el('b', null, k.tag + ' '));
-      $('facetxt').appendChild(document.createTextNode(title(k)));
+      var ftt = shelfTitle(k); $('facetxt').appendChild(document.createTextNode(ftt[0] + (ftt[1] ? ' — ' + ftt[1] : '')));
     } else {
       img.hidden = true;
       $('facetxt').textContent = k ? k.tag + ' is pinned but not public — your first public knife shows instead'
@@ -497,6 +739,25 @@
   $('bulkpub').addEventListener('click', function () { bulk(true); });
   $('bulkpriv').addEventListener('click', function () { bulk(false); });
   $('bulkclear').addEventListener('click', function () { selected = {}; render(); });
+  Array.prototype.forEach.call(document.querySelectorAll('.vchip[data-f]'), function (b) {
+    b.addEventListener('click', function () {
+      filter = b.getAttribute('data-f');
+      Array.prototype.forEach.call(document.querySelectorAll('.vchip[data-f]'), function (x) { x.classList.toggle('on', x === b); });
+      render();
+    });
+  });
+  $('vselect').addEventListener('click', function () {
+    selecting = !selecting; $('vselect').classList.toggle('on', selecting);
+    $('vselect').textContent = selecting ? 'done selecting' : 'select';
+    if (!selecting) selected = {};
+    say(selecting ? 'tap knives to select them, then make them public or private together' : '');
+    render();
+  });
+  $('lensvault').addEventListener('click', function () { setLens('vault'); });
+  $('lenspub').addEventListener('click', function () { setLens('public'); });
+  $('vsx').addEventListener('click', closeSheet);
+  $('vscrim').addEventListener('click', closeSheet);
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && sheetId !== null && !$('facedlg').open) closeSheet(); });
   $('q').addEventListener('input', render);
 
   function reload() {
@@ -507,8 +768,10 @@
       var nCover = knives.filter(function (k) { return k.status === 'live' && (k.photos || []).length > 1 && !k.hero_photo; }).length;
       $('coverwrap').hidden = !knives.some(function (k) { return (k.photos || []).length > 1; });
       $('coverlink').textContent = 'choose covers' + (nCover ? ' (' + nCover + ')' : '');
-      if (!didScroll && location.hash && document.getElementById(location.hash.slice(1))) {
-        document.getElementById(location.hash.slice(1)).scrollIntoView(); didScroll = true;
+      if (!didScroll && location.hash) {                       // /me/add → /me/#K98 lands on that knife's sheet, once
+        var hk = knives.filter(function (k) { return k.status === 'live' && k.tag === location.hash.slice(1); })[0];
+        if (hk) { document.getElementById(hk.tag) && document.getElementById(hk.tag).scrollIntoView(); openSheet(hk); }
+        didScroll = true;
       }
       // fresh from /me/add: the save is instant, the public bundle is debounced + rebuilt (~1 min).
       // Say so once, or a new collector checks their page, sees nothing, and thinks it failed.
@@ -535,6 +798,10 @@
       $('clearkey').hidden = !s.has_key;
       if (s.has_key) $('pagekey').placeholder = 'a key is set — enter a new one to change it';
       else $('pagekey').placeholder = 'no key — page is open';
+      publicUrl = s.public_url || ''; $('pubnotelink').href = publicUrl;
+      $('pubnow').textContent = [s.hide_born_day ? 'month-only birth dates' : 'full birth dates', 'cover photo',
+                                 s.profile_private ? 'page hidden' : s.has_key ? 'page behind a key' : 'page open to anyone'].join(' · ');
+      if (knives.length) render();                               // face / page state changed under the shelf
     }).catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); });
   }
 
@@ -573,7 +840,7 @@
   // BOTH (loadSettings swallows its own error) before the first render, so
   // featuredId is already known and no card briefly claims a false hero state.
   Promise.all([
-    api('/auth/me').then(function (res) { $('handle').textContent = '@' + (res.j.handle || ''); }),
+    api('/auth/me').then(function (res) { $('handle').textContent = '@' + (res.j.handle || ''); $('vhandle').textContent = '@' + String(res.j.handle || '').toUpperCase(); }),
     loadSettings()
   ]).then(function () {
     return reload();

@@ -589,11 +589,22 @@ def test_board_carries_a_top_strip_too():
         assert sel in css, sel
 
 
-APP_PAGES = {'me/index.html': 'MY REGISTER', 'me/add/index.html': 'ADD A KNIFE', 'me/wants/index.html': 'YOUR WANTS',
+APP_PAGES = {'me/add/index.html': 'ADD A KNIFE', 'me/wants/index.html': 'YOUR WANTS',
              'me/settings/index.html': 'SETTINGS', 'admin/index.html': 'ADMIN'}
 ROW_LINKS = ('class="add" href="/blade-book/me/add/">+ add<', 'href="/blade-book/me/">register<', 'href="/blade-book/me/wants/">wants<',
              'href="/blade-book/me/settings/">settings<', 'href="/blade-book/board/">board<', 'href="/blade-book/">home<',
              'id="adminlink" href="/blade-book/admin/" hidden>admin<', 'id="signout" class="btn link" type="button">sign out<')
+
+
+def test_vault_band_keeps_every_nav_link():
+    # /me left the shared bb-head row for the vault band (2026-09-26); every destination stays one tap away
+    html = _read('html/me/index.html')
+    nav = html[html.index('class="vnav"'):html.index('</nav>')]
+    for needle in ('href="/blade-book/me/wants/">wants<', 'href="/blade-book/board/">board<', 'href="/blade-book/me/settings/">settings<',
+                   'id="adminlink" href="/blade-book/admin/" hidden>admin<', 'id="signout" class="btn link" type="button">sign out<',
+                   'class="add" href="/blade-book/me/add/">+ add a knife<'):
+        assert needle in nav, needle
+    assert '<script src="/blade-book/nav.js?v=20260904" defer></script>' in html
 
 
 def test_app_pages_share_the_header_row():
@@ -764,3 +775,41 @@ def test_born_private_copy_and_add_page_choice():
     assert 'Every knife starts private' in _read('html/how/index.html')
     me = _read('html/me/index.html')
     assert 'made_public' in me and 'private, only you can see it' in me
+
+
+# --- the vault (/me redesign step 1, docs/superpowers/plans/2026-09-26-vault.md) ---
+
+def test_vault_shelf_helpers_present():
+    html = _read('html/me/index.html')
+    for needle in ('function shelfTitle(k)', 'function bornLabel(k)', 'function shelfCounts(', 'function isShown(k)',
+                   'e.graphic_name || e.special_edition || k.variant || e.damascus_pattern'):
+        assert needle in html, needle
+
+
+def test_vault_band_and_lens():
+    html = _read('html/me/index.html')
+    for needle in ('id="vband"', 'id="lensvault"', 'id="lenspub"', 'function renderBand(', 'function setLens(',
+                   'MY VAULT', 'open my public page'):
+        assert needle in html, needle
+
+
+def test_vault_shelf_grid():
+    html = _read('html/me/index.html')
+    for needle in ('function renderTile(k)', 'class="vgrid"', 'data-f="priv"', 'data-f="shown"', 'data-f="sale"',
+                   "'vt-vis '", "'vt-add'", 'e.stopPropagation()', 'nothing here'):
+        assert needle in html, needle
+    assert "querySelector('.hero')" not in html
+
+
+def test_vault_sheet_wraps_the_full_card():
+    html = _read('html/me/index.html')
+    for needle in ('id="vsheet"', 'function openSheet(k)', 'function closeSheet()', "'Escape'"):
+        assert needle in html, needle
+    body = html.split('function openSheet(k)', 1)[1].split('\n  }\n', 1)[0]
+    assert 'renderOne(' in body
+
+
+def test_vault_select_mode_and_folded_public_settings():
+    html = _read('html/me/index.html')
+    for needle in ('id="vselect"', 'selecting', 'class="vshows"'):
+        assert needle in html, needle

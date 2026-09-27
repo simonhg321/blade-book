@@ -1,0 +1,290 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>blade-book — my vault (mockup)</title>
+<link rel="stylesheet" href="/blade-book/vibe.css">
+<style>
+  body{background:var(--cream)}
+  /* ── the face band: same language as the public register, but it's yours ── */
+  .band{position:relative;overflow:hidden;background:#15130f;color:#faf6ee;padding:18px 16px 70px}
+  .band::before{content:'';position:absolute;inset:-40px;background:var(--hero) center/cover;filter:blur(28px) brightness(.45) saturate(1.2);transform:scale(1.1)}
+  .band>*{position:relative}
+  .top{display:flex;justify-content:space-between;align-items:center;max-width:1180px;margin:0 auto}
+  .top .brand{display:flex;align-items:center;gap:8px;font-size:1.5rem}
+  .top nav{display:flex;gap:14px;font-size:.88rem}
+  .top nav a{color:#e9e2d2;text-decoration:none}
+  .top nav a.add{color:#fff;background:var(--accent);padding:.45rem .8rem;border-radius:999px;font-weight:700}
+  .hero{max-width:1180px;margin:22px auto 0;display:grid;grid-template-columns:1fr auto;gap:24px;align-items:end}
+  .kicker{font-size:.78rem;letter-spacing:.2em;color:#e7c9bb;text-transform:uppercase;display:flex;align-items:center;gap:8px}
+  .hero h1{font-size:clamp(2.6rem,7vw,4.6rem);margin:6px 0 4px;line-height:.95}
+  .stats{display:flex;gap:18px;flex-wrap:wrap;font-size:.95rem;color:#d9d2c3}
+  .stats b{font-family:'Bebas Neue',sans-serif;font-size:1.7rem;color:#fff;font-weight:400;margin-right:4px;letter-spacing:.03em}
+  .face{width:210px;border-radius:14px;overflow:hidden;border:2px solid rgba(255,255,255,.85);box-shadow:0 18px 40px rgba(0,0,0,.5);background:#000}
+  .face img{display:block;width:100%;aspect-ratio:4/5;object-fit:cover}
+  .face div{background:#faf6ee;color:var(--ink);padding:8px 10px;font-size:.8rem}
+  .face div span{display:block;font-size:.66rem;letter-spacing:.16em;color:var(--muted)}
+  .face div b{color:var(--accent)}
+  /* the two-sided switch — the whole idea of the page in one control */
+  .lens{max-width:1180px;margin:-34px auto 0;padding:0 16px;position:relative;z-index:2}
+  .lens .seg{display:inline-flex;background:#fff;border:2px solid var(--ink);border-radius:999px;padding:4px;box-shadow:0 6px 18px rgba(0,0,0,.12)}
+  .lens .seg button{font:inherit;font-weight:700;letter-spacing:.04em;border:0;background:none;padding:.6rem 1.1rem;border-radius:999px;cursor:pointer;color:var(--muted)}
+  .lens .seg button.on{background:var(--ink);color:#fff}
+  main{max-width:1180px;margin:0 auto;padding:18px 16px 60px}
+  /* what the public sees — the promise, stated as switches */
+  .shows{background:#fff;border:2px solid var(--ink);border-radius:16px;padding:16px;margin:8px 0 20px;display:grid;grid-template-columns:1.2fr 1fr;gap:22px}
+  .shows h2{font-size:1.5rem;margin:0 0 2px}
+  .shows p.sub{margin:0 0 12px;color:var(--muted);font-size:.9rem}
+  .sw{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--line);font-size:.95rem;gap:10px}
+  .sw small{display:block;color:var(--muted);font-size:.78rem}
+  .tog{width:46px;height:28px;border-radius:999px;background:var(--soft);position:relative;flex:none;border:2px solid var(--line)}
+  .tog::after{content:'';position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:.2s}
+  .tog.on{background:var(--ok);border-color:var(--ok)} .tog.on::after{left:20px}
+  .pick{display:inline-flex;border:2px solid var(--line);border-radius:999px;overflow:hidden;font-size:.78rem;flex:none}
+  .pick span{padding:.3rem .6rem;color:var(--muted)} .pick span.on{background:var(--ink);color:#fff}
+  .never{background:var(--cream);border-radius:12px;padding:12px 14px;align-self:start}
+  .never h3{margin:0 0 6px;font-size:.78rem;letter-spacing:.14em;text-transform:uppercase}
+  .never li{list-style:none;padding:6px 0;border-bottom:1px dashed var(--line);font-size:.92rem;display:flex;justify-content:space-between}
+  .never ul{margin:0;padding:0}
+  .never .lk{color:var(--muted);font-size:.8rem}
+  .showsd{margin:8px 0 18px}
+  .showsd>summary{list-style:none;cursor:pointer;background:#fff;border:2px solid var(--ink);border-radius:16px;padding:12px 16px;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+  .showsd>summary::-webkit-details-marker{display:none}
+  .showsd>summary .bb-display{font-size:1.3rem}
+  .showsd>summary .now{color:var(--muted);font-size:.85rem;flex:1}
+  .showsd>summary .chev{color:var(--accent);font-weight:700;font-size:.85rem}
+  .showsd[open]>summary{border-radius:16px 16px 0 0;border-bottom:0}
+  .showsd[open] .shows{margin-top:0;border-top:1px dashed var(--line);border-radius:0 0 16px 16px}
+  .showsd .shows h2,.showsd .shows p.sub{display:none}
+
+  /* ── the knife sheet ── */
+  .scrim{position:fixed;inset:0;background:rgba(20,18,14,.55);display:none;z-index:10}
+  .scrim.open{display:block}
+  .sheet{position:fixed;z-index:11;background:var(--cream);display:none;overflow:auto;
+         right:0;top:0;bottom:0;width:min(760px,100%);box-shadow:-20px 0 50px rgba(0,0,0,.3)}
+  .sheet.open{display:block}
+  .sh-head{position:sticky;top:0;background:var(--cream);border-bottom:2px solid var(--ink);padding:14px 18px 12px;display:flex;gap:14px;align-items:flex-start;z-index:2}
+  .sh-head .tg{font-family:'Bebas Neue',sans-serif;font-size:3rem;line-height:.9;color:var(--accent)}
+  .sh-head h2{margin:0;font-size:1.25rem;line-height:1.15}
+  .sh-head h2 em{font-style:normal;color:var(--accent)}
+  .sh-head p{margin:3px 0 0;color:var(--muted);font-size:.88rem}
+  .sh-head .x{margin-left:auto;font:inherit;font-size:1.6rem;line-height:1;border:0;background:none;cursor:pointer;color:var(--muted)}
+  .sh-body{padding:16px 18px 40px;display:grid;gap:18px}
+  .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .seg2{display:inline-flex;border:2px solid var(--ink);border-radius:999px;padding:3px;background:#fff}
+  .seg2 span{padding:.5rem .9rem;border-radius:999px;font-weight:700;font-size:.9rem;color:var(--muted)}
+  .seg2 span.on{background:var(--ok);color:#fff}
+  .pill{border:2px solid var(--ink);border-radius:999px;padding:.45rem .85rem;font-weight:700;font-size:.85rem;background:#fff}
+  .pill.facep{background:var(--accent);border-color:var(--accent);color:#fff}
+  .pill select{font:inherit;border:0;background:none;font-weight:700}
+  .strip{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  .ph2{position:relative;border-radius:12px;overflow:hidden;border:2px solid var(--line);background:var(--soft);aspect-ratio:1}
+  .ph2 img{width:100%;height:100%;object-fit:cover;display:block}
+  .ph2.cover{border-color:var(--ink)}
+  .ph2 .cv{position:absolute;left:6px;top:6px;background:var(--ink);color:#fff;font-size:.62rem;font-weight:700;letter-spacing:.1em;padding:.18rem .45rem;border-radius:999px}
+  .ph2 .eye{position:absolute;left:6px;right:6px;bottom:6px;text-align:center;font-size:.7rem;font-weight:700;padding:.3rem 0;border-radius:999px}
+  .ph2 .eye.pub{background:#fff;color:var(--ok)} .ph2 .eye.pri{background:rgba(26,26,26,.85);color:#fff}
+  .ph2 .ghost{display:flex;height:100%;align-items:center;justify-content:center;color:var(--muted);font-size:.8rem;text-align:center;padding:8px}
+  .ph2.addp{border-style:dashed;display:flex;align-items:center;justify-content:center;flex-direction:column;color:var(--muted);font-size:.8rem}
+  .ph2.addp b{font-size:1.8rem;color:var(--accent);line-height:1}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .col{border-radius:14px;padding:12px 14px}
+  .col.pub{background:#fff;border:2px solid var(--ink)}
+  .col.me{background:#efe7d6;border:2px dashed #b9ad92}
+  .col h3{margin:0 0 8px;font-size:.74rem;letter-spacing:.16em;text-transform:uppercase;display:flex;justify-content:space-between}
+  .col h3 a{color:var(--accent);letter-spacing:.04em;text-transform:none;font-size:.8rem}
+  .col dl{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;margin:0;font-size:.9rem}
+  .col dt{color:var(--muted)} .col dd{margin:0;font-weight:600}
+  .story{background:#fff;border:2px solid var(--line);border-radius:12px;padding:10px 12px;font-size:.92rem;color:var(--muted)}
+  .story b{display:block;color:var(--ink);font-size:.74rem;letter-spacing:.16em;margin-bottom:4px}
+  .hist h3{margin:0 0 8px;font-size:.74rem;letter-spacing:.16em;text-transform:uppercase;display:flex;justify-content:space-between;align-items:center}
+  .hist h3 span{text-transform:none;letter-spacing:0;font-size:.8rem;color:var(--muted);display:flex;gap:8px;align-items:center}
+  .hist ol{list-style:none;margin:0;padding:0 0 0 14px;border-left:2px solid var(--line)}
+  .hist li{position:relative;padding:0 0 12px 12px;font-size:.9rem}
+  .hist li::before{content:'';position:absolute;left:-21px;top:4px;width:12px;height:12px;border-radius:50%;background:var(--cream);border:2px solid var(--accent)}
+  .hist li small{display:block;color:var(--muted)}
+  .del{text-align:center;color:var(--muted);font-size:.85rem;text-decoration:underline}
+  @media (max-width:760px){
+    .sheet{top:6vh;border-radius:18px 18px 0 0;width:100%}
+    .strip{grid-template-columns:repeat(4,1fr);gap:6px}
+    .ph2 .eye{font-size:.6rem;left:4px;right:4px}
+    .ph2 .ghost{font-size:.66rem}
+    .cols{grid-template-columns:1fr}
+    .sh-head .tg{font-size:2.4rem}
+  }
+  /* filters */
+  .bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+  .chip{font:inherit;font-size:.85rem;font-weight:700;border:2px solid var(--ink);background:#fff;border-radius:999px;padding:.4rem .8rem;cursor:pointer}
+  .chip.on{background:var(--ink);color:#fff}
+  .chip i{font-style:normal;color:var(--muted);font-weight:400;margin-left:4px} .chip.on i{color:#cfc8b8}
+  .bar .q{flex:1;min-width:180px;font:inherit;padding:.5rem .9rem;border:2px solid var(--line);border-radius:999px;background:#fff}
+  /* the shelf */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:16px}
+  .tile{background:#fff;border:2px solid var(--ink);border-radius:14px;overflow:hidden;position:relative;cursor:pointer;transition:transform .15s}
+  .tile:hover{transform:translateY(-3px)}
+  .tile .ph{position:relative;aspect-ratio:1;background:var(--soft)}
+  .tile .ph img{width:100%;height:100%;object-fit:cover;display:block}
+  .tile.priv .ph img{filter:grayscale(.55) brightness(.92)}
+  .tag{position:absolute;left:10px;top:10px;background:rgba(250,246,238,.94);font-family:'Bebas Neue',sans-serif;font-size:1.3rem;padding:0 .45rem;border-radius:7px;line-height:1.35}
+  .vis{position:absolute;right:10px;top:10px;border:0;font:inherit;font-size:.74rem;font-weight:700;letter-spacing:.06em;padding:.35rem .6rem;border-radius:999px;cursor:pointer}
+  .vis.pub{background:#fff;color:var(--ok)} .vis.pri{background:var(--ink);color:#fff}
+  .star{position:absolute;left:10px;bottom:10px;background:var(--accent);color:#fff;font-size:.7rem;font-weight:700;letter-spacing:.1em;padding:.25rem .55rem;border-radius:999px}
+  .sale{position:absolute;right:10px;bottom:10px;background:var(--warn);color:#3b2a00;font-size:.7rem;font-weight:700;letter-spacing:.08em;padding:.25rem .55rem;border-radius:999px}
+  .tile .meta{padding:10px 12px 12px}
+  .tile .meta b{display:block;font-size:1rem;line-height:1.2}
+  .tile .meta em{font-style:normal;color:var(--accent);font-weight:700}
+  .tile .meta span{display:block;color:var(--muted);font-size:.82rem;margin-top:3px}
+  .tile .meta .mine{display:flex;justify-content:space-between;border-top:1px dashed var(--line);margin-top:8px;padding-top:6px;font-size:.78rem;color:var(--muted)}
+  .add-tile{border:2px dashed var(--line);border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);min-height:260px;text-decoration:none;gap:6px}
+  .add-tile b{font-size:2.4rem;color:var(--accent);line-height:1}
+  .mocknote{max-width:1180px;margin:0 auto;padding:10px 16px;font-size:.78rem;color:var(--muted);text-align:center}
+  @media (max-width:760px){
+    .top nav a:not(.add){display:none}
+    .hero{grid-template-columns:1fr}
+    .face{display:none}
+    .shows{grid-template-columns:1fr}
+    .grid{grid-template-columns:1fr 1fr;gap:10px}
+    .tile .meta{padding:8px 9px 10px}
+    .tile .meta b{font-size:.9rem}
+    .tile .meta .mine{display:none}
+    .tag{font-size:1.05rem}
+    .lens .seg button{padding:.55rem .8rem;font-size:.85rem}
+    .stats{gap:4px 14px}
+    .showsd>summary{display:grid;grid-template-columns:1fr auto;gap:2px 10px}
+    .showsd>summary .now{grid-column:1/-1;grid-row:2}
+  }
+</style>
+
+<div class="band" style="--hero:url(/blade-book/@simon-collector/img/K89.jpg)">
+  <div class="top">
+    <div class="brand bb-display"><img src="/blade-book/mark.svg" width="26" alt="">BLADE-BOOK</div>
+    <nav><a href="#">wants</a><a href="#">board</a><a href="#">settings</a><a class="add" href="#">+ add a knife</a></nav>
+  </div>
+  <div class="hero">
+    <div>
+      <div class="kicker">🔒 My vault · only you see this</div>
+      <h1 class="bb-display">@SIMON-COLLECTOR</h1>
+      <div class="stats"><span><b>81</b>knives</span><span><b>74</b>shown</span><span><b>7</b>private</span><span><b>1999–2026</b>born</span></div>
+    </div>
+    <div class="face"><img src="/blade-book/@simon-collector/img/K89.jpg" alt=""><div><span>★ FACE OF YOUR REGISTER</span><b>K89</b> Sebenza 31 — Lunar Landing</div></div>
+  </div>
+</div>
+<div class="lens"><div class="seg"><button class="on">🔒 My vault</button><button>🌐 As the public sees it</button></div></div>
+
+<main>
+  <details class="showsd"><summary><span class="bb-display">WHAT MY PUBLIC PAGE SHOWS</span><span class="now">month-only dates · specs · story · cover photo · asking price</span><span class="chev">edit ›</span></summary>
+  <section class="shows">
+    <div>
+      <h2 class="bb-display">WHAT MY PUBLIC PAGE SHOWS</h2>
+      <p class="sub">For every knife you’ve made public. Private knives show nothing, anywhere.</p>
+      <div class="sw"><span>Birth date<small>the card’s date can say a lot</small></span><span class="pick"><span>day</span><span class="on">month</span><span>year</span><span>hide</span></span></div>
+      <div class="sw"><span>Specs<small>steel, handle, blade shape, lock</small></span><span class="tog on"></span></div>
+      <div class="sw"><span>The story<small>the public note you write per knife</small></span><span class="tog on"></span></div>
+      <div class="sw"><span>All photos<small>off: just the cover. Pick per photo inside a knife.</small></span><span class="tog"></span></div>
+      <div class="sw"><span>Asking price<small>only on knives you list for sale</small></span><span class="tog on"></span></div>
+      <div class="sw"><span>The whole page<small>open to anyone, a key you share, or nobody</small></span><span class="pick"><span class="on">open</span><span>key</span><span>hidden</span></span></div>
+    </div>
+    <div class="never">
+      <h3>🔒 Never public — no switch</h3>
+      <ul>
+        <li>What you paid <span class="lk">only you</span></li>
+        <li>Who you got it from <span class="lk">only you</span></li>
+        <li>Where it’s kept <span class="lk">only you</span></li>
+        <li>Private notes &amp; condition <span class="lk">only you</span></li>
+        <li>Your email <span class="lk">only you</span></li>
+      </ul>
+    </div>
+  </section></details>
+
+  <div class="bar">
+    <button class="chip on">All <i>81</i></button><button class="chip">🌐 Shown <i>74</i></button><button class="chip">🔒 Private <i>7</i></button><button class="chip">For sale <i>7</i></button>
+    <input class="q" placeholder="search your vault — private notes too">
+  </div>
+
+  <div class="grid" id="grid"></div>
+</main>
+
+<div class="scrim" id="scrim"></div>
+<aside class="sheet" id="sheet" aria-label="knife">
+  <div class="sh-head"><div class="tg" id="sTag">K89</div>
+    <div><h2 id="sTitle">Sebenza 31 <em>— Lunar Landing</em></h2><p id="sSub">born January 27, 2021 · 5 years old · Chris Reeve Knives</p></div>
+    <button class="x" id="sx" aria-label="close">×</button></div>
+  <div class="sh-body">
+    <div class="controls">
+      <span class="seg2"><span>🔒 Private</span><span class="on">🌐 Shown</span></span>
+      <span class="pill facep">★ face of my register</span>
+      <span class="pill">keeping ▾</span>
+      <span class="pill">✎ edit</span>
+    </div>
+    <div class="strip">
+      <div class="ph2 cover"><img id="sImg" src="/blade-book/@simon-collector/img/K89.jpg" alt=""><span class="cv">COVER</span><span class="eye pub">👁 public</span></div>
+      <div class="ph2"><div class="ghost">knife open<br>(blade side)</div><span class="eye pub">👁 public</span></div>
+      <div class="ph2"><div class="ghost">close-up<br>inlay</div><span class="eye pri">🚫 only me</span></div>
+      <div class="ph2 addp"><b>+</b>add a photo</div>
+    </div>
+    <div class="cols">
+      <div class="col pub"><h3>🌐 On the public page <a href="#">edit</a></h3>
+        <dl><dt>Model</dt><dd>Large Sebenza 31</dd><dt>Graphic</dt><dd>Lunar Landing</dd><dt>Handle</dt><dd>CGG titanium · chrysocolla</dd><dt>Steel</dt><dd>S45VN</dd><dt>Blade</dt><dd>drop point</dd><dt>Born</dt><dd>January 2021 <small style="color:var(--muted);font-weight:400">(day hidden)</small></dd></dl></div>
+      <div class="col me"><h3>🔒 Only you <a href="#">edit</a></h3>
+        <dl><dt>Paid</dt><dd>$ ···</dd><dt>From</dt><dd>···</dd><dt>Acquired</dt><dd>···</dd><dt>Kept</dt><dd>···</dd><dt>Condition</dt><dd>···</dd><dt>Notes</dt><dd>···</dd></dl></div>
+    </div>
+    <div class="story"><b>THE STORY · PUBLIC</b>Tap to tell it — how you found it, why it matters. This shows on the knife’s page.</div>
+    <div class="hist"><h3>This knife’s history <span><span class="tog"></span> show on its page</span></h3>
+      <ol><li>Born at Chris Reeve Knives<small>January 27, 2021 · from the birth card</small></li>
+          <li>Came into the collection<small>the date you add</small></li>
+          <li>Photographed and read<small>September 26, 2026 · K89</small></li>
+          <li>Made the face of the register<small>September 26, 2026</small></li></ol></div>
+    <div class="del">delete this knife</div>
+  </div>
+</aside>
+<div class="mocknote">MOCKUP · photos real, prices and private notes are samples · not linked anywhere</div>
+
+<script>
+var K = [
+  ['K97','Paramilitary 2','Colorado Flag','Spyderco · sprint run',1,'','$—','paid · source · notes'],
+  ['K96','Paramilitary 2','Purple','Spyderco · sprint run',1,'','$—','paid · source · notes'],
+  ['K94','Yojumbo','CF & S90V','Spyderco · limited',0,'','$—','paid · source · notes'],
+  ['K93','Spydiechef','','Spyderco',0,'','$—','paid · source · notes'],
+  ['K92','Shaman','','Spyderco',1,'','$—','paid · source · notes'],
+  ['K90','Sebenza','2003 Annual','born 2003',1,'','$—','paid · source · notes'],
+  ['K89','Sebenza 31','Lunar Landing','born Jan 27, 2021',1,'face','$—','paid · source · notes'],
+  ['K88','Sebenza 21','Koi Pond','born Mar 21, 2019',1,'','$—','paid · source · notes'],
+  ['K87','Inkosi','Crosshatch','born Sep 15, 2026',1,'sale','$—','paid · source · notes'],
+  ['K86','MAC 2','Atomic Bronze','born Sep 11, 2024',1,'','$—','paid · source · notes'],
+  ['K82','Sebenza','2007 Edition','born Oct 29, 2007',1,'','$—','paid · source · notes'],
+  ['K80','Sebenza 21','Glorious','born Feb 6, 2014',1,'','$—','paid · source · notes'],
+  ['K75','Small Sebenza 31','Night Sky','born Jun 23, 2026',1,'','$—','paid · source · notes'],
+  ['K71','Sebenza','the grail','',0,'','$—','paid · source · notes'],
+  ['K67','Sebenza','','',1,'sale','$—','paid · source · notes'],
+  ['K33','Sebenza','','',1,'','$—','paid · source · notes']
+];
+var g = document.getElementById('grid');
+K.forEach(function (k) {
+  var t = document.createElement('article'); t.className = 'tile' + (k[4] ? '' : ' priv');
+  var ph = document.createElement('div'); ph.className = 'ph';
+  var im = document.createElement('img'); im.src = '/blade-book/@simon-collector/img/' + k[0] + '_t.jpg'; im.alt = ''; ph.appendChild(im);
+  var tg = document.createElement('span'); tg.className = 'tag'; tg.textContent = k[0]; ph.appendChild(tg);
+  var v = document.createElement('button'); v.className = 'vis ' + (k[4] ? 'pub' : 'pri'); v.textContent = k[4] ? '🌐 SHOWN' : '🔒 PRIVATE'; ph.appendChild(v);
+  if (k[5] === 'face') { var s = document.createElement('span'); s.className = 'star'; s.textContent = '★ FACE'; ph.appendChild(s); }
+  if (k[5] === 'sale') { var s2 = document.createElement('span'); s2.className = 'sale'; s2.textContent = 'FOR SALE'; ph.appendChild(s2); }
+  t.appendChild(ph);
+  var m = document.createElement('div'); m.className = 'meta';
+  var b = document.createElement('b'); b.textContent = k[1]; if (k[2]) { var em = document.createElement('em'); em.textContent = ' — ' + k[2]; b.appendChild(em); }
+  m.appendChild(b);
+  var sp = document.createElement('span'); sp.textContent = k[3] || 'undated'; m.appendChild(sp);
+  var mine = document.createElement('div'); mine.className = 'mine'; mine.textContent = '🔒 ' + k[7]; m.appendChild(mine);
+  t.appendChild(m); g.appendChild(t);
+});
+var a = document.createElement('a'); a.className = 'add-tile'; a.href = '#'; a.innerHTML = '';
+var bb = document.createElement('b'); bb.textContent = '+'; a.appendChild(bb); a.appendChild(document.createTextNode('add a knife — one photo is enough')); g.appendChild(a);
+
+function openSheet(k){ document.getElementById('sTag').textContent=k[0];
+  var t=document.getElementById('sTitle'); t.textContent=k[1]+' '; if(k[2]){var e=document.createElement('em'); e.textContent='— '+k[2]; t.appendChild(e);}
+  document.getElementById('sImg').src='/blade-book/@simon-collector/img/'+k[0]+'.jpg';
+  document.getElementById('sheet').classList.add('open'); document.getElementById('scrim').classList.add('open'); }
+function closeSheet(){ document.getElementById('sheet').classList.remove('open'); document.getElementById('scrim').classList.remove('open'); }
+document.getElementById('sx').addEventListener('click', closeSheet);
+document.getElementById('scrim').addEventListener('click', closeSheet);
+Array.prototype.forEach.call(document.querySelectorAll('.tile'), function(t,i){ t.addEventListener('click', function(){ openSheet(K[i]); }); });
+if (location.hash === '#sheet') openSheet(K[6]);
+</script>
