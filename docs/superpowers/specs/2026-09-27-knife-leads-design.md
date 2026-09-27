@@ -1,10 +1,12 @@
 # The knife leads — design
 
-**Date:** 2026-09-27 · **Status:** awaiting Simon's review · **Napkin:** https://blade-book.com/abtesting/knife.html
+**Date:** 2026-09-27 · **Status:** Phase 1 approved to build (Simon, 2026-09-27 01:28 PDT); Phases 2 and 3 wait on how Phase 1 feels · **Napkin:** https://blade-book.com/abtesting/knife.html
 
 ## Why
 
 blade-book wants to be sticky and trusted. The honest kind of sticky is pride: the page has to look better than the owner's own camera roll.
+
+blade-book is a catalog where collectors trade and bond. Sales happen and are welcome, but it is not a shop. So the page reads like a catalog entry, not a listing.
 
 Today a stranger who taps a forum link lands on the plainest page on the site. The photo is a card shot: box, foam, paperwork, and a knife in the corner. The name drops the graphic, so five neighbours all read "Small Sebenza 31". There is no way to the next knife.
 
@@ -23,16 +25,19 @@ The stranger arriving from a forum link. Their motions, in order:
 |---|---|---|
 | 1 | Who draws the crop box? | We propose a box. The owner approves or nudges it. We never pick a face for anyone. |
 | 2 | Name order | Model first, then the graphic: "Large Sebenza 31 — Lunar Landing". There are too many variants to lead with them. |
-| 3 | Is the card shot public? | Yes, whenever the knife is. Every knife is born private, so a public knife is one the owner chose to show. Scammers want knife photos, not cards. |
+| 3 | Is the card shot public? | Yes, whenever the knife is. Every knife is born private, so a public knife is one the owner chose to show. |
 | 4 | Flip order | Sky's call: K-number order, the order the register already publishes in. |
-| — | The mark | D: etch plus plate. Live since 2026-09-27 (`b0bf858`). |
+| 5 | The mark | **Keep it simple.** "Just a subtle something that hooks it to us." Photos of these knives are everywhere; scam-proofing is not the job. The plate stays, the etch over the photo goes. |
+| 6 | The kit | Show what came with the knife, and **deduce everything we can from the photos**: the cloth (the blue polishing cloth), tools, grease, Loctite, stickers. The word is "cloth". |
+| 7 | Build order | Phase 1 first, then see how it feels. |
 
-## Two phases
+## Three phases
 
 Each phase ships on its own and gets its own implementation plan.
 
-- **Phase 1, the page:** names, one top bar, next and previous. No schema change. No new photos.
+- **Phase 1, the page:** names, one top bar, next and previous, the simple mark, the kit we already know. No schema change. No new photos.
 - **Phase 2, the face:** the crop of the knife leads; the card shot becomes "the record". Schema v15.
+- **Phase 3, the kit:** the decoder learns to spot everything in the photo.
 
 ---
 
@@ -94,9 +99,36 @@ Top to bottom:
 - The links carry `rel="prev"` and `rel="next"`.
 - A register with one public knife shows no arrows and no strip.
 
-### 1.5 What Phase 1 does not change
+### 1.5 The mark gets simple
 
-Photos, the mark, the schema, the API, `/me`.
+The mark that went live on 2026-09-27 (`b0bf858`) has two halves: lettering etched across the photo, and a plate under it. The etch goes. The plate stays.
+
+- **The photo is untouched.** No lettering over the knife.
+- **The plate** is the subtle something that hooks the photo to us: the tag, the name, the birth date, the maker, the owner, and the page it lives on.
+- Tiles stay clean, as today.
+- In code: `_watermark` becomes the plate alone; `_etch_mask` and `_etch` are deleted, with their tests. The plate's own tests stay.
+
+### 1.6 The kit we already know
+
+The decoder already records six things per knife. Phase 1 shows them on the knife page as chips, under the specs, headed "Came with":
+
+| Field | Chip | Known for (of 98 live knives) |
+|---|---|---|
+| `has_box` | BOX | 98 |
+| `has_card` | CARD | 98 |
+| `has_papers` | PAPERS | 97 |
+| `has_pouch` | POUCH | 78 |
+| `has_lanyard` | LANYARD | 71 |
+| `has_spare_hardware` | SPARE HARDWARE | 35 |
+
+- Only a "yes" makes a chip. "No" and "unknown" show nothing: a missing chip never says the knife lacks something.
+- No chips at all, no heading.
+- These six join the public whitelist (`PUBLIC_FIELDS`) for public knives. The leak test is updated to match.
+- Owners can already correct them on `/me`.
+
+### 1.7 What Phase 1 does not change
+
+The photos themselves, the schema, the API, `/me`.
 
 ---
 
@@ -180,19 +212,11 @@ A card beside the specs on a desktop, under them on a phone:
 - Heading "The record", with "✓ card read" when the knife was decoded from a card.
 - One line: "The birth card, as it came in the box."
 - The card shot, shown at 4:3 with a "see the whole card shot" link to the full image.
-- Chips for what came with it: box, card, papers, pouch, lanyard. **Open point:** these are `has_box`, `has_card` and so on, which are not public fields today. See 2.9.
+- The kit chips from Phase 1 move here, next to the photo that shows them.
 
 ### 2.7 The mark on the face
 
-Simon's point changes my napkin. I had the light mark on the knife and the heavy one on the card shot, because I thought the card was the prize. It is the other way round: **the knife photo is what a scammer steals.**
-
-So:
-
-- **The face carries the full mark:** the repeat etch at strength 0.8, plus the plate. This is the mark that is live today. On the Night Sky (K75, already a beauty shot) it is quiet and it is everywhere.
-- **The record carries the same mark.** One mark, one look.
-- **Tiles get the etch too.** Today `K80_t.jpg` is a clean 800-pixel photo. Once tiles are knife crops, a clean 800-pixel knife photo is good enough for a scam listing. The etch at that size is nearly invisible on a tile and still there when someone zooms.
-
-This departs from mark D as drawn on the napkin, where the crop had a single etched line. **Simon to confirm.**
+The same simple mark as everywhere else (1.5): the photo untouched, the plate under it. The record gets the same. Tiles stay clean.
 
 ### 2.8 Rules that never bend
 
@@ -202,11 +226,41 @@ This departs from mark D as drawn on the napkin, where the crop had a single etc
 - A gated register names nothing on the plate.
 - Every published image is re-encoded: no EXIF, no GPS.
 
-### 2.9 Open points for Simon
+---
 
-1. **The mark on the face** (2.7): the full repeat, or the single line from the napkin?
-2. **The kit chips** (2.6): showing "box · card · papers" publishes five fields that are unpublished today, for public knives only. Show them, or leave them out until the "what my public page shows" switches (vault step 3)?
-3. **Order of work:** Phase 1 first (quick, no risk), or Phase 2 first (the big visual win)?
+## Phase 3 — the kit
+
+Simon: "We should deduce everything we can from the photos."
+
+### 3.1 What the decoder learns to spot
+
+| Item | Note |
+|---|---|
+| Box | known today |
+| Birth card | known today |
+| Papers | known today: warranty, care notes, receipt |
+| Pouch | known today: the leather slip |
+| Lanyard | known today |
+| Spare hardware | known today |
+| **Cloth** | new: the blue polishing cloth. The word is "cloth". |
+| **Tools** | new: hex keys, wrenches |
+| **Grease** | new: the fluorinated grease tube |
+| **Loctite** | new |
+| **Stickers** | new |
+
+### 3.2 Shape
+
+- One new decoded field, `kit`: a list of the items seen in the photos. One list costs the decode schema one property, where eleven yes/no fields would cost eleven. The schema has a hard ceiling (the ~70-property grammar cliff).
+- The six existing `has_*` columns stay as they are and keep working. `kit` adds to them.
+- The decoder looks at **every** photo of the knife, not only the card shot: the box label and the extras are usually in photo 2 or 3.
+- Knives already in the register: a backfill script re-reads their photos for the kit only. It fills blanks and never overwrites what an owner typed.
+- The owner can correct the kit on `/me`.
+- The chips on the public page follow the list.
+
+### 3.3 Open when we get there
+
+- Whether the kit should also be searchable ("full kit" as a filter).
+- What a maker other than CRK ships, and whether the list needs to grow per maker.
 
 ---
 
