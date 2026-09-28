@@ -875,3 +875,14 @@ def test_terms_and_faq_say_we_keep_logs():
         assert line in html, page
         assert 'Nothing else' not in html, page
         assert 'No ads, no trackers, no analytics scripts.' in html, page
+
+
+def test_deploy_activity_script():
+    path = os.path.join(ROOT, 'scripts', 'deploy_activity.sh')
+    sh = open(path).read()
+    assert subprocess.run(['bash', '-n', path]).returncode == 0
+    for needle in ('set -euo pipefail', 'supervisorctl restart blade_book', '/blade-book/api/healthz',
+                   '/blade-book/api/admin/activity', 'def activity_summary', 'blade-book_access.log',
+                   'sudo -u shg -H cp -r', 'Like every web server', 'STOP:'):
+        assert needle in sh, needle
+    assert 'publish_sweep' not in sh          # publish.py did not change
