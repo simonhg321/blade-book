@@ -23,6 +23,26 @@
   .urow .acts{display:flex;gap:6px}
   .urow .acts .btn{padding:.35rem .6rem;font-size:.78rem}
   .urow .acts .btn[disabled]{opacity:.4}
+  #window{display:flex;gap:6px;justify-content:center;margin:10px 0 2px}
+  #window .btn{padding:.35rem .7rem;font-size:.8rem}
+  #window .btn[aria-pressed="true"]{background:var(--ink);color:#fff}
+  .sig{background:#fff;border:2px solid var(--ink);border-left:8px solid var(--accent);border-radius:12px;padding:8px 12px;margin-bottom:8px;font-size:.9rem}
+  .sig .top{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .sig .who{font-weight:700;overflow-wrap:anywhere}
+  .when{color:var(--muted);font-size:.8rem;margin-left:auto;white-space:nowrap}
+  .sig .detail{margin-top:2px}
+  .sig .purge{color:var(--accent);font-weight:700;font-size:.82rem}
+  details.arow{background:#fff;border:2px solid var(--ink);border-radius:12px;padding:8px 12px;margin-bottom:8px;font-size:.9rem}
+  details.arow.you{opacity:.6}
+  details.arow summary{cursor:pointer;display:flex;gap:8px;align-items:center;flex-wrap:wrap;list-style:none}
+  details.arow summary::-webkit-details-marker{display:none}
+  details.arow summary .name{font-weight:700;overflow-wrap:anywhere}
+  details.arow .meta{color:var(--muted);font-size:.8rem;overflow-wrap:anywhere}
+  details.arow ul{margin:8px 0 2px;padding-left:18px}
+  details.arow li{margin:2px 0;overflow-wrap:anywhere}
+  details.arow li span{color:var(--muted);font-size:.8rem}
+  .srcerr{color:var(--accent);font-weight:700;font-size:.85rem;margin:0 0 8px;overflow-wrap:anywhere}
+  .note{color:var(--muted);font-size:.8rem;text-align:center;margin:4px 0 0}
 </style>
 
 <header class="bb-head">
@@ -30,6 +50,17 @@
   <nav class="bb-nav"><a class="add" href="/blade-book/me/add/">+ add</a><a href="/blade-book/me/">register</a><a href="/blade-book/me/wants/">wants</a><a href="/blade-book/me/settings/">settings</a><a href="/blade-book/board/">board</a><a href="/blade-book/">home</a><a id="adminlink" href="/blade-book/admin/" hidden>admin</a><button id="signout" class="btn link" type="button">sign out</button></nav>
 </header>
 <div id="status" aria-live="polite"></div>
+<div id="window" role="group" aria-label="how far back">
+  <button class="btn alt" type="button" data-hours="48" aria-pressed="true">48 hours</button>
+  <button class="btn alt" type="button" data-hours="168" aria-pressed="false">7 days</button>
+  <button class="btn alt" type="button" data-hours="336" aria-pressed="false">14 days</button>
+</div>
+<h2 class="bb-display" style="margin:18px 0 6px">NEEDS HELP</h2>
+<div id="help"></div>
+<h2 class="bb-display" style="margin:18px 0 6px">PEOPLE</h2>
+<div id="people"></div>
+<h2 class="bb-display" style="margin:18px 0 6px">VISITORS</h2>
+<div id="visitors"></div>
 <h2 class="bb-display" style="margin:18px 0 6px">USERS</h2>
 <div id="users"></div>
 <h2 class="bb-display" style="margin:18px 0 6px">REPORTS</h2>
@@ -159,4 +190,5 @@
   }).catch(function () { say('could not reach the server', true); });
 })();
 </script>
+<script src="/blade-book/admin/activity.js?v=20260928" defer></script>
 <script src="/blade-book/nav.js?v=20260927" defer></script>

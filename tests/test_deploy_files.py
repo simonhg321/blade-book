@@ -851,3 +851,17 @@ def test_deploy_page_script_stops_loudly_when_the_app_does_not_come_back():
     assert 'if ! supervisorctl restart blade_book' in sh and sh.count('exit 1') >= 2
     assert 'for i in 1 2 3 4 5 6 7 8 9 10' in sh and 'curl -sf http://127.0.0.1:5004/blade-book/api/healthz' in sh
     assert sh.index('cp -r') < sh.index('supervisorctl restart') < sh.index('publish_sweep.py --all')
+
+
+def test_admin_activity_wiring():
+    html = _read('html/admin/index.html')
+    for needle in ('NEEDS HELP', 'PEOPLE', 'VISITORS', 'id="window"', 'id="help"', 'id="people"', 'id="visitors"',
+                   'data-hours="48"', 'data-hours="168"', 'data-hours="336"',
+                   '<script src="/blade-book/admin/activity.js?v=20260928" defer></script>'):
+        assert needle in html, needle
+    assert html.index('NEEDS HELP') < html.index('USERS') < html.index('REPORTS')
+    js = _read('html/admin/activity.js')
+    for needle in ("'/blade-book/api/admin/activity'", 'needs_help', 'people', 'visitors', 'hidden', 'sources',
+                   'probably', 'nobody is stuck', 'purge_at', 'textContent', 'Copyright (c) 2026 Simon SGH'):
+        assert needle in js, needle
+    assert 'innerHTML' not in js and 'insertAdjacentHTML' not in js and 'document.write' not in js
