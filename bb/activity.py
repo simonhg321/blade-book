@@ -124,7 +124,7 @@ _ACCESS = re.compile(
     r'^(?P<ip>\S+) \S+ \S+ \[(?P<ts>[^\]]+)\] "(?P<method>[A-Z]+) (?P<target>\S+)[^"]*" '
     r'(?P<status>\d{3}) \S+ "(?P<ref>(?:[^"\\]|\\.)*)" "(?P<ua>(?:[^"\\]|\\.)*)"')
 _BOT = re.compile(r'bot|crawl|spider|slurp|curl|wget|python|go-http|scrapy|headless|monitor|uptime|scan|'
-                  r'libwww|okhttp|java/|node|axios|httpclient|^https?://|^-?$', re.I)
+                  r'libwww|okhttp|java/|node|axios|httpclient|externalhit|inspect|preview', re.I)
 _ASSETS = ('.css', '.js', '.woff2', '.woff', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg', '.ico')
 _PROBE = re.compile(r'/\.(?:git|env|aws|ssh|svn|hg)\b|/wp-|\.php\b|/cgi-bin/|/vendor/|/phpmyadmin', re.I)
 PATH_MAX = 200
@@ -155,7 +155,9 @@ def device(ua):
 
 
 def is_bot(ua):
-    return bool(_BOT.search(ua))
+    """Every browser's string starts 'Mozilla/'. What does not is a fetcher: a
+    link previewer, a scanner, the phone's own icon loader."""
+    return not ua.startswith('Mozilla/') or bool(_BOT.search(ua))
 
 
 def is_probe(path):

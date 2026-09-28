@@ -527,3 +527,15 @@ def test_access_times_with_an_offset_come_out_as_utc():
     line = '203.0.113.9 - - [28/Sep/2026:06:01:34 +0200] "GET / HTTP/1.1" 200 1 "-" "x"\n'
     assert activity.parse_access_line(line)['when'] == datetime(2026, 9, 28, 4, 1, 34, tzinfo=timezone.utc)
     assert activity.parse_access_line('203.0.113.9 - - [31/Feb/2026:06:01:34 +0000] "GET / HTTP/1.1" 200 1 "-" "x"\n') is None
+
+
+def test_link_previewers_and_helpers_are_not_people():
+    # seen on the box 2026-09-27: these fetched a page and its picture, and showed as "Other · browser"
+    for ua in ('facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
+               'Mozilla/5.0 (compatible; CensysInspect/1.1; +https://about.censys.io/)',
+               'Cloudflare-SSLDetector', 'NetworkingExtension/8624.2.5.10.4 Network/5812.122.1 iOS/26.5',
+               'com.apple.WebKit.Networking/21624.5.1.11.3 Network/5812.160.9 macOS/26.6.2',
+               'WhatsApp/2.23.20.0', 'Mozilla/5.0 (compatible; Discordbot/2.0)', 'Slackbot-LinkExpanding 1.0'):
+        assert activity.is_bot(ua), ua
+    # an in-app web view names no browser and is still a person
+    assert not activity.is_bot('Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148')
