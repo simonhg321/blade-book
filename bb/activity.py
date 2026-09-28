@@ -5,6 +5,7 @@ admin page (spec 2026-09-27-admin-activity-design.md).
 Reads the database, the app log and the web server's request log. Writes
 nothing. No raw log line ever leaves: the parsers match known shapes and
 return named fields, and an unknown line is dropped."""
+import collections
 import functools
 import glob
 import gzip
@@ -17,7 +18,8 @@ from urllib.parse import urlsplit
 from bb import db, paths
 
 WINDOWS = (48, 168, 336)                  # hours
-MAX_LINES = 400_000                       # per log, newest files first
+MAX_LINES = 100_000                       # per log; the newest lines are the ones kept
+LINE_MAX = 4096                           # a longer line is not a request we care about
 LINK_TTL = timedelta(minutes=15)          # db.MAGIC_TTL_MIN
 LINK_USED_WITHIN = timedelta(minutes=20)
 DRAFT_QUIET = timedelta(hours=1)
@@ -34,7 +36,9 @@ _E = r'(?P<email>[^@\s]+@[^@\s]+)'
 _IP = r'(?P<ip>[0-9A-Fa-f.:]+)'
 
 _SHAPES = tuple((kind, re.compile(rx), extra) for kind, rx, extra in (
-    ('signed_in', rf'^magic link sign-in(?: \(confirmed\))?: {_E} \(@{_H}\)$', {'how': 'link'}),
+    ('signed_in', rf'^magic link sign-in: {_E} \(@{_H}\)$', {'how': 'link'}),
+    ('signed_in', rf'^magic link sign-in \(confirmed\): {_E} \(@{_H}\)$', {'how': 'confirmed'}),
+    ('handle_changed', rf'^handle changed: @(?P<old>[A-Za-z0-9][A-Za-z0-9-]*) -> @{_H} \(user \d{{1,9}}\)$', {}),
     ('signed_in', rf'^password sign-in: @{_H} from {_IP}$', {'how': 'password'}),
     ('signed_in', rf'^(?P<how>(?!magic\b|password\b)[a-z]+) sign-in: {_E} \(@{_H}\)$', {}),
     ('link_requested', rf'^magic link requested for {_E} from {_IP}$', {}),
@@ -43,7 +47,7 @@ _SHAPES = tuple((kind, re.compile(rx), extra) for kind, rx, extra in (
     ('rate_limited', rf'^password sign-in rate limited for @{_H} from {_IP}: ', {}),
     ('rate_limited', rf'^rate limited {_E} from {_IP}: ', {}),
     ('draft_started', rf'^draft {_T} created for @{_H}$', {}),
-    ('photo_added', rf'^photo (?P<knife_id>\d+)/(?P<seq>\d+) stored for @{_H} ', {}),
+    ('photo_added', rf'^photo (?P<knife_id>\d{{1,9}})/(?P<seq>\d{{1,3}}) stored for @{_H} ', {}),
     ('decoded', rf'^decoded {_T} for @{_H} via ', {}),
     ('edited', rf'^{_T} edited by @{_H}: (?P<fields>[a-z_]+(?:, [a-z_]+)*)$', {}),
     ('saved', rf'^{_T} saved to the register by @{_H}$', {}),
@@ -64,15 +68,19 @@ def _local_to_utc(text):
 
 def parse_app_line(line):
     """One app.log line as named fields, or None for a line we do not know."""
-    m = _APP_LINE.match(line.rstrip('\n'))
+    m = _APP_LINE.match(line.rstrip('\n')) if len(line) <= LINE_MAX else None
     if not m:
+        return None
+    try:
+        when = _local_to_utc(m.group(1))
+    except ValueError:                                  # a stamp that is no date: not ours
         return None
     for kind, rx, extra in _SHAPES:
         hit = rx.match(m.group(2))
         if not hit:
             continue
         rec = {k: v for k, v in hit.groupdict().items() if v is not None}
-        rec.update(extra, kind=kind, when=_local_to_utc(m.group(1)))
+        rec.update(extra, kind=kind, when=when)
         if 'email' in rec:
             rec['email'] = rec['email'].lower()
         if kind == 'settings':
@@ -84,38 +92,67 @@ def parse_app_line(line):
     return None
 
 
-def _lines(path, opener=open):
-    with opener(path, 'rt', encoding='utf-8', errors='replace') as f:
-        yield from f
+def _tail(path, room, opener=open):
+    """The last `room` lines of a file, and whether older ones were left out.
+    newline='\\n': a lone carriage return is not a line break here. If the
+    file breaks off part way (a cut-short .gz), the error carries what was
+    read: e.lines, e.cut."""
+    kept = collections.deque(maxlen=room)
+    seen = 0
+    try:
+        with opener(path, 'rt', encoding='utf-8', errors='replace', newline='\n') as f:
+            for line in f:
+                seen += 1
+                kept.append(line)
+    except (OSError, EOFError) as e:
+        e.lines, e.cut = list(kept), seen > room
+        raise
+    return list(kept), seen > room
 
 
 def _why(path, e):
     return f'could not read {path}: {getattr(e, "strerror", None) or e}'
 
 
+def _read(files, parse, info, since=None):
+    """Walk the files newest first, keep at most MAX_LINES of the newest lines,
+    and parse them. A file that cannot be read reports why; what it gave before
+    it broke still counts."""
+    out = []
+    for p, opener in files:
+        room = MAX_LINES - info['lines']
+        if room <= 0:
+            info['stopped'] = True
+            break
+        try:
+            if since is not None and p != files[0][0] \
+                    and datetime.fromtimestamp(os.path.getmtime(p), timezone.utc) < since:
+                break                                   # this file and every older one end before the window
+            lines, cut = _tail(p, room, opener)
+        except (OSError, EOFError) as e:
+            info.update(ok=False, error=_why(p, e))
+            lines, cut = getattr(e, 'lines', []), getattr(e, 'cut', False)
+        if lines and 'files' in info:
+            info['files'] += 1
+        if cut:
+            info['stopped'] = True
+        info['lines'] += len(lines)
+        for line in lines:
+            rec = parse(line)
+            if rec is None:
+                if 'files' in info:
+                    info['skipped'] = info.get('skipped', 0) + 1
+            elif since is None or rec['when'] >= since:
+                out.append(rec)
+    out.sort(key=lambda r: r['when'])
+    return out, info
+
+
 def read_app_log(path):
     """Every known line in app.log and its rotations (.1 to .5, plain text),
     oldest first, and how the read went."""
-    info = {'ok': True, 'lines': 0}
-    recs = []
-    for p in [path] + [f'{path}.{n}' for n in range(1, 6)]:
-        if p != path and not os.path.exists(p):
-            continue
-        try:
-            for line in _lines(p):
-                info['lines'] += 1
-                rec = parse_app_line(line)
-                if rec:
-                    recs.append(rec)
-                if info['lines'] >= MAX_LINES:
-                    info['stopped'] = True
-                    break
-        except OSError as e:
-            info.update(ok=False, error=_why(p, e))
-        if info.get('stopped'):
-            break
-    recs.sort(key=lambda r: r['when'])
-    return recs, info
+    files = [(path, open)] + [(f'{path}.{n}', open) for n in range(1, 6) if os.path.exists(f'{path}.{n}')]
+    return _read(files, parse_app_line, {'ok': True, 'lines': 0})
 
 
 # --- the web server log ---------------------------------------------------------
@@ -127,6 +164,7 @@ _BOT = re.compile(r'bot|crawl|spider|slurp|curl|wget|python|go-http|scrapy|headl
                   r'libwww|okhttp|java/|node|axios|httpclient|externalhit|inspect|preview', re.I)
 _ASSETS = ('.css', '.js', '.woff2', '.woff', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg', '.ico')
 _PROBE = re.compile(r'/\.(?:git|env|aws|ssh|svn|hg)\b|/wp-|\.php\b|/cgi-bin/|/vendor/|/phpmyadmin', re.I)
+_CUT = re.compile(r';|%3[Ff]|%3[Bb]|%23')       # a query or fragment that arrived encoded
 PATH_MAX = 200
 
 
@@ -138,6 +176,8 @@ def network(ip):
         a = ipaddress.ip_address(ip)
     except ValueError:
         return None
+    if a.version == 6 and a.ipv4_mapped:
+        a = a.ipv4_mapped
     if a.version == 4:
         return str(a)
     return str(ipaddress.ip_network((int(a) >> 64 << 64, 64)))
@@ -170,7 +210,7 @@ def is_asset(path):
 
 
 def is_page(path):
-    if path.startswith(paths.API_PREFIX + '/'):
+    if '/api/' in path:
         return False
     last = path.rsplit('/', 1)[-1]
     return last == '' or last.endswith('.html') or '.' not in last
@@ -205,7 +245,7 @@ def parse_access_line(line):
     """One combined-format line as named fields, or None. The query string is
     dropped, always: sign-in links and upload keys travel there. Of the
     referrer only the host is kept, for the same reason."""
-    m = _ACCESS.match(line)
+    m = _ACCESS.match(line) if len(line) <= LINE_MAX else None   # a long hostile line backtracks; a real one is short
     if not m:
         return None
     net = network(m.group('ip'))
@@ -213,7 +253,7 @@ def parse_access_line(line):
         return None
     try:
         when = _stamp(m.group('ts'))
-        path = urlsplit(m.group('target')).path or '/'
+        path = _CUT.split(urlsplit(m.group('target')).path, 1)[0] or '/'
     except ValueError:
         return None
     return {'net': net, 'when': when, 'method': m.group('method'), 'path': path[:PATH_MAX],
@@ -237,32 +277,8 @@ def read_access_log(path, since):
     """Every request at or after `since`, oldest first, and how the read went.
     A rotated file last written before `since` ends the walk: it and every
     older file hold nothing from the window."""
-    info = {'ok': True, 'lines': 0, 'files': 0}
-    hits = []
-    for p in _access_files(path):
-        try:
-            if p != path and datetime.fromtimestamp(os.path.getmtime(p), timezone.utc) < since:
-                break
-            counted = False
-            for line in _lines(p, gzip.open if p.endswith('.gz') else open):
-                if not counted:
-                    info['files'] += 1
-                    counted = True
-                info['lines'] += 1
-                hit = parse_access_line(line)
-                if hit is None:
-                    info['skipped'] = info.get('skipped', 0) + 1
-                elif hit['when'] >= since:
-                    hits.append(hit)
-                if info['lines'] >= MAX_LINES:
-                    info['stopped'] = True
-                    break
-        except (OSError, EOFError) as e:
-            info.update(ok=False, error=_why(p, e))
-        if info.get('stopped'):
-            break
-    hits.sort(key=lambda h: h['when'])
-    return hits, info
+    files = [(p, gzip.open if p.endswith('.gz') else open) for p in _access_files(path)]
+    return _read(files, parse_access_line, {'ok': True, 'lines': 0, 'files': 0}, since)
 
 
 # --- the stuck signals ----------------------------------------------------------
@@ -340,6 +356,25 @@ def needs_help(recs, drafts, since, now):
     return out
 
 
+# --- handles that changed ---------------------------------------------------------
+
+def renamed(recs):
+    """The same records, each under the handle that account has today. Walks
+    newest to oldest: a line older than "handle changed: @old -> @new" that
+    names @old is about the account now called @new. A line newer than it that
+    names @old is about whoever took the name afterwards, and is left alone."""
+    now_called = {}
+    out = []
+    for r in reversed(recs):
+        if 'handle' in r:
+            r = dict(r, handle=now_called.get(r['handle'], r['handle']))
+        if r['kind'] == 'handle_changed':
+            now_called[r['old']] = r['handle']
+        out.append(r)
+    out.reverse()
+    return out
+
+
 # --- people ---------------------------------------------------------------------
 
 def _what(r, tags):
@@ -349,6 +384,7 @@ def _what(r, tags):
         return f"added photo {r['seq']} to {tag or 'a knife'}"
     return {
         'signed_in': 'signed in',
+        'handle_changed': 'changed handle',
         'link_requested': 'asked for a sign-in link',
         'link_unbound': 'opened a sign-in link in another browser',
         'password_failed': 'password failed',
@@ -389,21 +425,32 @@ def people(rows, recs, tags, since):
 # --- visitors -------------------------------------------------------------------
 
 def guesses(recs):
-    """network -> the handles that signed in from it: a password sign-in from
-    that address, or a link asked for from it and used within 20 minutes. A
-    failed password or an unused link proves nothing."""
+    """network -> the handles that signed in from it.
+
+    A password sign-in names its address. A sign-in by link does not, so:
+    a confirmed one belongs to the address that opened the link, and a plain
+    one belongs to the address that asked for it, but only when every request
+    for that email in the 20 minutes before came from one network. Two askers
+    is a coin toss, and a wrong name is worse than none. A failed password or
+    an unused link proves nothing."""
     out = {}
-    asked = []
+    asked, opened = {}, {}                              # email -> [(network, when)]
     for r in recs:                                      # oldest first
         net = network(r['ip']) if 'ip' in r else None
         if r['kind'] == 'link_requested' and net:
-            asked.append((r['email'], net, r['when']))
-        elif r['kind'] == 'signed_in' and r['how'] == 'password' and net:
+            asked.setdefault(r['email'], []).append((net, r['when']))
+        elif r['kind'] == 'link_unbound' and net:
+            opened.setdefault(r['email'], []).append((net, r['when']))
+        elif r['kind'] != 'signed_in':
+            continue
+        elif r['how'] == 'password' and net:
             out.setdefault(net, set()).add(r['handle'])
-        elif r['kind'] == 'signed_in' and 'email' in r:
-            for email, asked_net, when in asked:
-                if email == r['email'] and timedelta(0) <= r['when'] - when <= LINK_USED_WITHIN:
-                    out.setdefault(asked_net, set()).add(r['handle'])
+        elif r['how'] in ('link', 'confirmed'):
+            recent = [n for n, when in (opened if r['how'] == 'confirmed' else asked).get(r['email'], ())
+                      if timedelta(0) <= r['when'] - when <= LINK_USED_WITHIN]
+            nets = set(recent[-1:] if r['how'] == 'confirmed' else recent)
+            if len(nets) == 1:
+                out.setdefault(nets.pop(), set()).add(r['handle'])
     return out
 
 
@@ -450,10 +497,14 @@ def summary(con, hours, you=None, own_hosts=(), now=None, app_log=None, access_l
     since = now - timedelta(hours=hours)
     own = set(own_hosts) | {'www.' + h for h in own_hosts}
     recs, app_info = read_app_log(app_log or os.path.join(paths.LOG_DIR, 'app.log'))
+    recs = renamed(recs)
     hits, access_info = read_access_log(access_log or paths.access_log(), since)
-    seen, hidden = visitors(hits, guesses(recs), you, own)
+    rows = db.activity_people(con)
+    here = {r['handle'] for r in rows}
+    guess = {net: names & here for net, names in guesses(recs).items()}
+    seen, hidden = visitors(hits, guess, you, own)
     return {'hours': hours, 'generated': now.isoformat(), 'you': you,
             'needs_help': needs_help(recs, db.activity_drafts(con), since, now),
-            'people': people(db.activity_people(con), recs, db.knife_tags(con), since),
+            'people': people(rows, recs, db.knife_tags(con), since),
             'visitors': seen, 'hidden': hidden,
             'sources': {'database': {'ok': True}, 'app_log': app_info, 'access_log': access_info}}

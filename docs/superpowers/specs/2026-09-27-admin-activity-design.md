@@ -32,11 +32,15 @@ The terms and the FAQ say what we store and end "Nothing else." That was never q
 
 **`html/terms/index.html`, "What we store"** becomes:
 
-> Your email address, your handle, the knife records and photos you add, the notes you write, and a sign-in cookie. Like every web server, ours keeps a log of requests (address, page, time) for two weeks, and the app keeps a log of sign-ins and saves. We read them to fix problems and to help people who get stuck. No ads, no trackers, no analytics scripts.
+> Your email address, your handle, the knife records and photos you add, the notes you write, and a sign-in cookie. Like every web server, ours keeps a log of requests (address, browser, page, the page you came from, time) for two weeks. The app keeps its own log of what happens on your account: sign-ins (email and the address they came from), and what you add, change and delete. That log has no time limit yet. We read both to fix problems and to help people who get stuck. No ads, no trackers, no analytics scripts.
 
 **`html/faq/index.html`, "What do you store?"** gets the same text.
 
 The words "Nothing else." go. Everything after them stays true.
+
+**"Delete is real"** said "We keep one thing" (the hash of the email). The logs keep the lines they already wrote, so it now says: "We keep a one-way hash of your email address, … The logs described below keep the lines they already wrote."
+
+The first wording (Simon approved it 2026-09-27 22:09 PDT) left out the browser and the referrer, called the app log "sign-ins and saves", and gave two weeks for both logs. The review found each of those untrue, so the words changed. **Open for Simon:** give the app log a time limit, then say the limit here.
 
 ## Sources
 
@@ -130,14 +134,20 @@ Built from the web server log.
 
 1. **Parse** each line of the combined format. A line that does not parse is counted and skipped.
 2. **Cut the address to a network:** an IPv4 address as it is; an IPv6 address to its `/64`.
-3. **Drop the query string** from every path, always. Sign-in links and upload keys travel in query strings.
+3. **Drop the query string** from every path, always, and the same when it arrives encoded (`%3F`, `;`, `%23`). Sign-in links and upload keys travel in query strings.
 4. **Group** by network and browser.
 5. **Keep people, hide bots.** A request whose browser string looks like a bot is hidden. A group is a person when it fetched at least one asset (stylesheet, script, font, image) or made at least one API `GET` that names one of our own pages as its referrer, **and** it has at least one page that answered 2xx or 3xx. Scanners do not run scripts or fetch stylesheets; browsers do. Everything else is counted in `hidden` and not listed.
 6. **Pages** are requests for a path that ends in `/` or `.html`, or has no extension, outside `/api/`. At most 30 per visitor, newest first.
 7. **Device** is two words from the browser string: "iPhone · Facebook app", "Windows · Firefox", "Mac · Chrome".
 8. **Came from** is the host of the first outside referrer, or empty. Our own hosts are `BASE_URL`'s host and the host of the request.
-9. **Guess.** A network gets a handle when the app log shows that network signing in as that account: a password sign-in from that address, or a sign-in link asked for from that address and used within 20 minutes. A failed password and an unused link prove nothing and do not count. The whole of the app log counts, not only the window. Two handles on one network gives both. The page says "probably @riverstone".
+9. **Guess.** A network gets a handle when the app log shows that network signing in as that account. A password sign-in names its address. A sign-in by link does not: a confirmed one belongs to the address that opened the link; a plain one belongs to the address that asked for it within the 20 minutes before, and only when every request for that email in those 20 minutes came from one network. A failed password and an unused link prove nothing and do not count. A handle with no account today is never named. The whole of the app log counts, not only the window. Two handles on one network gives both. The page says "probably @riverstone".
 10. **You.** A visitor whose guess includes the signed-in admin is marked `you: true`. The page folds it shut, so Simon's own clicks do not bury everyone else's.
+
+## One record, one line
+
+User text lands in the app log: a want's text, a file name, a report's reason. With a line break in it, the rest would read as a record of its own, and this view would believe a forged sign-in. So the app's log formatter (`app.py`, `_OneRecordPerLine`) indents every line after a record's first, tracebacks included. Only a real record starts a line with a stamp.
+
+A handle that changed keeps its history: lines older than "handle changed: @old -> @new" that name `@old` count for `@new`.
 
 ## What never leaves the server
 
@@ -166,7 +176,8 @@ Order on `/admin/`: a window switch (48 hours · 7 days · 14 days), NEEDS HELP,
 | The web server log cannot be read | `sources.access_log.ok` is false with the error text; `visitors` is empty; the rest is filled |
 | The app log cannot be read | the same for `sources.app_log`; the database signals still show |
 | A rotated `.gz` file is cut short | that file's readable lines count; the error is reported in `sources` |
-| The logs are huge | reading stops at 400,000 lines, newest files first, and `sources` says it stopped |
+| The logs are huge | the newest 100,000 lines of each log are read, and `sources` says older ones were left out |
+| A line is longer than 4,096 characters, or its date is no date | the line is skipped |
 
 ## Testing
 

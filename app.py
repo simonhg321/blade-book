@@ -5,6 +5,7 @@ Apache proxies /blade-book/api/ here and serves /blade-book/ static itself.
 """
 import logging
 import os
+import re
 import secrets
 import shutil
 import subprocess
@@ -27,6 +28,19 @@ def _version():
         return 'dev'
 
 
+class _OneRecordPerLine(logging.Formatter):
+    """A record starts a line with its stamp, and nothing else does. User text
+    lands in this log (a want, a file name, a report's reason); with a line
+    break in it, the rest would read as a record of its own. So every line
+    after the first is indented, tracebacks included, and the other characters
+    that break a line become spaces. bb/activity.py and scripts/monitor.py
+    read this file line by line and rely on it."""
+    _BREAKS = re.compile('[\r\x0b\x0c\x1c\x1d\x1e\x85\u2028\u2029]')
+
+    def format(self, record):
+        return self._BREAKS.sub(' ', super().format(record)).replace('\n', '\n\t')
+
+
 def _setup_logging():
     """One rotating file handler pointed at the *current* LOG_DIR (tests
     reload paths per test, so a stale handler is swapped, not duplicated)."""
@@ -40,7 +54,7 @@ def _setup_logging():
             root.removeHandler(h)
             h.close()
     handler = RotatingFileHandler(target, maxBytes=5_000_000, backupCount=5)
-    handler.setFormatter(logging.Formatter(
+    handler.setFormatter(_OneRecordPerLine(
         '%(asctime)s %(levelname)s %(name)s: %(message)s'))
     root.addHandler(handler)
     root.setLevel(logging.INFO)

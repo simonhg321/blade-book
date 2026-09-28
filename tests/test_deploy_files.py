@@ -868,13 +868,19 @@ def test_admin_activity_wiring():
 
 
 def test_terms_and_faq_say_we_keep_logs():
-    line = ('Like every web server, ours keeps a log of requests (address, page, time) for two weeks, and the app '
-            'keeps a log of sign-ins and saves. We read them to fix problems and to help people who get stuck.')
+    # final review I4: every claim here has to be true of the box
+    for needle in ('Like every web server, ours keeps a log of requests (address, browser, page, the page you came from, time) for two weeks.',
+                   'The app keeps its own log of what happens on your account: sign-ins (email and the address they came from), and what you add, change and delete.',
+                   'That log has no time limit yet.',
+                   'We read both to fix problems and to help people who get stuck.',
+                   'No ads, no trackers, no analytics scripts.'):
+        for page in ('html/terms/index.html', 'html/faq/index.html'):
+            assert needle in _read(page), (page, needle)
     for page in ('html/terms/index.html', 'html/faq/index.html'):
-        html = _read(page)
-        assert line in html, page
-        assert 'Nothing else' not in html, page
-        assert 'No ads, no trackers, no analytics scripts.' in html, page
+        assert 'Nothing else' not in _read(page), page
+    terms = _read('html/terms/index.html')
+    assert 'We keep one thing' not in terms
+    assert 'The logs described below keep the lines they already wrote.' in terms
 
 
 def test_deploy_activity_script():

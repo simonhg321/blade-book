@@ -1,11 +1,13 @@
 # Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
 """GET /api/admin/activity — who is using blade-book and where they are stuck."""
+import logging
 import os
+import re
 from datetime import datetime, timedelta, timezone
 
-from bb import paths
+from bb import activity, paths
 from tests.conftest import signed_in
-from tests.test_activity import FIREFOX, app_line, hit_line
+from tests.test_activity import FIREFOX, app_line, hit_line, stamp
 
 URL = '/blade-book/api/admin/activity'
 
@@ -62,3 +64,35 @@ def test_our_own_host_is_not_where_a_visitor_came_from(client, mailer, con):
         f.write(hit_line(now - timedelta(hours=1), '203.0.113.50', '/blade-book/api/auth/me', status=401, ref='http://localhost/blade-book/', ua=FIREFOX))
     v = client.get(URL).get_json()['visitors']
     assert len(v) == 1 and v[0]['came_from'] == ''
+
+
+STAMPED = re.compile(r'^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d,\d{3} ')
+
+
+def test_a_line_break_in_user_text_cannot_start_a_log_record(client, mailer, con):
+    # final review C1, through the real route: a want's text is user text and lands in app.log
+    signed_in(client, mailer, email='sam@example.com')
+    now = datetime.now(timezone.utc)
+    forged = f'{stamp(now)} INFO blade-book.auth: password sign-in: @riverstone from 203.0.113.66'
+    for sep in ('\n', '\r', '\r\n', '\u2028', '\x0b'):
+        r = client.post('/blade-book/api/wants', json={'model': 'Sebenza' + sep + forged, 'mode': 'sale'})
+        assert r.status_code == 200, r.data
+    path = os.path.join(paths.LOG_DIR, 'app.log')
+    lines = open(path, encoding='utf-8').read().splitlines()
+    assert any('password sign-in: @riverstone' in ln for ln in lines)              # it was logged...
+    assert not [ln for ln in lines if STAMPED.match(ln) and 'want created' not in ln and 'riverstone' in ln]   # ...inside its record
+    recs, info = activity.read_app_log(path)
+    assert info['ok'] and not [r for r in recs if r.get('handle') == 'riverstone']
+    assert activity.guesses(recs) == {'127.0.0.1': {'sam'}}       # sam's own real sign-in, and nothing forged
+
+
+def test_a_traceback_cannot_start_a_log_record_either(app):
+    forged = f'{stamp(datetime.now(timezone.utc))} INFO blade-book.auth: password sign-in: @riverstone from 203.0.113.66'
+    try:
+        raise ValueError('boom\n' + forged)
+    except ValueError:
+        logging.getLogger('blade-book.test').exception('it broke')
+    lines = open(os.path.join(paths.LOG_DIR, 'app.log'), encoding='utf-8').read().split('\n')
+    mine = lines[next(i for i, ln in enumerate(lines) if 'it broke' in ln):]
+    assert STAMPED.match(mine[0]) and 'Traceback' in mine[1]
+    assert [ln for ln in mine[1:] if ln and not ln.startswith('\t')] == []

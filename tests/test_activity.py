@@ -58,7 +58,8 @@ T = NOW - timedelta(hours=2)
 
 SHAPES = [
     ('magic link sign-in: sam@example.com (@sam)', {'kind': 'signed_in', 'email': 'sam@example.com', 'handle': 'sam', 'how': 'link'}),
-    ('magic link sign-in (confirmed): sam@example.com (@sam)', {'kind': 'signed_in', 'email': 'sam@example.com', 'handle': 'sam', 'how': 'link'}),
+    ('magic link sign-in (confirmed): sam@example.com (@sam)', {'kind': 'signed_in', 'email': 'sam@example.com', 'handle': 'sam', 'how': 'confirmed'}),
+    ('handle changed: @old-name -> @new-name (user 7)', {'kind': 'handle_changed', 'old': 'old-name', 'handle': 'new-name'}),
     ('password sign-in: @riverstone from 2001:db8:4181:bdd0::1', {'kind': 'signed_in', 'handle': 'riverstone', 'ip': '2001:db8:4181:bdd0::1', 'how': 'password'}),
     ('google sign-in: sam@example.com (@sam)', {'kind': 'signed_in', 'email': 'sam@example.com', 'handle': 'sam', 'how': 'google'}),
     ('magic link requested for sam@example.com from 203.0.113.9', {'kind': 'link_requested', 'email': 'sam@example.com', 'ip': '203.0.113.9'}),
@@ -246,12 +247,27 @@ def test_read_access_log_reports_a_missing_file_and_stops_at_the_cap(env, tmp_pa
     hits, info = activity.read_access_log(path, NOW - timedelta(hours=48))
     assert hits == [] and info['ok'] is False
     assert info['error'] == f'could not read {path}: No such file or directory'
-    monkeypatch.setattr(activity, 'MAX_LINES', 3)
+
+
+def test_the_cap_keeps_the_newest_lines(env, tmp_path, monkeypatch):
+    # final review I5: the cap used to keep the top of the file, which is the oldest part
+    path = _access(tmp_path)
+    monkeypatch.setattr(activity, 'MAX_LINES', 4)
+    with open(path + '.1', 'w') as f:
+        for n in range(5):
+            f.write(hit_line(NOW - timedelta(hours=30) + timedelta(minutes=n), '203.0.113.3', f'/old{n}/'))
     with open(path, 'w') as f:
-        for n in range(10):
-            f.write(hit_line(NOW - timedelta(minutes=n), '203.0.113.3', f'/p{n}/'))
+        for n in range(2):
+            f.write(hit_line(NOW - timedelta(hours=1) + timedelta(minutes=n), '203.0.113.3', f'/new{n}/'))
     hits, info = activity.read_access_log(path, NOW - timedelta(hours=48))
-    assert len(hits) == 3 and info['stopped'] is True
+    assert [h['path'] for h in hits] == ['/old3/', '/old4/', '/new0/', '/new1/']
+    assert info == {'ok': True, 'lines': 4, 'files': 2, 'stopped': True}
+    app = os.path.join(paths.LOG_DIR, 'app.log')
+    with open(app, 'w') as f:
+        for n in range(9):
+            f.write(app_line(h(9 - n), f'K0{n} saved to the register by @sam'))
+    recs, info = activity.read_app_log(app)
+    assert [r['tag'] for r in recs] == ['K05', 'K06', 'K07', 'K08'] and info == {'ok': True, 'lines': 4, 'stopped': True}
 
 
 SINCE = NOW - timedelta(hours=48)
@@ -379,6 +395,56 @@ def test_guesses_need_a_real_sign_in():
         (h(69), 'magic link sign-in: sam@example.com (@sam)'),                          # an hour later: too late
         (h(60), 'password sign-in: @sam from 2001:db8:4181:bdd0::77'))                  # a second person, same home
     assert activity.guesses(recs) == {LWNET: {'riverstone', 'sam'}, '203.0.113.9': {'sam'}}
+
+
+def test_a_stranger_who_asks_for_your_link_is_not_you():
+    # final review I2: the sign-in line carries no address, so two askers make it a coin toss. No guess.
+    for stranger_at, pat_at in ((h(10), h(10) + timedelta(minutes=1)), (h(10) + timedelta(minutes=1), h(10))):
+        recs = recs_of((stranger_at, 'magic link requested for pat@example.com from 198.51.100.66'),
+                       (pat_at, 'magic link requested for pat@example.com from 203.0.113.9'),
+                       (h(10) + timedelta(minutes=3), 'magic link sign-in: pat@example.com (@pat)'))
+        assert activity.guesses(recs) == {}
+    # the same network asking twice is one asker
+    recs = recs_of((h(10), 'magic link requested for pat@example.com from 203.0.113.9'),
+                   (h(10) + timedelta(minutes=1), 'magic link requested for pat@example.com from 203.0.113.9'),
+                   (h(10) + timedelta(minutes=3), 'magic link sign-in: pat@example.com (@pat)'))
+    assert activity.guesses(recs) == {'203.0.113.9': {'pat'}}
+
+
+def test_a_confirmed_sign_in_belongs_to_whoever_opened_the_link():
+    recs = recs_of((h(10), 'magic link requested for pat@example.com from 198.51.100.66'),
+                   (h(10) + timedelta(minutes=2), 'magic link for pat@example.com opened unbound from 203.0.113.9 (signed in: -)'),
+                   (h(10) + timedelta(minutes=3), 'magic link sign-in (confirmed): pat@example.com (@pat)'))
+    assert activity.guesses(recs) == {'203.0.113.9': {'pat'}}
+    recs = recs_of((h(10), 'magic link for pat@example.com opened unbound from 203.0.113.9 (signed in: -)'),
+                   (h(9), 'magic link sign-in (confirmed): pat@example.com (@pat)'))      # an hour later: too late
+    assert activity.guesses(recs) == {}
+
+
+def test_a_renamed_handle_keeps_its_history():
+    # final review I3
+    recs = activity.renamed(recs_of(
+        (h(9), 'password sign-in failed for @old-name from 203.0.113.9'),
+        (h(8), 'K01 saved to the register by @old-name'),
+        (h(7), 'handle changed: @old-name -> @mid-name (user 7)'),
+        (h(6), 'handle changed: @mid-name -> @new-name (user 7)'),
+        (h(5), 'password sign-in: @new-name from 203.0.113.9'),
+        (h(4), 'K01 saved to the register by @old-name')))          # somebody else took the old name later
+    assert [r['handle'] for r in recs] == ['new-name', 'new-name', 'new-name', 'new-name', 'new-name', 'old-name']
+    assert activity.needs_help(recs, [], SINCE, NOW) == []
+    rows = [{'id': 7, 'handle': 'new-name', 'email': 'n@example.com', 'last_active': None, 'knives': 1, 'drafts': 0}]
+    assert [t['what'] for t in activity.people(rows, recs, {}, SINCE)[0]['trail']] == [
+        'signed in', 'changed handle', 'changed handle', 'saved K01', 'password failed']
+
+
+def test_a_guess_never_names_an_account_that_is_gone(con, env, tmp_path):
+    _mk_user(con, email='here@example.com', handle='here')
+    _write_logs(tmp_path,
+                [app_line(h(300), 'password sign-in: @gone from 203.0.113.9'),
+                 app_line(h(200), 'password sign-in: @here from 203.0.113.9')],
+                [hit_line(h(1), '203.0.113.9', '/blade-book/'), hit_line(h(1), '203.0.113.9', '/blade-book/vibe.css')])
+    s = activity.summary(con, 48, own_hosts=OURS, now=NOW)
+    assert [v['guess'] for v in s['visitors']] == [['here']]
 
 
 def test_people_carry_a_trail_newest_first():
@@ -539,3 +605,33 @@ def test_link_previewers_and_helpers_are_not_people():
         assert activity.is_bot(ua), ua
     # an in-app web view names no browser and is still a person
     assert not activity.is_bot('Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148')
+
+
+def test_a_poisoned_line_is_dropped_not_raised():
+    # final review C1: one bad line must never take the page down
+    assert activity.parse_app_line('2026-02-31 04:00:00,000 INFO blade-book.knives: K01 saved to the register by @sam\n') is None
+    assert activity.parse_app_line(app_line(T, 'photo ' + '9' * 5000 + '/1 stored for @sam (jpg, thumb=True)')) is None
+    assert activity.parse_access_line(hit_line(T, '203.0.113.9', '/' + 'a' * 5000)) is None
+
+
+def test_a_very_long_line_is_refused_fast():
+    # final review I1: this line took 32 ms to reject; 200 of them took 6.4 s
+    import time
+    hostile = '203.0.113.9 - - [28/Sep/2026:04:01:34 +0000] "GET /' + 'a' * 8000 + ' \\"x" 400 1 "-" "-"\n'
+    start = time.perf_counter()
+    for _ in range(200):
+        assert activity.parse_access_line(hostile) is None
+    assert time.perf_counter() - start < 1.0
+
+
+def test_an_encoded_query_is_cut_too():
+    # final review minor 3, raised: a mail program can mangle ?t= into %3Ft=
+    for target in ('/blade-book/api/auth/magic%3Ft=TOKENSECRET', '/blade-book/api/auth/magic%3ft=TOKENSECRET',
+                   '/sell/;key=TOKENSECRET', '/sell/%3Bkey=TOKENSECRET', '/sell/%23TOKENSECRET'):
+        h_ = activity.parse_access_line(hit_line(T, '203.0.113.9', target))
+        assert 'TOKENSECRET' not in h_['path'], target
+    assert not activity.is_page('/api/auth/magic') and not activity.is_page('/x/api/y')
+
+
+def test_ipv4_inside_ipv6_is_still_that_ipv4():
+    assert activity.network('::ffff:203.0.113.9') == '203.0.113.9'
