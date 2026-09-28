@@ -125,3 +125,130 @@ def test_read_app_log_reports_a_missing_file(env):
     recs, info = activity.read_app_log(path)
     assert recs == [] and info['ok'] is False
     assert info['error'] == f'could not read {path}: No such file or directory'
+
+
+FIREFOX = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:156.0) Gecko/20100101 Firefox/156.0'
+CHROME_MAC = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36'
+FB_IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 26_6_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/23G90 [FBAN/FBIOS;FBAV/580.0.0.29.107]'
+SAFARI_IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 26_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1'
+
+
+def hit_line(dt, ip, target, status=200, ref='-', ua=FIREFOX, method='GET'):
+    ts = dt.astimezone(timezone.utc).strftime('%d/%b/%Y:%H:%M:%S +0000')
+    return f'{ip} - - [{ts}] "{method} {target} HTTP/1.1" {status} 1234 "{ref}" "{ua}"\n'
+
+
+def test_network_keeps_ipv4_and_cuts_ipv6_to_64():
+    assert activity.network('203.0.113.9') == '203.0.113.9'
+    assert activity.network('2001:db8:4181:bdd0:c12c:ab90:c13b:c6bc') == '2001:db8:4181:bdd0::/64'
+    assert activity.network('2001:db8:4181:bdd0::1') == '2001:db8:4181:bdd0::/64'     # Review Focus 3
+    assert activity.network('not-an-address') is None and activity.network('?') is None
+
+
+def test_device_is_two_words():
+    assert activity.device(FIREFOX) == 'Windows · Firefox'
+    assert activity.device(CHROME_MAC) == 'Mac · Chrome'
+    assert activity.device(FB_IPHONE) == 'iPhone · Facebook app'
+    assert activity.device(SAFARI_IPHONE) == 'iPhone · Safari'
+    assert activity.device('') == 'Other · browser'
+
+
+def test_pages_assets_and_bots():
+    for p in ('/', '/blade-book/', '/@simon-collector/K80/', '/blade-book/abtesting/flow.html', '/blade-book/me'):
+        assert activity.is_page(p), p
+    for p in ('/blade-book/api/auth/me', '/blade-book/vibe.css', '/wp-admin/install.php', '/.env', '/robots.txt'):
+        assert not activity.is_page(p), p
+    for p in ('/blade-book/vibe.css', '/blade-book/fonts/DMSans.woff2', '/blade-book/@sam/img/K33_t.JPG', '/favicon.ico'):
+        assert activity.is_asset(p), p
+    assert not activity.is_asset('/robots.txt') and not activity.is_asset('/blade-book/')
+    for ua in ('Googlebot/2.1', 'curl/8.5.0', 'python-requests/2.31', 'Go-http-client/1.1', '-', '',
+               'http://blade-book.com/wp-admin/install.php?step=1', 'Mozilla/5.0 (compatible; AhrefsBot/7.0)'):
+        assert activity.is_bot(ua), ua
+    for ua in (FIREFOX, CHROME_MAC, FB_IPHONE, SAFARI_IPHONE):
+        assert not activity.is_bot(ua), ua
+
+
+def test_parse_access_line_drops_the_query_and_keeps_only_the_referrer_host():
+    h = activity.parse_access_line(hit_line(
+        T, '2001:db8:4181:bdd0:c12c:ab90:c13b:c6bc', '/blade-book/api/auth/magic?t=TOKENSECRET',
+        ref='https://blade-book.com/sell/?key=KEYSECRET'))
+    assert h == {'net': '2001:db8:4181:bdd0::/64', 'when': T.replace(microsecond=0), 'method': 'GET',
+                 'path': '/blade-book/api/auth/magic', 'status': 200, 'ref_host': 'blade-book.com', 'ua': FIREFOX}
+    assert 'SECRET' not in repr(h)                                                        # Review Focus 5
+    assert activity.parse_access_line(hit_line(T, '203.0.113.9', '/x#frag?t=1'))['path'] == '/x'
+    assert activity.parse_access_line(hit_line(T, '203.0.113.9', 'http://evil.example/a?b=1'))['path'] == '/a'
+    assert activity.parse_access_line(hit_line(T, '203.0.113.9', '/', ref='-'))['ref_host'] == ''
+    assert len(activity.parse_access_line(hit_line(T, '203.0.113.9', '/' + 'a' * 500))['path']) == 200
+
+
+def test_parse_access_line_refuses_junk():
+    for line in ('', 'garbage\n', '203.0.113.9 - - [not a date] "GET / HTTP/1.1" 200 1 "-" "x"\n',
+                 'not-an-ip - - [28/Sep/2026:04:01:34 +0000] "GET / HTTP/1.1" 200 1 "-" "x"\n',
+                 '203.0.113.9 - - [28/Sep/2026:04:01:34 +0000] "\\x16\\x03\\x01" 400 1 "-" "-"\n'):
+        assert activity.parse_access_line(line) is None, line
+
+
+def test_a_quote_inside_the_browser_string_does_not_break_the_line():
+    h = activity.parse_access_line(hit_line(T, '203.0.113.9', '/', ua='Mozilla \\"quoted\\" thing'))
+    assert h['path'] == '/' and h['ua'] == 'Mozilla \\"quoted\\" thing'
+
+
+def _access(tmp_path):
+    return str(tmp_path / 'log' / 'access.log')
+
+
+def test_read_access_log_reads_the_window_across_rotations(env, tmp_path):
+    path = _access(tmp_path)
+    since = NOW - timedelta(hours=48)
+    with gzip.open(path + '.2.gz', 'wt') as f:
+        f.write(hit_line(NOW - timedelta(hours=47), '203.0.113.1', '/old-but-inside/'))
+        f.write(hit_line(NOW - timedelta(hours=60), '203.0.113.1', '/too-old/'))
+    with open(path + '.1', 'w') as f:
+        f.write(hit_line(NOW - timedelta(hours=30), '203.0.113.2', '/yesterday/'))
+        f.write('junk\n')
+    with open(path, 'w') as f:
+        f.write(hit_line(NOW - timedelta(hours=1), '203.0.113.3', '/today/'))
+    hits, info = activity.read_access_log(path, since)
+    assert [h['path'] for h in hits] == ['/old-but-inside/', '/yesterday/', '/today/']
+    assert info == {'ok': True, 'lines': 5, 'files': 3, 'skipped': 1}
+
+
+def test_read_access_log_skips_files_that_end_before_the_window(env, tmp_path):
+    path = _access(tmp_path)
+    with gzip.open(path + '.2.gz', 'wt') as f:
+        f.write(hit_line(NOW - timedelta(days=9), '203.0.113.1', '/ancient/'))
+    old = (NOW - timedelta(days=9)).timestamp()
+    os.utime(path + '.2.gz', (old, old))
+    with open(path, 'w') as f:
+        f.write(hit_line(NOW - timedelta(hours=1), '203.0.113.3', '/today/'))
+    hits, info = activity.read_access_log(path, NOW - timedelta(hours=48))
+    assert [h['path'] for h in hits] == ['/today/'] and info['files'] == 1
+
+
+def test_read_access_log_keeps_what_a_broken_gz_gave(env, tmp_path):
+    # Review Focus 4
+    path = _access(tmp_path)
+    with gzip.open(path + '.2.gz', 'wt') as f:
+        for n in range(2000):
+            f.write(hit_line(NOW - timedelta(hours=40), '203.0.113.1', f'/page-{n}/'))
+    whole = open(path + '.2.gz', 'rb').read()
+    with open(path + '.2.gz', 'wb') as f:
+        f.write(whole[:len(whole) // 2])
+    with open(path, 'w') as f:
+        f.write(hit_line(NOW - timedelta(hours=1), '203.0.113.3', '/today/'))
+    hits, info = activity.read_access_log(path, NOW - timedelta(hours=48))
+    assert hits[-1]['path'] == '/today/' and len(hits) > 1
+    assert info['ok'] is False and info['error'].startswith(f'could not read {path}.2.gz: ')
+
+
+def test_read_access_log_reports_a_missing_file_and_stops_at_the_cap(env, tmp_path, monkeypatch):
+    path = _access(tmp_path)
+    hits, info = activity.read_access_log(path, NOW - timedelta(hours=48))
+    assert hits == [] and info['ok'] is False
+    assert info['error'] == f'could not read {path}: No such file or directory'
+    monkeypatch.setattr(activity, 'MAX_LINES', 3)
+    with open(path, 'w') as f:
+        for n in range(10):
+            f.write(hit_line(NOW - timedelta(minutes=n), '203.0.113.3', f'/p{n}/'))
+    hits, info = activity.read_access_log(path, NOW - timedelta(hours=48))
+    assert len(hits) == 3 and info['stopped'] is True

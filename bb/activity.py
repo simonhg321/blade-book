@@ -115,3 +115,125 @@ def read_app_log(path):
             break
     recs.sort(key=lambda r: r['when'])
     return recs, info
+
+
+# --- the web server log ---------------------------------------------------------
+
+_ACCESS = re.compile(
+    r'^(?P<ip>\S+) \S+ \S+ \[(?P<ts>[^\]]+)\] "(?P<method>[A-Z]+) (?P<target>\S+)[^"]*" '
+    r'(?P<status>\d{3}) \S+ "(?P<ref>(?:[^"\\]|\\.)*)" "(?P<ua>(?:[^"\\]|\\.)*)"')
+_BOT = re.compile(r'bot|crawl|spider|slurp|curl|wget|python|go-http|scrapy|headless|monitor|uptime|scan|'
+                  r'libwww|okhttp|java/|node|axios|httpclient|^https?://|^-?$', re.I)
+_ASSETS = ('.css', '.js', '.woff2', '.woff', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg', '.ico')
+PATH_MAX = 200
+
+
+def network(ip):
+    """An IPv4 address as it is; an IPv6 address cut to its /64, because a
+    home's devices share the /64 and change the rest. None for junk."""
+    try:
+        a = ipaddress.ip_address(ip)
+    except ValueError:
+        return None
+    if a.version == 4:
+        return str(a)
+    return str(ipaddress.ip_network((int(a) >> 64 << 64, 64)))
+
+
+def device(ua):
+    os_ = next((name for mark, name in (('iPhone', 'iPhone'), ('iPad', 'iPad'), ('Android', 'Android'),
+                                        ('Windows', 'Windows'), ('Macintosh', 'Mac'), ('Linux', 'Linux'))
+                if mark in ua), 'Other')
+    app = next((name for marks, name in ((('FBAN', 'FBAV'), 'Facebook app'), (('Instagram',), 'Instagram app'),
+                                         (('Edg/',), 'Edge'), (('Firefox/', 'FxiOS'), 'Firefox'),
+                                         (('Chrome/', 'CriOS'), 'Chrome'), (('Safari/',), 'Safari'))
+                if any(m in ua for m in marks)), 'browser')
+    return f'{os_} · {app}'
+
+
+def is_bot(ua):
+    return bool(_BOT.search(ua))
+
+
+def is_asset(path):
+    return path.lower().endswith(_ASSETS)
+
+
+def is_page(path):
+    if path.startswith(paths.API_PREFIX + '/'):
+        return False
+    last = path.rsplit('/', 1)[-1]
+    return last == '' or last.endswith('.html') or '.' not in last
+
+
+def _host(url):
+    if url in ('', '-'):
+        return ''
+    try:
+        return (urlsplit(url).hostname or '').lower()
+    except ValueError:
+        return ''
+
+
+def parse_access_line(line):
+    """One combined-format line as named fields, or None. The query string is
+    dropped, always: sign-in links and upload keys travel there. Of the
+    referrer only the host is kept, for the same reason."""
+    m = _ACCESS.match(line)
+    if not m:
+        return None
+    net = network(m.group('ip'))
+    if net is None:
+        return None
+    try:
+        when = datetime.strptime(m.group('ts'), '%d/%b/%Y:%H:%M:%S %z').astimezone(timezone.utc)
+        path = urlsplit(m.group('target')).path or '/'
+    except ValueError:
+        return None
+    return {'net': net, 'when': when, 'method': m.group('method'), 'path': path[:PATH_MAX],
+            'status': int(m.group('status')), 'ref_host': _host(m.group('ref')), 'ua': m.group('ua')}
+
+
+def _access_files(path):
+    """Newest first: the live file, .1, then .2.gz upward."""
+    out = [path]
+    if os.path.exists(path + '.1'):
+        out.append(path + '.1')
+    gz = []
+    for p in glob.glob(glob.escape(path) + '.*.gz'):
+        n = p[len(path) + 1:-3]
+        if n.isdigit():
+            gz.append((int(n), p))
+    return out + [p for _n, p in sorted(gz)]
+
+
+def read_access_log(path, since):
+    """Every request at or after `since`, oldest first, and how the read went.
+    A rotated file last written before `since` ends the walk: it and every
+    older file hold nothing from the window."""
+    info = {'ok': True, 'lines': 0, 'files': 0}
+    hits = []
+    for p in _access_files(path):
+        try:
+            if p != path and datetime.fromtimestamp(os.path.getmtime(p), timezone.utc) < since:
+                break
+            counted = False
+            for line in _lines(p, gzip.open if p.endswith('.gz') else open):
+                if not counted:
+                    info['files'] += 1
+                    counted = True
+                info['lines'] += 1
+                hit = parse_access_line(line)
+                if hit is None:
+                    info['skipped'] = info.get('skipped', 0) + 1
+                elif hit['when'] >= since:
+                    hits.append(hit)
+                if info['lines'] >= MAX_LINES:
+                    info['stopped'] = True
+                    break
+        except (OSError, EOFError) as e:
+            info.update(ok=False, error=_why(p, e))
+        if info.get('stopped'):
+            break
+    hits.sort(key=lambda h: h['when'])
+    return hits, info
