@@ -865,3 +865,13 @@ def test_admin_activity_wiring():
                    'probably', 'nobody is stuck', 'purge_at', 'textContent', 'Copyright (c) 2026 Simon SGH'):
         assert needle in js, needle
     assert 'innerHTML' not in js and 'insertAdjacentHTML' not in js and 'document.write' not in js
+
+
+def test_terms_and_faq_say_we_keep_logs():
+    line = ('Like every web server, ours keeps a log of requests (address, page, time) for two weeks, and the app '
+            'keeps a log of sign-ins and saves. We read them to fix problems and to help people who get stuck.')
+    for page in ('html/terms/index.html', 'html/faq/index.html'):
+        html = _read(page)
+        assert line in html, page
+        assert 'Nothing else' not in html, page
+        assert 'No ads, no trackers, no analytics scripts.' in html, page
