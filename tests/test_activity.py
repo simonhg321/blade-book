@@ -252,3 +252,112 @@ def test_read_access_log_reports_a_missing_file_and_stops_at_the_cap(env, tmp_pa
             f.write(hit_line(NOW - timedelta(minutes=n), '203.0.113.3', f'/p{n}/'))
     hits, info = activity.read_access_log(path, NOW - timedelta(hours=48))
     assert len(hits) == 3 and info['stopped'] is True
+
+
+SINCE = NOW - timedelta(hours=48)
+
+
+def recs_of(*pairs):
+    """(datetime, message) pairs as parsed records, oldest first."""
+    out = [activity.parse_app_line(app_line(dt, msg)) for dt, msg in pairs]
+    assert all(out), [msg for (_dt, msg), r in zip(pairs, out) if r is None]
+    return sorted(out, key=lambda r: r['when'])
+
+
+def help_of(*pairs, drafts=()):
+    return activity.needs_help(recs_of(*pairs), list(drafts), SINCE, NOW)
+
+
+def h(n):
+    return NOW - timedelta(hours=n)
+
+
+def test_a_link_nobody_opened():
+    got = help_of((h(30), 'magic link requested for pat@example.com from 203.0.113.9'),
+                  (h(29), 'magic link requested for Pat@Example.com from 203.0.113.9'))
+    assert got == [{'kind': 'link_unclicked', 'who': 'pat@example.com', 'when': h(29).isoformat(),
+                    'detail': '2 sign-in links sent, never opened'}]
+
+
+def test_a_link_opened_elsewhere_and_never_confirmed():
+    got = help_of((h(30), 'magic link requested for pat@example.com from 203.0.113.9'),
+                  (h(30) + timedelta(minutes=2), 'magic link for pat@example.com opened unbound from 198.51.100.4 (signed in: -)'))
+    assert got[0]['detail'] == '1 sign-in link sent, opened in another browser, never confirmed'
+
+
+def test_a_later_sign_in_clears_the_link():
+    assert help_of((h(30), 'magic link requested for sam@example.com from 203.0.113.9'),
+                   (h(29), 'magic link requested for sam@example.com from 203.0.113.9'),
+                   (h(29) + timedelta(minutes=1), 'magic link sign-in: sam@example.com (@sam)')) == []
+    # asked again after signing in, and that one went nowhere
+    got = help_of((h(30), 'magic link requested for sam@example.com from 203.0.113.9'),
+                  (h(30) + timedelta(minutes=1), 'magic link sign-in (confirmed): sam@example.com (@sam)'),
+                  (h(3), 'magic link requested for sam@example.com from 203.0.113.9'))
+    assert [(g['when'], g['detail']) for g in got] == [(h(3).isoformat(), '1 sign-in link sent, never opened')]
+
+
+def test_a_link_still_alive_or_outside_the_window_is_not_stuck():
+    assert help_of((NOW - timedelta(minutes=10), 'magic link requested for sam@example.com from 203.0.113.9'),
+                   (h(60), 'magic link requested for old@example.com from 203.0.113.9')) == []
+
+
+def test_failed_passwords_until_a_good_sign_in():
+    got = help_of((h(5), 'password sign-in failed for @riverstone from 203.0.113.9'),
+                  (h(4), 'password sign-in failed for @riverstone from 203.0.113.9'))
+    assert got == [{'kind': 'password_failed', 'who': '@riverstone', 'when': h(4).isoformat(),
+                    'detail': '2 failed password sign-ins'}]
+    assert help_of((h(5), 'password sign-in failed for @riverstone from 203.0.113.9'),
+                   (h(4), 'password sign-in: @riverstone from 203.0.113.9')) == []
+    got = help_of((h(5), 'password sign-in: @riverstone from 203.0.113.9'),
+                  (h(4), 'password sign-in failed for @riverstone from 203.0.113.9'))
+    assert [g['detail'] for g in got] == ['1 failed password sign-in']
+
+
+def test_rate_limits():
+    got = help_of((h(5), 'rate limited sam@example.com from 203.0.113.9: too many links'),
+                  (h(4), 'password sign-in rate limited for @riverstone from 203.0.113.9: too many'),
+                  (h(3), 'password sign-in rate limited for @riverstone from 203.0.113.9: too many'))
+    assert [(g['kind'], g['who'], g['detail']) for g in got] == [
+        ('rate_limited', '@riverstone', 'rate limited 2 times'), ('rate_limited', 'sam@example.com', 'rate limited 1 time')]
+
+
+def test_a_blocked_save_until_the_knife_saves():
+    blocked = (h(5), 'K98 save gated for @sam (free, free_old_used=3): older than 12 months')
+    got = help_of(blocked, blocked)
+    assert got == [{'kind': 'save_blocked', 'who': '@sam', 'when': h(5).isoformat(), 'tag': 'K98',
+                    'detail': 'save of K98 blocked by the gate, 2 times'}]
+    assert help_of(blocked, (h(4), 'K98 saved to the register by @sam')) == []
+    assert len(help_of(blocked, (h(4), 'K97 saved to the register by @sam'))) == 1
+    assert len(help_of(blocked, (h(4), 'K98 saved to the register by @other'))) == 1
+
+
+def test_a_failed_decode_until_the_knife_decodes():
+    failed = (h(5), "decode failed for sam/K98: BadRequestError: Error code: 400 - {'request_id': 'req_SECRET'}")
+    got = help_of(failed)
+    assert got == [{'kind': 'decode_failed', 'who': '@sam', 'when': h(5).isoformat(), 'tag': 'K98',
+                    'detail': 'decode of K98 failed: BadRequestError'}]
+    assert help_of(failed, (h(4), 'decoded K98 for @sam via claude-sonnet-5 (0 flags, 20799ms)')) == []
+
+
+def test_a_refused_upload():
+    got = help_of((h(5), 'undecodable upload refused for @sam: a.heic'), (h(4), 'undecodable upload refused for @sam: b.tiff'))
+    assert got == [{'kind': 'upload_refused', 'who': '@sam', 'when': h(4).isoformat(),
+                    'detail': '2 photos refused, last one .tiff'}]
+    assert help_of((h(5), 'undecodable upload refused for @sam: noext'))[0]['detail'] == '1 photo refused'
+
+
+def test_an_unfinished_draft_ignores_the_window_and_names_its_purge():
+    old = NOW - timedelta(days=5)
+    drafts = [{'id': 101, 'tag': 'K06', 'handle': 'riverstone', 'updated': old.isoformat()},
+              {'id': 102, 'tag': 'K07', 'handle': 'sam', 'updated': (NOW - timedelta(minutes=20)).isoformat()}]
+    assert help_of(drafts=drafts) == [{'kind': 'draft_unfinished', 'who': '@riverstone', 'when': old.isoformat(), 'tag': 'K06',
+                                       'detail': 'draft K06 started, never saved',
+                                       'purge_at': (old + timedelta(days=7)).isoformat()}]
+
+
+def test_signals_come_newest_first_and_a_nameless_handle_still_counts():
+    # Review Focus 2: @gone has no account any more; the signal still shows
+    got = help_of((h(9), 'password sign-in failed for @gone from 203.0.113.9'),
+                  (h(2), 'undecodable upload refused for @sam: a.heic'),
+                  (h(6), 'K98 save gated for @sam (free, free_old_used=3): older'))
+    assert [g['kind'] for g in got] == ['upload_refused', 'save_blocked', 'password_failed']

@@ -237,3 +237,78 @@ def read_access_log(path, since):
             break
     hits.sort(key=lambda h: h['when'])
     return hits, info
+
+
+# --- the stuck signals ----------------------------------------------------------
+
+def _n(n, one, many=None):
+    return f'{n} {one if n == 1 else (many or one + "s")}'
+
+
+def _latest(recs, kind, key):
+    """key(record) -> when of the newest record of that kind."""
+    out = {}
+    for r in recs:                                      # oldest first, so the last write is the newest
+        if r['kind'] == kind:
+            out[key(r)] = r['when']
+    return out
+
+
+def _stuck(recs, kind, key, cleared, since):
+    """Records of `kind` in the window, grouped by key, that came after the
+    last thing that cleared them. key -> records, oldest first."""
+    out = {}
+    for r in recs:
+        if r['kind'] == kind and r['when'] >= since and r['when'] > cleared.get(key(r), since - timedelta(seconds=1)):
+            out.setdefault(key(r), []).append(r)
+    return out
+
+
+def needs_help(recs, drafts, since, now):
+    """Where people are stuck, newest first (spec: NEEDS HELP)."""
+    out = []
+    EPOCH = datetime.min.replace(tzinfo=timezone.utc)
+
+    signed_in = _latest(recs, 'signed_in', lambda r: r.get('email'))
+    asked = _stuck([r for r in recs if r['when'] <= now - LINK_TTL], 'link_requested',
+                   lambda r: r['email'], signed_in, since)
+    opened = _stuck(recs, 'link_unbound', lambda r: r['email'], signed_in, since)
+    for email, rs in asked.items():
+        tail = 'opened in another browser, never confirmed' if email in opened else 'never opened'
+        out.append({'kind': 'link_unclicked', 'who': email, 'when': rs[-1]['when'],
+                    'detail': f'{_n(len(rs), "sign-in link")} sent, {tail}'})
+
+    got_in = _latest(recs, 'signed_in', lambda r: r['handle'])
+    for handle, rs in _stuck(recs, 'password_failed', lambda r: r['handle'], got_in, since).items():
+        out.append({'kind': 'password_failed', 'who': '@' + handle, 'when': rs[-1]['when'],
+                    'detail': _n(len(rs), 'failed password sign-in')})
+
+    who = lambda r: '@' + r['handle'] if 'handle' in r else r['email']
+    for name, rs in _stuck(recs, 'rate_limited', who, {}, since).items():
+        out.append({'kind': 'rate_limited', 'who': name, 'when': rs[-1]['when'],
+                    'detail': f'rate limited {_n(len(rs), "time")}'})
+
+    knife = lambda r: (r['handle'], r['tag'])
+    for (handle, tag), rs in _stuck(recs, 'save_blocked', knife, _latest(recs, 'saved', knife), since).items():
+        times = '' if len(rs) == 1 else f', {_n(len(rs), "time")}'
+        out.append({'kind': 'save_blocked', 'who': '@' + handle, 'when': rs[-1]['when'], 'tag': tag,
+                    'detail': f'save of {tag} blocked by the gate{times}'})
+    for (handle, tag), rs in _stuck(recs, 'decode_failed', knife, _latest(recs, 'decoded', knife), since).items():
+        out.append({'kind': 'decode_failed', 'who': '@' + handle, 'when': rs[-1]['when'], 'tag': tag,
+                    'detail': f'decode of {tag} failed: {rs[-1]["error"]}'})
+
+    for handle, rs in _stuck(recs, 'upload_refused', lambda r: r['handle'], {}, since).items():
+        ext = rs[-1]['ext']
+        out.append({'kind': 'upload_refused', 'who': '@' + handle, 'when': rs[-1]['when'],
+                    'detail': _n(len(rs), 'photo') + ' refused' + (f', last one {ext}' if ext and len(rs) > 1 else '')})
+
+    for d in drafts:                                    # the window does not apply: stuck until saved or purged
+        updated = datetime.fromisoformat(d['updated'])
+        if now - updated >= DRAFT_QUIET:
+            out.append({'kind': 'draft_unfinished', 'who': '@' + d['handle'], 'when': updated, 'tag': d['tag'],
+                        'detail': f'draft {d["tag"]} started, never saved', 'purge_at': (updated + DRAFT_PURGE).isoformat()})
+
+    out.sort(key=lambda s: s['when'] or EPOCH, reverse=True)
+    for s in out:
+        s['when'] = s['when'].isoformat()
+    return out
