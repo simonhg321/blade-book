@@ -361,3 +361,146 @@ def test_signals_come_newest_first_and_a_nameless_handle_still_counts():
                   (h(2), 'undecodable upload refused for @sam: a.heic'),
                   (h(6), 'K98 save gated for @sam (free, free_old_used=3): older'))
     assert [g['kind'] for g in got] == ['upload_refused', 'save_blocked', 'password_failed']
+
+
+LW6 = '2001:db8:4181:bdd0:c12c:ab90:c13b:c6bc'
+LWNET = '2001:db8:4181:bdd0::/64'
+OURS = {'blade-book.com'}
+
+
+def test_guesses_need_a_real_sign_in():
+    recs = recs_of(
+        (h(200), f'password sign-in: @riverstone from {LW6}'),
+        (h(100), 'magic link requested for sam@example.com from 203.0.113.9'),
+        (h(100) + timedelta(minutes=5), 'magic link sign-in: sam@example.com (@sam)'),
+        (h(90), 'password sign-in failed for @riverstone from 198.51.100.1'),          # proves nothing
+        (h(80), 'magic link requested for sam@example.com from 198.51.100.2'),        # never used
+        (h(70), 'magic link requested for sam@example.com from 198.51.100.3'),
+        (h(69), 'magic link sign-in: sam@example.com (@sam)'),                          # an hour later: too late
+        (h(60), 'password sign-in: @sam from 2001:db8:4181:bdd0::77'))                  # a second person, same home
+    assert activity.guesses(recs) == {LWNET: {'riverstone', 'sam'}, '203.0.113.9': {'sam'}}
+
+
+def test_people_carry_a_trail_newest_first():
+    rows = [{'id': 1, 'handle': 'sam', 'email': 'sam@example.com', 'last_active': h(1).isoformat(), 'knives': 2, 'drafts': 0},
+            {'id': 2, 'handle': 'quiet', 'email': 'quiet@example.com', 'last_active': None, 'knives': 0, 'drafts': 0},
+            {'id': 3, 'handle': 'riverstone', 'email': 'lw@example.com', 'last_active': h(100).isoformat(), 'knives': 3, 'drafts': 1}]
+    recs = recs_of(
+        (h(60), 'K01 saved to the register by @sam'),                                   # outside the window
+        (h(9), 'magic link requested for sam@example.com from 203.0.113.9'),
+        (h(9) + timedelta(minutes=1), 'magic link sign-in: sam@example.com (@sam)'),
+        (h(8), 'draft K98 created for @sam'),
+        (h(7), 'photo 109/3 stored for @sam (jpg, thumb=True)'),
+        (h(7) + timedelta(minutes=1), 'photo 555/1 stored for @sam (jpg, thumb=True)'),
+        (h(6), 'K98 save gated for @sam (free, free_old_used=3): older'),
+        (h(5), "settings changed for @sam: ['featured_knife_id']"),
+        (h(4), 'K89 sale_status → for_sale by @sam'),
+        (h(3), 'K96 edited by @sam: hero_photo'),
+        (h(2), 'password sign-in failed for @gone from 203.0.113.9'))
+    got = activity.people(rows, recs, {109: 'K98'}, SINCE)
+    assert [p['handle'] for p in got] == ['sam', 'riverstone', 'quiet']
+    sam = got[0]
+    assert set(sam) == {'handle', 'email', 'last_active', 'knives', 'drafts', 'trail'}
+    assert [t['what'] for t in sam['trail']] == [
+        'edited K96: hero_photo', 'K89 → for_sale', 'changed settings: featured_knife_id', 'save of K98 blocked',
+        'added photo 1 to a knife', 'added photo 3 to K98', 'started draft K98', 'signed in', 'asked for a sign-in link']
+    assert sam['trail'][0]['when'] == h(3).isoformat() and set(sam['trail'][0]) == {'when', 'what'}
+    assert got[1]['trail'] == [] and got[2]['last_active'] is None
+
+
+def test_the_trail_stops_at_fifty(monkeypatch):
+    rows = [{'id': 1, 'handle': 'sam', 'email': 'sam@example.com', 'last_active': None, 'knives': 0, 'drafts': 0}]
+    recs = recs_of(*[(h(40) + timedelta(minutes=n), 'K01 edited by @sam: notes_public') for n in range(60)])
+    assert len(activity.people(rows, recs, {}, SINCE)[0]['trail']) == 50
+
+
+def _visit(ip, ua, pages, at, asset=True, api=False, ref='-'):
+    """A browser's visit as hits: the pages, and the stylesheet or API call a real browser makes."""
+    lines = [hit_line(at + timedelta(seconds=n), ip, p, ref=ref if n == 0 else '-', ua=ua) for n, p in enumerate(pages)]
+    if asset:
+        lines.append(hit_line(at + timedelta(seconds=1), ip, '/blade-book/vibe.css', ua=ua))
+    if api:
+        lines.append(hit_line(at + timedelta(seconds=1), ip, '/blade-book/api/auth/me', status=401,
+                              ref='https://blade-book.com/', ua=ua))
+    return [activity.parse_access_line(x) for x in lines]
+
+
+def test_visitors_keep_people_and_hide_bots():
+    hits = (_visit(LW6, FIREFOX, ['/blade-book/abtesting/flow.html'], h(1))
+            + _visit('2001:db8:4181:bdd0::99', FIREFOX, ['/blade-book/'], h(1) + timedelta(minutes=5))   # same home
+            + _visit('47.150.153.164', FB_IPHONE, ['/'], h(3), asset=False, api=True, ref='https://m.facebook.com/x?y=SECRET')
+            + _visit('71.197.159.99', CHROME_MAC, ['/blade-book/admin/', '/blade-book/me/'], h(2))
+            + _visit('193.32.162.233', SAFARI_IPHONE, ['/'], h(4), asset=False)                          # no asset, no API: a scanner
+            + _visit('106.75.66.25', 'Go-http-client/1.1', ['/'], h(5))
+            + [activity.parse_access_line(hit_line(h(6), '198.51.100.7', '/wp-admin/install.php', status=404, ua=CHROME_MAC)),
+               activity.parse_access_line(hit_line(h(6), '198.51.100.7', '/blade-book/vibe.css', ua=CHROME_MAC))])   # no page at all
+    hits.sort(key=lambda x: x['when'])
+    guess = {LWNET: {'riverstone'}, '71.197.159.99': {'simon-collector'}}
+    got, hidden = activity.visitors(hits, guess, 'simon-collector', OURS)
+    assert [(v['network'], v['guess'], v['you'], v['device'], v['came_from']) for v in got] == [
+        (LWNET, ['riverstone'], False, 'Windows · Firefox', ''),
+        ('71.197.159.99', ['simon-collector'], True, 'Mac · Chrome', ''),
+        ('47.150.153.164', [], False, 'iPhone · Facebook app', 'm.facebook.com')]
+    lw = got[0]
+    assert set(lw) == {'network', 'guess', 'you', 'device', 'came_from', 'first', 'last', 'requests', 'pages'}
+    assert [p['path'] for p in lw['pages']] == ['/blade-book/', '/blade-book/abtesting/flow.html']   # newest first, one visitor
+    assert lw['requests'] == 4 and lw['first'] == h(1).isoformat()
+    assert set(lw['pages'][0]) == {'when', 'path', 'status'}
+    assert hidden == {'bots': 3, 'requests': 5}
+    assert 'SECRET' not in repr(got)
+
+
+def test_visitor_pages_stop_at_thirty():
+    hits = _visit('203.0.113.9', FIREFOX, [f'/p{n}/' for n in range(40)], h(1))
+    hits.sort(key=lambda x: x['when'])
+    got, _ = activity.visitors(hits, {}, None, OURS)
+    assert len(got[0]['pages']) == 30 and got[0]['pages'][0]['path'] == '/p39/'
+
+
+def _write_logs(tmp_path, app_lines, access_lines):
+    app = os.path.join(paths.LOG_DIR, 'app.log')
+    with open(app, 'w') as f:
+        f.writelines(app_lines)
+    with open(_access(tmp_path), 'w') as f:
+        f.writelines(access_lines)
+
+
+def test_summary_joins_the_three_sources(con, env, tmp_path):
+    lw = _mk_user(con, email='lw@example.com', handle='riverstone')
+    db.create_draft_knife(con, lw['id'])
+    con.execute('UPDATE knives SET updated = ? WHERE owner_id = ?', ((NOW - timedelta(days=4)).isoformat(), lw['id']))
+    con.commit()
+    _mk_user(con, email='simon@example.com', handle='simon-collector')
+    _write_logs(tmp_path,
+                [app_line(h(200), f'password sign-in: @riverstone from {LW6}'),
+                 app_line(h(30), 'magic link requested for pat@example.com from 203.0.113.50'),
+                 app_line(h(2), 'magic link requested for simon@example.com from 71.197.159.99'),
+                 app_line(h(2) + timedelta(minutes=1), 'magic link sign-in: simon@example.com (@simon-collector)'),
+                 f'{stamp(h(2))} INFO blade-book.mail: https://blade-book.com/blade-book/api/auth/magic?t=TOKENSECRET\n'],
+                [hit_line(h(1), LW6, '/blade-book/abtesting/flow.html'),
+                 hit_line(h(1), LW6, '/blade-book/vibe.css'),
+                 hit_line(h(2), '71.197.159.99', '/blade-book/api/auth/magic?t=TOKENSECRET'),
+                 hit_line(h(2), '71.197.159.99', '/blade-book/admin/'),
+                 hit_line(h(2), '71.197.159.99', '/blade-book/vibe.css')])
+    s = activity.summary(con, 48, you='simon-collector', own_hosts=OURS, now=NOW)
+    assert set(s) == {'hours', 'generated', 'you', 'needs_help', 'people', 'visitors', 'hidden', 'sources'}
+    assert s['hours'] == 48 and s['generated'] == NOW.isoformat() and s['you'] == 'simon-collector'
+    assert [(n['kind'], n['who']) for n in s['needs_help']] == [
+        ('link_unclicked', 'pat@example.com'), ('draft_unfinished', '@riverstone')]
+    assert [p['handle'] for p in s['people']] == ['simon-collector', 'riverstone']
+    assert [t['what'] for t in s['people'][0]['trail']] == ['signed in', 'asked for a sign-in link']
+    assert [(v['guess'], v['you']) for v in s['visitors']] == [(['riverstone'], False), (['simon-collector'], True)]
+    assert s['sources'] == {'database': {'ok': True}, 'app_log': {'ok': True, 'lines': 5},
+                            'access_log': {'ok': True, 'lines': 5, 'files': 1}}
+    assert 'TOKENSECRET' not in repr(s) and '?' not in repr(s['visitors'])
+
+
+def test_summary_still_answers_when_a_log_is_missing(con, env, tmp_path):
+    lw = _mk_user(con, email='lw@example.com', handle='riverstone')
+    db.create_draft_knife(con, lw['id'])
+    con.execute('UPDATE knives SET updated = ?', ((NOW - timedelta(days=4)).isoformat(),)); con.commit()
+    s = activity.summary(con, 48, now=NOW)
+    assert s['visitors'] == [] and s['hidden'] == {'bots': 0, 'requests': 0} and s['you'] is None
+    assert [n['kind'] for n in s['needs_help']] == ['draft_unfinished']
+    assert s['sources']['access_log']['ok'] is False and 'No such file' in s['sources']['access_log']['error']
+    assert s['sources']['app_log']['ok'] is False and s['sources']['database'] == {'ok': True}

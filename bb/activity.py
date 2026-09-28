@@ -312,3 +312,120 @@ def needs_help(recs, drafts, since, now):
     for s in out:
         s['when'] = s['when'].isoformat()
     return out
+
+
+# --- people ---------------------------------------------------------------------
+
+def _what(r, tags):
+    k = r['kind']
+    if k == 'photo_added':
+        tag = tags.get(int(r['knife_id']))
+        return f"added photo {r['seq']} to {tag or 'a knife'}"
+    return {
+        'signed_in': 'signed in',
+        'link_requested': 'asked for a sign-in link',
+        'link_unbound': 'opened a sign-in link in another browser',
+        'password_failed': 'password failed',
+        'rate_limited': 'rate limited',
+        'draft_started': 'started draft {tag}',
+        'decoded': 'decoded {tag}',
+        'edited': 'edited {tag}: {fields}',
+        'saved': 'saved {tag}',
+        'sale_status': '{tag} → {status}',
+        'deleted': 'deleted {tag}',
+        'settings': 'changed settings: {fields}',
+        'save_blocked': 'save of {tag} blocked',
+        'decode_failed': 'decode of {tag} failed',
+        'upload_refused': 'photo refused',
+    }[k].format(**{f: r.get(f, '') for f in ('tag', 'fields', 'status')})
+
+
+def people(rows, recs, tags, since):
+    """One row per account, most recently active first, each with what the app
+    log says that handle did in the window. A line that names an email and no
+    handle (a link request) belongs to the account with that email."""
+    by_email = {r['email']: r['handle'] for r in rows}
+    trails = {}
+    for r in reversed(recs):                            # newest first
+        if r['when'] < since:
+            break
+        handle = r.get('handle') or by_email.get(r.get('email'))
+        trail = trails.setdefault(handle, [])
+        if len(trail) < TRAIL_MAX:
+            trail.append({'when': r['when'].isoformat(), 'what': _what(r, tags)})
+    out = [{'handle': r['handle'], 'email': r['email'], 'last_active': r['last_active'], 'knives': r['knives'],
+            'drafts': r['drafts'], 'trail': trails.get(r['handle'], [])} for r in rows]
+    newest = lambda p: max(p['last_active'] or '', p['trail'][0]['when'] if p['trail'] else '')
+    out.sort(key=lambda p: (newest(p), p['handle']), reverse=True)
+    return out
+
+
+# --- visitors -------------------------------------------------------------------
+
+def guesses(recs):
+    """network -> the handles that signed in from it: a password sign-in from
+    that address, or a link asked for from it and used within 20 minutes. A
+    failed password or an unused link proves nothing."""
+    out = {}
+    asked = []
+    for r in recs:                                      # oldest first
+        net = network(r['ip']) if 'ip' in r else None
+        if r['kind'] == 'link_requested' and net:
+            asked.append((r['email'], net, r['when']))
+        elif r['kind'] == 'signed_in' and r['how'] == 'password' and net:
+            out.setdefault(net, set()).add(r['handle'])
+        elif r['kind'] == 'signed_in' and 'email' in r:
+            for email, asked_net, when in asked:
+                if email == r['email'] and timedelta(0) <= r['when'] - when <= LINK_USED_WITHIN:
+                    out.setdefault(asked_net, set()).add(r['handle'])
+    return out
+
+
+def visitors(hits, guess, you, own_hosts):
+    """People who came by, newest first, and a count of what was hidden."""
+    hidden = {'bots': 0, 'requests': 0}
+    api = paths.API_PREFIX + '/'
+    bots, groups = set(), {}
+    for h in hits:                                      # oldest first
+        if is_bot(h['ua']):
+            bots.add((h['net'], h['ua']))
+            hidden['requests'] += 1
+        else:
+            groups.setdefault((h['net'], device(h['ua'])), []).append(h)
+    hidden['bots'] = len(bots)
+    out = []
+    for (net, dev), hs in groups.items():
+        pages = [h for h in hs if h['method'] == 'GET' and is_page(h['path'])]
+        browser = any((is_asset(h['path']) and h['status'] < 400)
+                      or (h['method'] == 'GET' and h['path'].startswith(api) and h['ref_host'] in own_hosts)
+                      for h in hs)
+        if not browser or not any(p['status'] < 400 for p in pages):
+            hidden['bots'] += 1
+            hidden['requests'] += len(hs)
+            continue
+        names = sorted(guess.get(net, ()))
+        out.append({'network': net, 'guess': names, 'you': bool(you and you in names), 'device': dev,
+                    'came_from': next((h['ref_host'] for h in hs if h['ref_host'] and h['ref_host'] not in own_hosts), ''),
+                    'first': hs[0]['when'].isoformat(), 'last': hs[-1]['when'].isoformat(), 'requests': len(hs),
+                    'pages': [{'when': p['when'].isoformat(), 'path': p['path'], 'status': p['status']}
+                              for p in reversed(pages)][:PAGES_MAX]})
+    out.sort(key=lambda v: v['last'], reverse=True)
+    return out, hidden
+
+
+# --- the summary ----------------------------------------------------------------
+
+def summary(con, hours, you=None, own_hosts=(), now=None, app_log=None, access_log=None):
+    """Everything the admin page draws. A source that cannot be read reports
+    its error in `sources`; the rest is still filled."""
+    now = now or datetime.now(timezone.utc)
+    since = now - timedelta(hours=hours)
+    own = set(own_hosts) | {'www.' + h for h in own_hosts}
+    recs, app_info = read_app_log(app_log or os.path.join(paths.LOG_DIR, 'app.log'))
+    hits, access_info = read_access_log(access_log or paths.access_log(), since)
+    seen, hidden = visitors(hits, guesses(recs), you, own)
+    return {'hours': hours, 'generated': now.isoformat(), 'you': you,
+            'needs_help': needs_help(recs, db.activity_drafts(con), since, now),
+            'people': people(db.activity_people(con), recs, db.knife_tags(con), since),
+            'visitors': seen, 'hidden': hidden,
+            'sources': {'database': {'ok': True}, 'app_log': app_info, 'access_log': access_info}}
