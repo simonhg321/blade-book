@@ -1,12 +1,15 @@
 # Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
 """bb/routes/admin.py — /blade-book/api/admin/*: the report queue and the
 three moderation verbs (spec §9 abuse: "Admin can hide, restore, or delete
-with a note"). Plan 10 added users + the ManualBilling flip."""
+with a note"). Plan 10 added users + the ManualBilling flip; 2026-09-27 added
+the activity view."""
 import logging
+import os
+from urllib.parse import urlsplit
 
 from flask import Blueprint, current_app, g, jsonify, request
 
-from bb import auth, db, edit, paths, publish
+from bb import activity, auth, db, edit, paths, publish
 from bb.routes.knives import _delete_keys
 
 log = logging.getLogger('blade-book.admin')
@@ -103,3 +106,22 @@ def set_sub(user_id):
         con.close()
     log.warning('admin @%s set sub_status=%s for @%s (user %d)', g.user['handle'], status, u['handle'], user_id)
     return jsonify({'ok': True, 'user': row})
+
+
+# --- activity (2026-09-27) -----------------------------------------------------
+
+@bp.get('/activity', strict_slashes=False)
+@auth.admin_required
+def activity_summary():
+    """Who is using blade-book and where they are stuck. Read-only."""
+    raw = request.args.get('hours', '48')
+    hours = int(raw) if raw.isascii() and raw.isdigit() else 0
+    if hours not in activity.WINDOWS:
+        return jsonify({'error': 'hours must be one of ' + ', '.join(map(str, activity.WINDOWS))}), 400
+    own = {request.host.split(':')[0].lower(), (urlsplit(os.environ.get('BASE_URL', '')).hostname or '').lower()} - {''}
+    con = db.connect()
+    try:
+        out = activity.summary(con, hours, you=g.user['handle'], own_hosts=own)
+    finally:
+        con.close()
+    return jsonify(out)
