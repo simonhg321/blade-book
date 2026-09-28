@@ -5,6 +5,7 @@ admin page (spec 2026-09-27-admin-activity-design.md).
 Reads the database, the app log and the web server's request log. Writes
 nothing. No raw log line ever leaves: the parsers match known shapes and
 return named fields, and an unknown line is dropped."""
+import functools
 import glob
 import gzip
 import ipaddress
@@ -125,9 +126,11 @@ _ACCESS = re.compile(
 _BOT = re.compile(r'bot|crawl|spider|slurp|curl|wget|python|go-http|scrapy|headless|monitor|uptime|scan|'
                   r'libwww|okhttp|java/|node|axios|httpclient|^https?://|^-?$', re.I)
 _ASSETS = ('.css', '.js', '.woff2', '.woff', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg', '.ico')
+_PROBE = re.compile(r'/\.(?:git|env|aws|ssh|svn|hg)\b|/wp-|\.php\b|/cgi-bin/|/vendor/|/phpmyadmin', re.I)
 PATH_MAX = 200
 
 
+@functools.lru_cache(maxsize=4096)
 def network(ip):
     """An IPv4 address as it is; an IPv6 address cut to its /64, because a
     home's devices share the /64 and change the rest. None for junk."""
@@ -155,6 +158,11 @@ def is_bot(ua):
     return bool(_BOT.search(ua))
 
 
+def is_probe(path):
+    """A path nobody reaches by following our links: a scanner's guess."""
+    return bool(_PROBE.search(path))
+
+
 def is_asset(path):
     return path.lower().endswith(_ASSETS)
 
@@ -164,6 +172,22 @@ def is_page(path):
         return False
     last = path.rsplit('/', 1)[-1]
     return last == '' or last.endswith('.html') or '.' not in last
+
+
+_MONTHS = {m: n for n, m in enumerate('Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.split(), 1)}
+_STAMP = re.compile(r'^(\d\d)/([A-Z][a-z]{2})/(\d{4}):(\d\d):(\d\d):(\d\d) ([+-])(\d\d)(\d\d)$')
+
+
+def _stamp(text):
+    """'28/Sep/2026:04:01:34 +0000' as UTC. By hand: strptime was a third of
+    the whole read. ValueError for anything else."""
+    m = _STAMP.match(text)
+    if not m or m.group(2) not in _MONTHS:
+        raise ValueError(text)
+    d, mon, y, H, M, S, sign, oh, om = m.groups()
+    off = timedelta(hours=int(oh), minutes=int(om))
+    when = datetime(int(y), _MONTHS[mon], int(d), int(H), int(M), int(S), tzinfo=timezone.utc)
+    return when - off if sign == '+' else when + off
 
 
 def _host(url):
@@ -186,7 +210,7 @@ def parse_access_line(line):
     if net is None:
         return None
     try:
-        when = datetime.strptime(m.group('ts'), '%d/%b/%Y:%H:%M:%S %z').astimezone(timezone.utc)
+        when = _stamp(m.group('ts'))
         path = urlsplit(m.group('target')).path or '/'
     except ValueError:
         return None
@@ -382,7 +406,9 @@ def guesses(recs):
 
 
 def visitors(hits, guess, you, own_hosts):
-    """People who came by, newest first, and a count of what was hidden."""
+    """People who came by, newest first, and a count of what was hidden: bots by
+    their browser string, and groups that never behaved like a browser or that
+    went looking for things we do not have."""
     hidden = {'bots': 0, 'requests': 0}
     api = paths.API_PREFIX + '/'
     bots, groups = set(), {}
@@ -399,7 +425,7 @@ def visitors(hits, guess, you, own_hosts):
         browser = any((is_asset(h['path']) and h['status'] < 400)
                       or (h['method'] == 'GET' and h['path'].startswith(api) and h['ref_host'] in own_hosts)
                       for h in hs)
-        if not browser or not any(p['status'] < 400 for p in pages):
+        if not browser or not any(p['status'] < 400 for p in pages) or any(is_probe(h['path']) for h in hs):
             hidden['bots'] += 1
             hidden['requests'] += len(hs)
             continue

@@ -35,7 +35,7 @@
     top.appendChild(when(s.when));
     card.appendChild(top);
     card.appendChild(el('div', 'detail', s.detail));
-    if (s.purge_at) card.appendChild(el('div', 'purge', 'purges ' + local(s.purge_at)));
+    if (s.purge_at) card.appendChild(el('div', 'purge', 'purges the night after ' + local(s.purge_at)));
     return card;
   }
 

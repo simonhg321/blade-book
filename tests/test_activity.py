@@ -504,3 +504,26 @@ def test_summary_still_answers_when_a_log_is_missing(con, env, tmp_path):
     assert [n['kind'] for n in s['needs_help']] == ['draft_unfinished']
     assert s['sources']['access_log']['ok'] is False and 'No such file' in s['sources']['access_log']['error']
     assert s['sources']['app_log']['ok'] is False and s['sources']['database'] == {'ok': True}
+
+
+def test_a_scanner_that_fetches_a_stylesheet_is_still_a_scanner():
+    # seen on the box 2026-09-27: a "Linux · Chrome" that asked for /.git/config beside real pages
+    hits = (_visit('45.138.12.16', CHROME_MAC, ['/', '/.git/config', '/blade-book/'], h(1))
+            + _visit('203.0.113.9', FIREFOX, ['/blade-book/', '/.well-known/security.txt'], h(2)))
+    hits.sort(key=lambda x: x['when'])
+    got, hidden = activity.visitors(hits, {}, None, OURS)
+    assert [v['network'] for v in got] == ['203.0.113.9']
+    assert hidden == {'bots': 1, 'requests': 4}
+    for p in ('/.git/config', '/.env', '/wp-admin/install.php', '/wp-login.php', '/blade-book/x.php', '/cgi-bin/luci',
+              '/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php', '/phpMyAdmin/', '/.aws/credentials'):
+        assert activity.is_probe(p), p
+    for p in ('/', '/blade-book/', '/.well-known/security.txt', '/@simon-collector/K80/', '/blade-book/abtesting/flow.html'):
+        assert not activity.is_probe(p), p
+
+
+def test_access_times_with_an_offset_come_out_as_utc():
+    line = '203.0.113.9 - - [27/Sep/2026:21:01:34 -0700] "GET / HTTP/1.1" 200 1 "-" "x"\n'
+    assert activity.parse_access_line(line)['when'] == datetime(2026, 9, 28, 4, 1, 34, tzinfo=timezone.utc)
+    line = '203.0.113.9 - - [28/Sep/2026:06:01:34 +0200] "GET / HTTP/1.1" 200 1 "-" "x"\n'
+    assert activity.parse_access_line(line)['when'] == datetime(2026, 9, 28, 4, 1, 34, tzinfo=timezone.utc)
+    assert activity.parse_access_line('203.0.113.9 - - [31/Feb/2026:06:01:34 +0000] "GET / HTTP/1.1" 200 1 "-" "x"\n') is None
