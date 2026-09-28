@@ -865,6 +865,32 @@ def admin_users(con):
     return [{f: r[f] for f in ADMIN_USER_FIELDS} for r in rows]
 
 
+def activity_people(con):
+    """Every account for the admin activity view: who, when last active, how
+    many knives and drafts. A whitelist, like admin_users."""
+    rows = con.execute(
+        'SELECT u.id, u.handle, u.email, '
+        '(SELECT max(s.last_seen) FROM sessions s WHERE s.user_id = u.id) AS last_active, '
+        "(SELECT count(*) FROM knives k WHERE k.owner_id = u.id AND k.status = 'live') AS knives, "
+        "(SELECT count(*) FROM knives k WHERE k.owner_id = u.id AND k.status = 'draft') AS drafts "
+        'FROM users u ORDER BY u.id').fetchall()
+    return [dict(r) for r in rows]
+
+
+def activity_drafts(con):
+    """Every draft and its owner, oldest first. purge_stale_drafts removes a
+    draft 7 days after `updated`."""
+    rows = con.execute(
+        'SELECT k.id, k.tag, u.handle, k.updated FROM knives k JOIN users u ON u.id = k.owner_id '
+        "WHERE k.status = 'draft' ORDER BY k.updated, k.id").fetchall()
+    return [dict(r) for r in rows]
+
+
+def knife_tags(con):
+    """Knife id to tag, for log lines that name a knife by id."""
+    return {r['id']: r['tag'] for r in con.execute('SELECT id, tag FROM knives')}
+
+
 # --- wants + intros (user wishlists + knife matches) ---------------------------
 
 def create_want(con, owner_id, fields):

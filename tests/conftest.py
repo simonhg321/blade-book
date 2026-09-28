@@ -13,6 +13,7 @@ def env(tmp_path, monkeypatch):
     """Point every blade-book path at tmp_path so tests never touch the box."""
     for name in ('CONFIG', 'DATA', 'LOG', 'WWW'):
         monkeypatch.setenv(f'BLADEBOOK_{name}_DIR', str(tmp_path / name.lower()))
+    monkeypatch.setenv('BLADEBOOK_ACCESS_LOG', str(tmp_path / 'log' / 'access.log'))   # never the box's Apache log
     from bb import paths
     importlib.reload(paths)
     paths.ensure_dirs()

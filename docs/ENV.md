@@ -4,7 +4,7 @@ Secrets only. Paths never live here (bb/paths.py). `install.sh` creates the
 file with `SESSION_KEY`; add the rest by hand (`sudo nano /etc/blade-book/.env`)
 and restart with `bash scripts/restart.sh`.
 
-Paths and the port are NOT here — `BLADEBOOK_*_DIR` / `BLADEBOOK_PORT` are read by `bb/paths.py` and set by the supervisor program, not `.env`.
+Paths and the port are NOT here — `BLADEBOOK_*_DIR` / `BLADEBOOK_PORT` are read by `bb/paths.py` and set by the supervisor program, not `.env`. The same goes for `BLADEBOOK_ACCESS_LOG` (default `/var/log/apache2/blade-book_access.log`), the web server log the admin activity view reads; the app's user must be able to read it (group `adm` on stark).
 
 | key | plan | value |
 |---|---|---|

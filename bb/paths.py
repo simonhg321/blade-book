@@ -42,6 +42,12 @@ def ai_log():
     return os.path.join(LOG_DIR, 'ai_calls.jsonl')
 
 
+def access_log():
+    """The web server's request log for this site. The admin activity view
+    reads it; nothing here writes it. Rotations sit beside it: .1, then .N.gz."""
+    return os.environ.get('BLADEBOOK_ACCESS_LOG', '/var/log/apache2/blade-book_access.log')
+
+
 def ensure_dirs():
     """Create the runtime dirs we own. CONFIG_DIR is root-owned in prod and
     created by scripts/install.sh; here we only create it if we can."""
