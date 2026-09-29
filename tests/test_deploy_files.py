@@ -108,6 +108,47 @@ def test_backup_script_runs_and_removes_partial_on_failure(tmp_path):
     assert not list(bk.glob('blade-book-*.tgz')) and not list(bk.glob('.stage.*'))
 
 
+def _backup_with_a_tar_that_exits(tmp_path, code, note):
+    """Run scripts/backup.sh with a `tar` that does the real work and then
+    exits `code`, the way GNU tar does when the data dir is written to while
+    it reads (1) or when it fails (2)."""
+    import subprocess
+    data = tmp_path / 'blade-book'
+    (data / 'photos').mkdir(parents=True)
+    (data / 'photos' / 'a.jpg').write_bytes(b'x')
+    subprocess.run(['sqlite3', str(data / 'blade-book.db'), 'create table t(x)'], check=True)
+    bk = tmp_path / 'backup'
+    bk.mkdir()
+    fake = tmp_path / 'bin'
+    fake.mkdir()
+    (fake / 'tar').write_text(f'#!/bin/bash\n/bin/tar "$@"\necho "tar: {note}" >&2\nexit {code}\n')
+    (fake / 'tar').chmod(0o755)
+    env = dict(os.environ, BLADEBOOK_DATA_DIR=str(data), BLADEBOOK_BACKUP_DIR=str(bk),
+               PATH=f'{fake}:{os.environ["PATH"]}')
+    r = subprocess.run(['bash', os.path.join(ROOT, 'scripts', 'backup.sh')], env=env, capture_output=True, text=True)
+    return r, bk
+
+
+def test_backup_survives_a_data_dir_that_changed_while_it_was_read(tmp_path):
+    # 2026-09-04 to 09-28: no tarball at all. 03:30 is a cron minute; the monitor writes its state in the data dir,
+    # tar says "file changed as we read it" and exits 1, set -e stopped the run and the trap deleted the tarball
+    import subprocess
+    r, bk = _backup_with_a_tar_that_exits(tmp_path, 1, 'blade-book: file changed as we read it')
+    assert r.returncode == 0, r.stderr
+    tgz = list(bk.glob('blade-book-*.tgz'))
+    assert len(tgz) == 1 and not list(bk.glob('.stage.*'))
+    names = subprocess.run(['/bin/tar', 'tzf', str(tgz[0])], capture_output=True, text=True, check=True).stdout.split()
+    assert 'blade-book.db' in names and 'blade-book/photos/a.jpg' in names
+    assert 'wrote ' in r.stdout and 'changed while it was read' in r.stdout      # kept, and the log says why tar complained
+
+
+def test_backup_still_fails_when_tar_fails(tmp_path):
+    r, bk = _backup_with_a_tar_that_exits(tmp_path, 2, 'Exiting with failure status due to previous errors')
+    assert r.returncode != 0
+    assert not list(bk.glob('blade-book-*.tgz')) and not list(bk.glob('.stage.*'))
+    assert 'wrote ' not in r.stdout
+
+
 def test_runbook_move_exists_and_names_the_steps():
     s = _read('docs/RUNBOOK-move.md')
     for word in ('supervisorctl stop blade_book', 'rsync', '/var/lib/blade-book',

@@ -11,10 +11,22 @@ STAGE=$(mktemp -d "$BK/.stage.XXXXXX")
 trap 'rm -rf "$STAGE"; [ "${OK:-}" = 1 ] || rm -f "$OUT"' EXIT
 sqlite3 "$DATA/blade-book.db" ".backup '$STAGE/blade-book.db'"
 NAME=$(basename "$DATA")
+# tar exits 1 when something changed while it read, 2 when it failed. The data
+# dir is live (03:30 is a cron minute: the monitor writes its state there), so 1
+# is a note in the log, not a stop: photos are written once and the db in the
+# tarball is the snapshot above. 2026-09-04 to 09-28 this stopped every run.
+RC=0
 tar czf "$OUT" \
   --exclude="$NAME/blade-book.db*" --exclude="$NAME/exports" --exclude="$NAME/publish-locks" \
   -C "$(dirname "$DATA")" "$NAME" \
-  -C "$STAGE" blade-book.db
+  -C "$STAGE" blade-book.db || RC=$?
+if [ "$RC" -gt 1 ]; then
+  echo "$(date -Is) tar failed (exit $RC); no tarball kept" >&2
+  exit "$RC"
+fi
+if [ "$RC" = 1 ]; then
+  echo "$(date -Is) the data dir changed while it was read (tar exit 1); the tarball is kept"
+fi
 gzip -t "$OUT"
 OK=1
 rm -rf "$STAGE"
