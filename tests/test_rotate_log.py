@@ -126,9 +126,105 @@ def test_the_app_writes_to_the_fresh_log_after_a_run(rot, env):
     from app import create_app
     create_app()
     logging.getLogger('blade-book').info('before')
-    rot.rotate(_log(env), datetime.now(), settle=0)
+    rot.rotate(_log(env), datetime.now(), settle=0, keep_days=10 ** 5)   # keep everything: only the move is under test
     logging.getLogger('blade-book').info('after')
-    today = datetime.now().strftime('%Y-%m-%d')
-    assert 'before' in open(f'{_log(env)}.{today}').read()
+    (day_file,) = [n for n in _names(env) if n.startswith('app.log.')]
+    assert 'before' in open(os.path.join(env.LOG_DIR, day_file)).read()
     live = open(_log(env)).read()
     assert 'after' in live and 'before' not in live
+
+
+def test_a_stamp_from_the_future_is_filed_under_today(rot, env):
+    # review M2: a day file dated 2099 would never be deleted
+    with open(_log(env), 'w') as f:
+        f.write(line('2099-01-01', 'from the future') + line('2026-11-30', 'two'))
+    rot.rotate(_log(env), NOW, settle=0)
+    assert [n for n in _names(env) if n.startswith('app.log.')] == ['app.log.2026-11-30', 'app.log.2026-12-01']
+    assert open(_log(env) + '.2026-12-01').read() == line('2099-01-01', 'from the future')
+
+
+def test_a_last_line_cut_short_gets_its_line_end(rot, env):
+    # review M5: the next night's first record would be glued to it and lost to every reader
+    with open(_log(env), 'w') as f:
+        f.write(line('2026-11-30', 'whole') + '2026-11-30 23:00:00,000 INFO blade-book: cut sh')
+    rot.rotate(_log(env), NOW, settle=0)
+    assert open(_log(env) + '.2026-11-30').read().endswith('cut sh\n')
+
+
+def test_only_plain_files_with_our_exact_name_are_deleted(rot, env):
+    # review M4: a folder, a link, and digits that are not 0-9
+    os.mkdir(_log(env) + '.2020-01-01')
+    target = os.path.join(env.DATA_DIR, 'elsewhere')
+    open(target, 'w').write('x\n')
+    os.symlink(target, _log(env) + '.2020-01-02')
+    open(_log(env) + '.\u0662\u0660\u0662\u0660-\u0660\u0661-\u0660\u0661', 'w').write('x\n')
+    open(_log(env) + '.2020-01-03', 'w').write(line('2020-01-03', 'old'))
+    out = rot.rotate(_log(env), NOW, settle=0)
+    assert out['deleted'] == ['app.log.2020-01-03']
+    assert len([n for n in _names(env) if n.startswith('app.log.')]) == 3 and os.path.exists(target)
+
+
+def test_a_day_file_that_is_a_link_is_not_written_through(rot, env):
+    target = os.path.join(env.DATA_DIR, 'elsewhere')
+    open(target, 'w').write('')
+    os.symlink(target, _log(env) + '.2026-11-30')
+    with open(_log(env), 'w') as f:
+        f.write(line('2026-11-30', 'two'))
+    with pytest.raises(OSError):
+        rot.rotate(_log(env), NOW, settle=0)
+    assert open(target).read() == ''
+    assert open(_log(env) + '.rotating').read() == line('2026-11-30', 'two')      # kept for the next run
+
+
+def test_a_second_run_at_the_same_time_stands_down(rot, env):
+    # review M1: two runs could move the fresh log over the first run's held file and lose a day
+    import fcntl
+    with open(_log(env), 'w') as f:
+        f.write(line('2026-11-30', 'two'))
+    with open(os.path.join(env.LOG_DIR, 'rotate.lock'), 'w') as held:
+        fcntl.flock(held, fcntl.LOCK_EX)
+        with pytest.raises(rot.Busy):
+            rot.rotate(_log(env), NOW, settle=0)
+    assert open(_log(env)).read() == line('2026-11-30', 'two')
+    assert rot.rotate(_log(env), NOW, settle=0)['moved'] == 1                    # the lock is free again
+
+
+def test_a_run_that_died_after_filing_does_not_file_twice(rot, env):
+    # review M6: the admin page would count every record of that night twice, for 90 days
+    boom = line('2026-11-30', 'boom') + '\tTraceback\n\t  File "x"\n'
+    with open(_log(env) + '.2026-11-30', 'w') as f:
+        f.write(line('2026-11-30', 'one') + boom)                                # filed before it died
+    with open(_log(env) + '.rotating', 'w') as f:
+        f.write(line('2026-11-30', 'one') + boom + line('2026-11-30', 'other') + '\tTraceback\n'
+                + line('2026-11-30', 'three'))
+    rot.rotate(_log(env), NOW, settle=0)
+    assert open(_log(env) + '.2026-11-30').read() == line('2026-11-30', 'one') + boom \
+        + line('2026-11-30', 'other') + '\tTraceback\n' + line('2026-11-30', 'three')
+
+
+def test_the_script_refuses_root(rot, env, monkeypatch, capsys):
+    with open(_log(env), 'w') as f:
+        f.write(line('2026-11-30', 'two'))
+    monkeypatch.setattr(os, 'geteuid', lambda: 0)
+    assert rot.main() == 2
+    assert 'refusing to run as root' in capsys.readouterr().err
+    assert _names(env) == ['app.log']
+
+
+def test_the_script_says_what_it_did(rot, env, monkeypatch, capsys):
+    import time
+    with open(_log(env), 'w') as f:
+        f.write(line('2020-01-01', 'old') + line('2020-01-02', 'old'))
+    slept = []
+    monkeypatch.setattr(time, 'sleep', slept.append)
+    assert rot.main() == 0
+    assert capsys.readouterr().out.endswith(' moved 2 line(s), deleted 2 day file(s) app.log.2020-01-01 app.log.2020-01-02\n')
+    assert slept == [2]                       # a worker that was mid-line gets its two seconds
+
+
+def test_the_script_stands_down_when_another_run_holds_the_lock(rot, env, capsys):
+    import fcntl
+    with open(os.path.join(env.LOG_DIR, 'rotate.lock'), 'w') as held:
+        fcntl.flock(held, fcntl.LOCK_EX)
+        assert rot.main() == 1
+    assert 'another run' in capsys.readouterr().err

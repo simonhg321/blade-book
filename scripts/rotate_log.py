@@ -12,7 +12,7 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from bb import paths  # noqa: E402
-from bb.logkeep import KEEP_DAYS, rotate  # noqa: E402,F401
+from bb.logkeep import Busy, rotate  # noqa: E402,F401
 
 
 def main():
@@ -20,7 +20,11 @@ def main():
         print('rotate_log: refusing to run as root; run as shg', file=sys.stderr)
         return 2
     now = datetime.now()
-    out = rotate(os.path.join(paths.LOG_DIR, 'app.log'), now)
+    try:
+        out = rotate(os.path.join(paths.LOG_DIR, 'app.log'), now)
+    except Busy as e:
+        print(f'{now.isoformat(timespec="seconds")} rotate_log: another run holds {e}; nothing done', file=sys.stderr)
+        return 1
     print(f'{now.isoformat(timespec="seconds")} moved {out["moved"]} line(s), '
           f'deleted {len(out["deleted"])} day file(s) {" ".join(out["deleted"])}'.rstrip())
     return 0

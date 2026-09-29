@@ -124,8 +124,7 @@ def test_read_app_log_reads_the_day_files_oldest_first(env):
         f.write(app_line(T, 'K01 saved to the register by @sam'))
         f.write('not a log line at all\n')
     recs, info = activity.read_app_log(path)
-    assert [r['when'] for r in recs] == sorted(r['when'] for r in recs) and len(recs) == 4
-    assert recs[0]['kind'] == 'draft_started' and recs[-1]['kind'] == 'saved' and recs[-1]['tag'] == 'K01'
+    assert [(r['kind'], r['tag']) for r in recs] == [('draft_started', 'K01'), ('decoded', 'K01'), ('decoded', 'K01'), ('saved', 'K01')]
     assert info == {'ok': True, 'lines': 5}
 
 

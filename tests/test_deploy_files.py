@@ -907,11 +907,76 @@ def test_deploy_log_limit_script():
     assert subprocess.run(['bash', '-n', path]).returncode == 0
     for needle in ('set -euo pipefail', 'supervisorctl restart blade_book', '/blade-book/api/healthz',
                    '_PrivateWatchedFile', 'sudo -u shg -H cp -r', 'sudo -u shg -H python3 scripts/rotate_log.py',
-                   "grep -v 'scripts/rotate_log.py'", 'crontab -u shg -',
+                   'bash "$CODE/scripts/add_cron_line.sh" shg \'scripts/rotate_log.py\' "$CRON"',
                    '7 0 * * * cd /home/shg/blade-book && python3 scripts/rotate_log.py >> /var/log/blade-book/rotate.log 2>&1',
                    'The app keeps that log for 90 days.', 'STOP:'):
         assert needle in sh, needle
+    assert '| crontab' not in sh              # review I2: only add_cron_line.sh writes a crontab
     # an app that has not restarted keeps writing into the file the run moves away, and those lines are deleted with it
     restart = sh.index('supervisorctl restart blade_book')
-    assert restart < sh.index('sudo -u shg -H python3 scripts/rotate_log.py') < sh.index('crontab -u shg -')
+    cron = sh.index('bash "$CODE/scripts/add_cron_line.sh"')
+    assert restart < sh.index('sudo -u shg -H python3 scripts/rotate_log.py') < cron
+    # review I1: the pages promise 90 days, so they go live last, when the nightly run is installed
+    assert cron < sh.index('sudo -u shg -H cp -r')
     assert 'publish_sweep' not in sh          # publish.py did not change
+
+
+CRON_LINE = '7 0 * * * cd /home/shg/blade-book && python3 scripts/rotate_log.py >> /var/log/blade-book/rotate.log 2>&1'
+
+
+def _add_cron_line(tmp_path, table, fail=''):
+    """Run scripts/add_cron_line.sh against a `crontab` that keeps its table
+    in a file. table=None: the user has no crontab. fail: `-l` breaks with
+    this message. Returns the run and the table afterwards."""
+    fake = tmp_path / 'bin'
+    fake.mkdir()
+    store = tmp_path / 'table'
+    if table is not None:
+        store.write_text(table)
+    (fake / 'crontab').write_text(f'''#!/bin/bash
+[ "$1" = -u ] && shift 2
+if [ "$1" = -l ]; then
+  if [ -n "{fail}" ]; then echo "{fail}" >&2; exit 1; fi
+  if [ ! -f {store} ]; then echo "no crontab for shg" >&2; exit 1; fi
+  cat {store}; exit 0
+fi
+cat > {store}
+''')
+    (fake / 'crontab').chmod(0o755)
+    r = subprocess.run(['bash', os.path.join(ROOT, 'scripts', 'add_cron_line.sh'), 'shg', 'scripts/rotate_log.py', CRON_LINE],
+                       env=dict(os.environ, PATH=f'{fake}:{os.environ["PATH"]}'), capture_output=True, text=True)
+    return r, (store.read_text() if store.exists() else None)
+
+
+def test_add_cron_line_keeps_every_other_line(tmp_path):
+    others = '*/5 * * * * /usr/bin/python3 /home/shg/billboard/billboard_monitor.py\n30 3 * * * bash backup.sh\n'
+    r, table = _add_cron_line(tmp_path, others)
+    assert r.returncode == 0, r.stderr
+    assert table == others + CRON_LINE + '\n'
+
+
+def test_add_cron_line_twice_is_one_line(tmp_path):
+    others = '30 3 * * * bash backup.sh\n'
+    r, table = _add_cron_line(tmp_path, others + '0 0 * * * python3 scripts/rotate_log.py --old\n' + CRON_LINE + '\n')
+    assert r.returncode == 0, r.stderr
+    assert table == others + CRON_LINE + '\n'
+
+
+def test_add_cron_line_never_writes_when_the_table_cannot_be_read(tmp_path):
+    # review I2: `( crontab -l | grep -v …; echo … ) | crontab -` under set -e installs an EMPTY table when -l fails
+    others = '30 3 * * * bash backup.sh\n'
+    r, table = _add_cron_line(tmp_path, others, fail='crontab: must be privileged')
+    assert r.returncode != 0 and 'STOP:' in r.stderr
+    assert table == others
+
+
+def test_add_cron_line_starts_a_table_for_a_user_with_none(tmp_path):
+    r, table = _add_cron_line(tmp_path, None)
+    assert r.returncode == 0, r.stderr
+    assert table == CRON_LINE + '\n'
+
+
+def test_add_cron_line_with_only_our_line_in_the_table(tmp_path):
+    r, table = _add_cron_line(tmp_path, CRON_LINE + '\n')
+    assert r.returncode == 0, r.stderr
+    assert table == CRON_LINE + '\n'

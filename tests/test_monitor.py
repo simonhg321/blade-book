@@ -326,11 +326,37 @@ def test_check_log_limit_is_quiet_when_the_nightly_run_works(mon, tmp_path):
     log.write_text(_stamp(NOW - timedelta(hours=30)))
     (tmp_path / 'app.log.2026-06-06').write_text('x\n')             # 89 days before NOW's day
     assert mon.check_log_limit(str(log), s, NOW) == []
+    (tmp_path / 'app.log.2026-06-05').write_text('x\n')             # 90 days: tonight's run deletes it, not late yet
+    assert mon.check_log_limit(str(log), s, NOW) == []
+
+
+def test_check_log_limit_waits_for_the_first_run(mon, tmp_path):
+    # review I3: the monitor runs from the main tree, so it sees this check before deploy_log_limit.sh has run
+    log = tmp_path / 'app.log'
+    log.write_text(_stamp(NOW - timedelta(days=30)))
+    s = mon.load_state('/nonexistent')
+    assert mon.check_log_limit(str(log), s, NOW) == [] and 'log_limit' not in s['sent']
+    (tmp_path / 'rotate.log').write_text('')                        # the first run has been asked for
+    assert len(mon.check_log_limit(str(log), s, NOW)) == 1
+
+
+def test_check_log_limit_names_an_old_copy_nobody_deletes(mon, tmp_path):
+    # review M3: app.log.1, a hand copy, a .gz: the nightly run leaves them alone, so somebody has to be told
+    log = tmp_path / 'app.log'
+    log.write_text(_stamp(NOW))
+    for name, days in (('app.log.1', 91), ('app.log.2026-06-01.bak', 91), ('app.log.copy', 89)):
+        (tmp_path / name).write_text('x\n')
+        old = (NOW - timedelta(days=days)).timestamp()
+        os.utime(tmp_path / name, (old, old))
+    ev = mon.check_log_limit(str(log), mon.load_state('/nonexistent'), NOW)
+    assert len(ev) == 1 and 'older than 90 days' in ev[0].subject
+    assert 'app.log.1\n' in ev[0].body and 'app.log.2026-06-01.bak' in ev[0].body and 'app.log.copy' not in ev[0].body
 
 
 def test_check_log_limit_says_when_the_live_log_was_not_moved(mon, tmp_path):
     log = tmp_path / 'app.log'
     log.write_text(_stamp(NOW - timedelta(hours=50)) + _stamp(NOW))
+    (tmp_path / 'app.log.2026-09-01').write_text('x\n')             # the nightly run has run before
     s = mon.load_state('/nonexistent')
     ev = mon.check_log_limit(str(log), s, NOW)
     assert len(ev) == 1 and ev[0].key == 'log_limit' and ev[0].sms is False
@@ -351,4 +377,5 @@ def test_check_log_limit_says_when_a_day_file_outlives_the_promise(mon, tmp_path
 def test_check_log_limit_reads_past_a_line_with_no_stamp(mon, tmp_path):
     log = tmp_path / 'app.log'
     log.write_text('stray\n' + _stamp(NOW - timedelta(hours=50)))
+    (tmp_path / 'rotate.log').write_text('')
     assert len(mon.check_log_limit(str(log), mon.load_state('/nonexistent'), NOW)) == 1

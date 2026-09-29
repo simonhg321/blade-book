@@ -173,20 +173,27 @@ def check_backup(backup_glob, state, now):
 
 
 def check_log_limit(log_path, state, now):
-    """The terms promise the app log keeps 90 days. Says so when the nightly
-    run (scripts/rotate_log.py) has stopped: the live log holds a line older
-    than two nights, or a day file has outlived the promise."""
+    """The terms promise the app log keeps 90 days. Says so when the promise
+    is not kept: a day file or another copy of the log (app.log.1, a hand
+    copy) is older than that, or the nightly run (scripts/rotate_log.py) has
+    stopped and the live log holds a line older than two nights. Quiet until
+    the nightly run has been asked for once (a day file or rotate.log is
+    there): this file goes live with the merge, the run with the deploy."""
     subject = body = None
-    late = [p for day, p in logkeep.day_files(log_path)
-            if day < now.astimezone().date() - timedelta(days=logkeep.KEEP_DAYS)]
+    keep = timedelta(days=logkeep.KEEP_DAYS)
+    days = logkeep.day_files(log_path)
+    late = [p for day, p in days if day < now.astimezone().date() - keep]
+    late += [p for p in logkeep.strays(log_path)
+             if now - datetime.fromtimestamp(os.lstat(p).st_mtime, timezone.utc) > keep]
+    started = bool(days) or os.path.exists(os.path.join(os.path.dirname(log_path), 'rotate.log'))
     try:
         first = logkeep.first_stamp(log_path)
     except FileNotFoundError:
         first = None
     if late:
-        subject = f'{len(late)} app log day file(s) older than {logkeep.KEEP_DAYS} days'
-        body = '\n'.join(late) + '\nscripts/rotate_log.py should have deleted them; see rotate.log'
-    elif first and now - first.astimezone(timezone.utc) > timedelta(hours=LOG_MOVE_MAX_H):
+        subject = f'{len(late)} app log file(s) older than {logkeep.KEEP_DAYS} days'
+        body = '\n'.join(late) + '\nscripts/rotate_log.py deletes the day files it made (see rotate.log); any other copy is for a hand to delete'
+    elif started and first and now - first.astimezone(timezone.utc) > timedelta(hours=LOG_MOVE_MAX_H):
         hours = int((now - first.astimezone(timezone.utc)).total_seconds() // 3600)
         subject = f'app.log has not been moved for {hours} h'
         body = f'{log_path}\nscripts/rotate_log.py runs at 00:07 from the crontab of shg; see rotate.log'
