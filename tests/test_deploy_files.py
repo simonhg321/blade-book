@@ -206,14 +206,14 @@ def test_runbook_move_lists_match_cron():
 
 def _cron_dedupe_chain_and_lines():
     """Pull the real `grep -v '...' | grep -v '...' | ...` de-dupe chain and
-    the five `echo '...'` cron lines straight out of install.sh, so this test
+    the six `echo '...'` cron lines straight out of install.sh, so this test
     exercises the actual patterns shipped in the script rather than a
     hand-copied approximation of them."""
     sh = _read('scripts/install.sh')
     m = re.search(r"crontab -u shg -l 2>/dev/null((?: \| grep -v '[^']*')+)", sh)
     assert m, 'could not find the crontab de-dupe grep chain in install.sh'
     lines = re.findall(r"echo '([^']*)'", sh)
-    assert len(lines) == 5, 'expected exactly 5 cron lines (backup/purge/publish/match/monitor)'
+    assert len(lines) == 6, 'expected exactly 6 cron lines (backup/purge/publish/match/monitor/rotate_log)'
     return m.group(1), lines
 
 
@@ -224,7 +224,7 @@ def test_install_cron_dedupe_actually_filters_every_added_line():
     `cd /home/shg/blade-book && python3 scripts/purge_drafts.py ...` line,
     which has no 'blade-book/scripts/' substring) makes install.sh append a
     duplicate crontab entry on every rerun. Feed a fake crontab containing
-    exactly the five lines install.sh adds through the REAL grep chain
+    exactly the lines install.sh adds through the REAL grep chain
     extracted from the script; every line must come out filtered — the
     property being pinned is: for every cron line install.sh adds, its own
     grep -v pattern matches that line."""
@@ -912,13 +912,14 @@ def test_terms_and_faq_say_we_keep_logs():
     # final review I4: every claim here has to be true of the box
     for needle in ('Like every web server, ours keeps a log of requests (address, browser, page, the page you came from, time) for two weeks.',
                    'The app keeps its own log of what happens on your account: sign-ins (email and the address they came from), and what you add, change and delete.',
-                   'That log has no time limit yet.',
+                   'The app keeps that log for 90 days.',
                    'We read both to fix problems and to help people who get stuck.',
                    'No ads, no trackers, no analytics scripts.'):
         for page in ('html/terms/index.html', 'html/faq/index.html'):
             assert needle in _read(page), (page, needle)
     for page in ('html/terms/index.html', 'html/faq/index.html'):
         assert 'Nothing else' not in _read(page), page
+        assert 'no time limit' not in _read(page), page
     terms = _read('html/terms/index.html')
     assert 'We keep one thing' not in terms
     assert 'The logs described below keep the lines they already wrote.' in terms
@@ -933,3 +934,90 @@ def test_deploy_activity_script():
                    'sudo -u shg -H cp -r', 'Like every web server', 'STOP:'):
         assert needle in sh, needle
     assert 'publish_sweep' not in sh          # publish.py did not change
+
+
+def test_install_has_the_log_limit_cron():
+    sh = open(os.path.join(ROOT, 'scripts', 'install.sh')).read()
+    assert "echo '7 0 * * * cd /home/shg/blade-book && python3 scripts/rotate_log.py >> /var/log/blade-book/rotate.log 2>&1'" in sh
+    assert "grep -v 'scripts/rotate_log.py'" in sh
+
+
+def test_deploy_log_limit_script():
+    path = os.path.join(ROOT, 'scripts', 'deploy_log_limit.sh')
+    sh = open(path).read()
+    assert subprocess.run(['bash', '-n', path]).returncode == 0
+    for needle in ('set -euo pipefail', 'supervisorctl restart blade_book', '/blade-book/api/healthz',
+                   '_PrivateWatchedFile', 'sudo -u shg -H cp -r', 'sudo -u shg -H python3 scripts/rotate_log.py',
+                   'bash "$CODE/scripts/add_cron_line.sh" shg \'scripts/rotate_log.py\' "$CRON"',
+                   '7 0 * * * cd /home/shg/blade-book && python3 scripts/rotate_log.py >> /var/log/blade-book/rotate.log 2>&1',
+                   'The app keeps that log for 90 days.', 'STOP:'):
+        assert needle in sh, needle
+    assert '| crontab' not in sh              # review I2: only add_cron_line.sh writes a crontab
+    # an app that has not restarted keeps writing into the file the run moves away, and those lines are deleted with it
+    restart = sh.index('supervisorctl restart blade_book')
+    cron = sh.index('bash "$CODE/scripts/add_cron_line.sh"')
+    assert restart < sh.index('sudo -u shg -H python3 scripts/rotate_log.py') < cron
+    # review I1: the pages promise 90 days, so they go live last, when the nightly run is installed
+    assert cron < sh.index('sudo -u shg -H cp -r')
+    assert 'publish_sweep' not in sh          # publish.py did not change
+
+
+CRON_LINE = '7 0 * * * cd /home/shg/blade-book && python3 scripts/rotate_log.py >> /var/log/blade-book/rotate.log 2>&1'
+
+
+def _add_cron_line(tmp_path, table, fail=''):
+    """Run scripts/add_cron_line.sh against a `crontab` that keeps its table
+    in a file. table=None: the user has no crontab. fail: `-l` breaks with
+    this message. Returns the run and the table afterwards."""
+    fake = tmp_path / 'bin'
+    fake.mkdir()
+    store = tmp_path / 'table'
+    if table is not None:
+        store.write_text(table)
+    (fake / 'crontab').write_text(f'''#!/bin/bash
+[ "$1" = -u ] && shift 2
+if [ "$1" = -l ]; then
+  if [ -n "{fail}" ]; then echo "{fail}" >&2; exit 1; fi
+  if [ ! -f {store} ]; then echo "no crontab for shg" >&2; exit 1; fi
+  cat {store}; exit 0
+fi
+cat > {store}
+''')
+    (fake / 'crontab').chmod(0o755)
+    r = subprocess.run(['bash', os.path.join(ROOT, 'scripts', 'add_cron_line.sh'), 'shg', 'scripts/rotate_log.py', CRON_LINE],
+                       env=dict(os.environ, PATH=f'{fake}:{os.environ["PATH"]}'), capture_output=True, text=True)
+    return r, (store.read_text() if store.exists() else None)
+
+
+def test_add_cron_line_keeps_every_other_line(tmp_path):
+    others = '*/5 * * * * /usr/bin/python3 /home/shg/billboard/billboard_monitor.py\n30 3 * * * bash backup.sh\n'
+    r, table = _add_cron_line(tmp_path, others)
+    assert r.returncode == 0, r.stderr
+    assert table == others + CRON_LINE + '\n'
+
+
+def test_add_cron_line_twice_is_one_line(tmp_path):
+    others = '30 3 * * * bash backup.sh\n'
+    r, table = _add_cron_line(tmp_path, others + '0 0 * * * python3 scripts/rotate_log.py --old\n' + CRON_LINE + '\n')
+    assert r.returncode == 0, r.stderr
+    assert table == others + CRON_LINE + '\n'
+
+
+def test_add_cron_line_never_writes_when_the_table_cannot_be_read(tmp_path):
+    # review I2: `( crontab -l | grep -v …; echo … ) | crontab -` under set -e installs an EMPTY table when -l fails
+    others = '30 3 * * * bash backup.sh\n'
+    r, table = _add_cron_line(tmp_path, others, fail='crontab: must be privileged')
+    assert r.returncode != 0 and 'STOP:' in r.stderr
+    assert table == others
+
+
+def test_add_cron_line_starts_a_table_for_a_user_with_none(tmp_path):
+    r, table = _add_cron_line(tmp_path, None)
+    assert r.returncode == 0, r.stderr
+    assert table == CRON_LINE + '\n'
+
+
+def test_add_cron_line_with_only_our_line_in_the_table(tmp_path):
+    r, table = _add_cron_line(tmp_path, CRON_LINE + '\n')
+    assert r.returncode == 0, r.stderr
+    assert table == CRON_LINE + '\n'

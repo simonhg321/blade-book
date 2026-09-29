@@ -109,16 +109,35 @@ def test_a_forged_line_inside_a_file_name_stays_inside_it():
     assert 'riverstone' not in repr(rec) and '203.0.113.66' not in repr(rec)
 
 
-def test_read_app_log_reads_rotations_oldest_first(env):
+def test_read_app_log_reads_the_day_files_oldest_first(env):
+    # scripts/rotate_log.py keeps one file per day beside app.log
     path = os.path.join(paths.LOG_DIR, 'app.log')
-    with open(path + '.1', 'w') as f:
-        f.write(app_line(T - timedelta(days=3), 'draft K01 created for @sam'))
+    with open(path + '.2026-09-24', 'w') as f:
+        f.write(app_line(T - timedelta(days=4), 'draft K01 created for @sam'))
+    with open(path + '.2026-09-25', 'w') as f:
+        f.write(app_line(T - timedelta(days=3), 'decoded K01 for @sam via FakeDecoder'))
+    with open(path + '.rotating', 'w') as f:           # a run in flight, or one that died
+        f.write(app_line(T - timedelta(days=1), 'decoded K01 for @sam via FakeDecoder'))
+    with open(path + '.2026-09-25.gz', 'w') as f:      # not ours
+        f.write(app_line(T, 'K09 saved to the register by @sam'))
     with open(path, 'w') as f:
         f.write(app_line(T, 'K01 saved to the register by @sam'))
         f.write('not a log line at all\n')
     recs, info = activity.read_app_log(path)
-    assert [r['kind'] for r in recs] == ['draft_started', 'saved']
-    assert info == {'ok': True, 'lines': 3}
+    assert [(r['kind'], r['tag']) for r in recs] == [('draft_started', 'K01'), ('decoded', 'K01'), ('decoded', 'K01'), ('saved', 'K01')]
+    assert info == {'ok': True, 'lines': 5}
+
+
+def test_read_app_log_keeps_the_newest_lines_when_cut_short(env, monkeypatch):
+    path = os.path.join(paths.LOG_DIR, 'app.log')
+    for day in ('2026-09-24', '2026-09-25'):
+        with open(f'{path}.{day}', 'w') as f:
+            f.write(app_line(T - timedelta(days=3), f'draft K{day[-2:]} created for @sam'))
+    with open(path, 'w') as f:
+        f.write(app_line(T, 'K01 saved to the register by @sam'))
+    monkeypatch.setattr(activity, 'MAX_LINES', 2)
+    recs, info = activity.read_app_log(path)
+    assert [r['tag'] for r in recs] == ['K25', 'K01'] and info['stopped'] is True
 
 
 def test_read_app_log_reports_a_missing_file(env):

@@ -10,7 +10,7 @@ import secrets
 import shutil
 import subprocess
 from datetime import timedelta
-from logging.handlers import RotatingFileHandler
+from logging.handlers import WatchedFileHandler
 
 from flask import Blueprint, Flask, current_app, jsonify, request
 
@@ -41,28 +41,37 @@ class _OneRecordPerLine(logging.Formatter):
         return self._BREAKS.sub(' ', super().format(record)).replace('\n', '\n\t')
 
 
+class _PrivateWatchedFile(WatchedFileHandler):
+    """scripts/rotate_log.py moves app.log away each night (the terms promise
+    90 days). This handler sees the move before its next line and opens a
+    fresh app.log; two gunicorn workers rotating one file themselves would
+    fight over it. A file it creates is born 0o640: sign-in links land here
+    via LogMailer."""
+
+    def _open(self):
+        return open(self.baseFilename, self.mode, encoding=self.encoding, errors=self.errors,
+                    opener=lambda path, flags: os.open(path, flags, 0o640))
+
+
 def _setup_logging():
-    """One rotating file handler pointed at the *current* LOG_DIR (tests
-    reload paths per test, so a stale handler is swapped, not duplicated)."""
+    """One file handler pointed at the *current* LOG_DIR (tests reload paths
+    per test, so a stale handler is swapped, not duplicated)."""
     paths.ensure_dirs()
     target = os.path.join(paths.LOG_DIR, 'app.log')
     root = logging.getLogger()
     for h in list(root.handlers):
-        if isinstance(h, RotatingFileHandler):
+        if isinstance(h, _PrivateWatchedFile):
             if h.baseFilename == target:
                 return
             root.removeHandler(h)
             h.close()
-    handler = RotatingFileHandler(target, maxBytes=5_000_000, backupCount=5)
+    handler = _PrivateWatchedFile(target)
     handler.setFormatter(_OneRecordPerLine(
         '%(asctime)s %(levelname)s %(name)s: %(message)s'))
     root.addHandler(handler)
     root.setLevel(logging.INFO)
     try:
-        os.chmod(target, 0o640)  # magic links land here via LogMailer — never world-readable
-        # rotated files (app.log.1, .2, ...) inherit this only via the process
-        # umask at rotation time, not this chmod — acceptable, they're on the
-        # same host under the same log dir permissions.
+        os.chmod(target, 0o640)  # a file that was already there keeps its old mode otherwise
     except OSError as e:
         log.warning('could not chmod %s to 0o640: %r', target, e)
 

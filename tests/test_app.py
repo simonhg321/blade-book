@@ -51,3 +51,16 @@ def test_healthz_version_is_captured_at_app_creation(env, monkeypatch):
     a = app_module.create_app()
     monkeypatch.setattr(app_module, '_version', lambda: 'zzz9999')  # git moved on; process did not
     assert a.test_client().get('/blade-book/api/healthz').get_json()['version'] == 'abc1234'
+
+
+def test_app_log_follows_the_nightly_move(env):
+    # scripts/rotate_log.py moves app.log away; the next line has to open a fresh app.log, not follow the old file
+    import logging
+    from app import create_app
+    create_app()
+    app_log = os.path.join(env.LOG_DIR, 'app.log')
+    os.rename(app_log, app_log + '.rotating')
+    logging.getLogger('blade-book').info('after the move')
+    assert 'after the move' in open(app_log).read()
+    assert 'after the move' not in open(app_log + '.rotating').read()
+    assert stat.S_IMODE(os.stat(app_log).st_mode) == 0o640
