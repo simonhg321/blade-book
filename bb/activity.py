@@ -15,7 +15,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlsplit
 
-from bb import db, paths
+from bb import db, logkeep, paths
 
 WINDOWS = (48, 168, 336)                  # hours
 MAX_LINES = 100_000                       # per log; the newest lines are the ones kept
@@ -149,10 +149,12 @@ def _read(files, parse, info, since=None):
 
 
 def read_app_log(path):
-    """Every known line in app.log and its rotations (.1 to .5, plain text),
-    oldest first, and how the read went."""
-    files = [(path, open)] + [(f'{path}.{n}', open) for n in range(1, 6) if os.path.exists(f'{path}.{n}')]
-    return _read(files, parse_app_line, {'ok': True, 'lines': 0})
+    """Every known line in app.log and the day files scripts/rotate_log.py
+    keeps beside it (app.log.2026-09-27, 90 days of them), oldest first, and
+    how the read went. app.log.rotating is a nightly run in flight."""
+    held = [path + logkeep.HELD] if os.path.exists(path + logkeep.HELD) else []
+    days = [p for _day, p in reversed(logkeep.day_files(path))]
+    return _read([(p, open) for p in [path] + held + days], parse_app_line, {'ok': True, 'lines': 0})
 
 
 # --- the web server log ---------------------------------------------------------

@@ -311,3 +311,44 @@ def test_gather_logs_but_does_not_raise_when_state_cannot_be_saved(mon, env, mon
                             backup_glob=str(env.DATA_DIR) + '/nothing-*.tgz')
     assert isinstance(events, list)
     assert any('could not save state' in r.message for r in caplog.records)
+
+
+def _stamp(dt):
+    """A UTC datetime as app.log writes it: the box's local time."""
+    return dt.astimezone().strftime('%Y-%m-%d %H:%M:%S') + ',000 INFO blade-book: x\n'
+
+
+def test_check_log_limit_is_quiet_when_the_nightly_run_works(mon, tmp_path):
+    # the terms promise 90 days; scripts/rotate_log.py keeps it, this check says when it stops
+    log = tmp_path / 'app.log'
+    s = mon.load_state('/nonexistent')
+    assert mon.check_log_limit(str(log), s, NOW) == []              # no log yet
+    log.write_text(_stamp(NOW - timedelta(hours=30)))
+    (tmp_path / 'app.log.2026-06-06').write_text('x\n')             # 89 days before NOW's day
+    assert mon.check_log_limit(str(log), s, NOW) == []
+
+
+def test_check_log_limit_says_when_the_live_log_was_not_moved(mon, tmp_path):
+    log = tmp_path / 'app.log'
+    log.write_text(_stamp(NOW - timedelta(hours=50)) + _stamp(NOW))
+    s = mon.load_state('/nonexistent')
+    ev = mon.check_log_limit(str(log), s, NOW)
+    assert len(ev) == 1 and ev[0].key == 'log_limit' and ev[0].sms is False
+    assert 'not been moved for 50 h' in ev[0].subject and 'rotate_log.py' in ev[0].body
+    assert mon.check_log_limit(str(log), s, NOW + timedelta(hours=1)) == []   # once per 24 h
+
+
+def test_check_log_limit_says_when_a_day_file_outlives_the_promise(mon, tmp_path):
+    log = tmp_path / 'app.log'
+    log.write_text(_stamp(NOW))
+    (tmp_path / 'app.log.2026-06-04').write_text('x\n')             # 91 days before NOW's day
+    (tmp_path / 'app.log.2026-06-04.gz').write_text('x\n')          # not ours
+    s = mon.load_state('/nonexistent')
+    ev = mon.check_log_limit(str(log), s, NOW)
+    assert len(ev) == 1 and 'older than 90 days' in ev[0].subject and ev[0].body.count('app.log.') == 1
+
+
+def test_check_log_limit_reads_past_a_line_with_no_stamp(mon, tmp_path):
+    log = tmp_path / 'app.log'
+    log.write_text('stray\n' + _stamp(NOW - timedelta(hours=50)))
+    assert len(mon.check_log_limit(str(log), mon.load_state('/nonexistent'), NOW)) == 1

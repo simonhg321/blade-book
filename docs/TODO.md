@@ -113,3 +113,18 @@ Small items that don't warrant a plan. Bigger work lives in the plan roadmap
   control she does not need). NOT a filter, facet bar or per-maker pages — a display detail inside the shelf
   (docs/abtesting napkin). ~2 h with tests. Context: Simon's register is CRK + rare birds + Spydercos for sale;
   the site's face stays CRK, the app stays any-maker, the shelf toggle (curated lens) is the next dashed box.
+
+## Shipped 2026-09-28 — the app log keeps 90 days (Simon: "lets keep 90 days of logs")
+- **bb/logkeep.py + scripts/rotate_log.py** (cron 00:07, shg). The nightly run moves app.log aside, files its lines
+  under the day they were written (`app.log.2026-09-27`, 0o640), deletes a day file when its first line turns 90 days
+  old. app.py's handler is a `WatchedFileHandler` that opens a fresh app.log after the move (two gunicorn workers
+  rotating one file themselves would fight over it). bb/activity.py reads the day files; scripts/monitor.py
+  (`check_log_limit`) mails when app.log was not moved for 48 h or a day file outlives the promise.
+- Terms and FAQ: "The app keeps that log for 90 days."
+- Open: (a) an ERROR line written between the monitor's look at 00:05 and the move at 00:07 is in the day file but is
+  never mailed (the monitor starts the fresh app.log at 0). (b) a run that dies between filing and removing
+  `app.log.rotating` files those lines twice on the next run. (c) the other files in /var/log/blade-book have no limit:
+  `ai_calls.jsonl` (user id, knife id, cost per decode), `monitor.log` (mail subjects, which name a new sign-in's
+  address), `gunicorn_err.log` (root's, not read). The terms speak of the app's log only. (d) the Linode backup
+  service snapshots the whole box, /var/log included; a deleted line lives on there for as long as Linode keeps a
+  snapshot. Our own nightly tarball holds the data dir only, no logs.

@@ -20,7 +20,7 @@ from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, __file__.rsplit('/scripts/', 1)[0])
 
-from bb import config, paths  # noqa: E402
+from bb import config, logkeep, paths  # noqa: E402
 
 log = logging.getLogger('blade-book.monitor')
 
@@ -30,6 +30,7 @@ HEALTHZ_URL = f'http://127.0.0.1:{paths.PORT}' + paths.API_PREFIX + '/healthz'
 BACKUP_GLOB = '/home/backup/blade-book-*.tgz'
 DISK_MIN_PCT = 10
 BACKUP_MAX_H = 26
+LOG_MOVE_MAX_H = 48           # scripts/rotate_log.py runs nightly; two nights missed is a stop
 ERROR_LINES_MAX = 40
 DECODE_MIN_CALLS = 5
 DECODE_MAX_FAIL = 0.20
@@ -171,6 +172,30 @@ def check_backup(backup_glob, state, now):
     return [Event('backup', subject, body, False)]
 
 
+def check_log_limit(log_path, state, now):
+    """The terms promise the app log keeps 90 days. Says so when the nightly
+    run (scripts/rotate_log.py) has stopped: the live log holds a line older
+    than two nights, or a day file has outlived the promise."""
+    subject = body = None
+    late = [p for day, p in logkeep.day_files(log_path)
+            if day < now.astimezone().date() - timedelta(days=logkeep.KEEP_DAYS)]
+    try:
+        first = logkeep.first_stamp(log_path)
+    except FileNotFoundError:
+        first = None
+    if late:
+        subject = f'{len(late)} app log day file(s) older than {logkeep.KEEP_DAYS} days'
+        body = '\n'.join(late) + '\nscripts/rotate_log.py should have deleted them; see rotate.log'
+    elif first and now - first.astimezone(timezone.utc) > timedelta(hours=LOG_MOVE_MAX_H):
+        hours = int((now - first.astimezone(timezone.utc)).total_seconds() // 3600)
+        subject = f'app.log has not been moved for {hours} h'
+        body = f'{log_path}\nscripts/rotate_log.py runs at 00:07 from the crontab of shg; see rotate.log'
+    if not subject or not due(state, 'log_limit', 24, now):
+        return []
+    stamp(state, 'log_limit', now)
+    return [Event('log_limit', subject, body, False)]
+
+
 def check_signups(rows, state, now):
     """rows = (email, handle, created) for users created since last_users_check."""
     state['last_users_check'] = now.isoformat()
@@ -278,6 +303,7 @@ def gather(now, fetch=None, con=None, backup_glob=BACKUP_GLOB, save=True):
         ('errors', lambda: check_errors(os.path.join(paths.LOG_DIR, 'app.log'), state, now)),
         ('decode', lambda: check_decode(paths.ai_log(), state, now)),
         ('backup', lambda: check_backup(backup_glob, state, now)),
+        ('log_limit', lambda: check_log_limit(os.path.join(paths.LOG_DIR, 'app.log'), state, now)),
     ]
     for name, fn in steps:
         try:

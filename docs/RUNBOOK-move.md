@@ -22,12 +22,14 @@ supervisor program; nothing imports from billboard.
 5. `curl http://127.0.0.1:5004/blade-book/api/healthz` → ok.
 6. DNS: `blade-book.com` → new box. Leave the stark `/blade-book/` alias as a
    redirect for 30 days, then remove the include + supervisor conf on stark.
-7. Move the crontab — five lines, from `crontab -u shg -l` on stark:
+7. Move the crontab — six lines, from `crontab -u shg -l` on stark:
    `30 3 * * * bash /home/shg/blade-book/scripts/backup.sh >> /var/log/blade-book/backup.log 2>&1`
    `15 4 * * * cd /home/shg/blade-book && python3 scripts/purge_drafts.py >> /var/log/blade-book/purge.log 2>&1`
    `*/5 * * * * /usr/bin/python3 /home/shg/blade-book/scripts/publish_sweep.py >> /var/log/blade-book/publish.log 2>&1`
    `*/15 * * * * cd /home/shg/blade-book && python3 scripts/match_cron.py >> /var/log/blade-book/match.log 2>&1`
    `*/5 * * * * cd /home/shg/blade-book && python3 /home/shg/blade-book/scripts/monitor.py >> /var/log/blade-book/monitor.log 2>&1`
+   `7 0 * * * cd /home/shg/blade-book && python3 scripts/rotate_log.py >> /var/log/blade-book/rotate.log 2>&1`
+   (the app log keeps 90 days, as the terms say; never as root; move `/var/log/blade-book/app.log*` with the box or the history on the admin page starts empty)
    Confirm `/home/backup/blade-book-*.tgz` appears on new, check `purge.log` the following morning, monitor
    `publish.log` for publish_sweep activity, monitor `match.log` for match_cron activity (silent unless
    it sends), and check `monitor.log`/mail for `scripts/monitor.py` (needs `BLADEBOOK_ADMIN_EMAIL`, §ENV.md,
