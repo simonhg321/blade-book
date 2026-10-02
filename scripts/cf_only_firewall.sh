@@ -3,11 +3,17 @@
 # Without --apply this only PRINTS what it would do. With --apply it:
 #   1. allows SSH (22) FIRST so an enable can never lock us out,
 #   2. allows every current Cloudflare IPv4/IPv6 range on 80,443/tcp,
-#   3. denies 80,443/tcp from everywhere else,
-#   4. removes any older "allow 80/tcp" / "allow 443/tcp" from Anywhere — ufw is
-#      first-match, and those sit ABOVE the new denies, so without this step the
-#      denies never fire (found on stark 2026-10-02, the first --apply),
-#   5. enables ufw if it was inactive.
+#   3. removes any older "allow 80/tcp" / "allow 443/tcp" from Anywhere (the
+#      Cloudflare allows are already in, so the proxied sites stay up),
+#   4. denies 80,443/tcp from everywhere else — APPENDED, so it sits below the allows,
+#   5. enables ufw if it was inactive,
+#   6. checks the site through Cloudflare and ROLLS BACK (deletes the denies,
+#      re-opens 80/443) if it does not answer 200.
+# ORDER MATTERS. ufw is first-match, and `ufw deny 80/tcp` with an existing
+# `allow 80/tcp` does not append — it rewrites that rule IN PLACE, keeping its
+# slot above every Cloudflare allow. Doing the deny before the delete put both
+# sites behind a 522 for seven minutes on stark, 2026-10-02 23:50 UTC. Not
+# applied there since (Simon: not worth it); kept correct for the next box.
 # Run as root. Re-run after Cloudflare updates its ranges (rare).
 set -euo pipefail
 APPLY=${1:-}
@@ -19,13 +25,22 @@ run() { if [ "$APPLY" = "--apply" ]; then "$@"; else echo "would: $*"; fi; }
 echo "== ufw status now:"; ufw status | head -3
 run ufw allow 22/tcp comment 'ssh — always first'
 for ip in $V4 $V6; do run ufw allow proto tcp from "$ip" to any port 80,443 comment cloudflare; done
-run ufw deny 80/tcp
-run ufw deny 443/tcp
-# the open rules from before: delete AFTER the Cloudflare allows exist, so the
-# proxied sites never drop. `ufw delete` of a rule that is not there is a no-op.
+# the open rules from before go BEFORE the denies are written (see header).
 for p in 80 443; do
   if ufw status | grep -qE "^$p/tcp +ALLOW +Anywhere"; then run ufw delete allow $p/tcp; fi
 done
+run ufw deny 80/tcp
+run ufw deny 443/tcp
 run ufw --force enable
-[ "$APPLY" = "--apply" ] && ufw status numbered | tail -8
+if [ "$APPLY" = "--apply" ]; then
+  ufw status numbered | grep -E "DENY|cloudflare" | head -4
+  sleep 2
+  code=$(curl -s -o /dev/null -m 15 -w '%{http_code}' https://blade-book.com/ || true)
+  if [ "$code" != "200" ]; then
+    echo "!! blade-book.com answered $code through Cloudflare — rolling back"
+    ufw delete deny 80/tcp; ufw delete deny 443/tcp; ufw allow 80/tcp; ufw allow 443/tcp
+    exit 1
+  fi
+  echo "ok: 200 through Cloudflare, origin closed to the rest"
+fi
 [ "$APPLY" = "--apply" ] || echo "(dry run — add --apply to do it)"
