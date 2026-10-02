@@ -185,8 +185,12 @@ def test_deliver_survives_channel_failures(mon):
 
 def test_send_sms_uses_injected_sender_and_never_raises(mon, monkeypatch):
     got = []
+    monkeypatch.delenv('BB_ADMIN_PHONE', raising=False)
+    assert mon.send_sms('hello', sender=lambda phone, body: got.append((phone, body)) or {'sid': 'x'}) is False
+    assert got == []                                   # no number in the environment → no SMS, never a default
+    monkeypatch.setenv('BB_ADMIN_PHONE', '15550002222')
     assert mon.send_sms('hello', sender=lambda phone, body: got.append((phone, body)) or {'sid': 'x'}) is True
-    assert got == [('5550002222', 'hello')]
+    assert got == [('15550002222', 'hello')]
     monkeypatch.setenv('BB_ADMIN_PHONE', '15550001111')
     mon.send_sms('hi', sender=lambda phone, body: got.append((phone, body)))
     assert got[-1][0] == '15550001111'

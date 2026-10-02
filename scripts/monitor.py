@@ -215,7 +215,6 @@ def check_signups(rows, state, now):
 # --- channels -------------------------------------------------------------------------
 
 BILLBOARD_DIR = '/home/shg/billboard'
-DEFAULT_PHONE = '5550002222'
 PREFIX = '[blade-book] '
 
 
@@ -252,8 +251,15 @@ def send_sms(body, sender=None):
     _send_twilio_sms returns False (no raise) when creds are missing or
     Twilio refuses, and that must not read as success."""
     try:
+        # BB_ADMIN_PHONE must be in the environment (docs/ENV.md); never in code,
+        # the repo is public. billboard's .env sets the same name — read it
+        # BEFORE the lazy import so an empty value there cannot blank ours.
+        phone = os.environ.get('BB_ADMIN_PHONE', '')
+        if not phone:
+            log.warning('BB_ADMIN_PHONE not set — SMS skipped')
+            return False
         sender = sender or _billboard_sender()
-        return bool(sender(os.environ.get('BB_ADMIN_PHONE', DEFAULT_PHONE), body))
+        return bool(sender(phone, body))
     except Exception as e:  # noqa: BLE001
         log.error('sms failed: %r', e)
         return False
