@@ -12,7 +12,7 @@ if [ "$EMAIL" = "--force" ]; then FORCE=--force; EMAIL=; fi
 if [ -z "$EMAIL" ]; then EMAIL=$(grep -s '^CERTBOT_EMAIL=' /etc/blade-book/.env | cut -d= -f2-); fi
 if [ -z "$EMAIL" ]; then echo "usage: enable_domain.sh <certbot email> [--force]  (or CERTBOT_EMAIL= in /etc/blade-book/.env)" >&2; exit 2; fi
 if [ "$FORCE" != "--force" ] && ! getent hosts blade-book.com | grep -q "$(hostname -I | awk '{print $1}')"; then
-  echo "blade-book.com does not resolve to this box (A record → <ORIGIN-IP>) — set DNS first, or pass --force behind the Cloudflare proxy"; exit 1
+  echo "blade-book.com does not resolve to this box (A record → $(hostname -I | awk '{print $1}')) — set DNS first, or pass --force behind the Cloudflare proxy"; exit 1
 fi
 cp "$CODE/deploy/apache-blade-book.com.conf" /etc/apache2/sites-available/blade-book.conf
 a2enmod -q headers proxy proxy_http rewrite >/dev/null

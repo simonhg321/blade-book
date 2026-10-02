@@ -20,7 +20,7 @@ after the switch (links already in the wild never break).
 
 | record | value |
 |---|---|
-| `blade-book.com` A | `<ORIGIN-IP>` |
+| `blade-book.com` A | `<ORIGIN-IP>` (the box's public IP, `hostname -I`) |
 | `www.blade-book.com` CNAME | `blade-book.com` |
 | `blade-book.net`, `www.blade-book.net` | same A / CNAME (redirects to .com in step 4) |
 | Resend SPF/DKIM | from the Resend domain page |
