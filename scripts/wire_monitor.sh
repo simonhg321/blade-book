@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 # Plan 12 deploy, one shot (sudo): set BLADEBOOK_ADMIN_EMAIL in /etc/blade-book/.env
 # (idempotent), then re-run install.sh (adds the */5 monitor cron, re-copies html,
 # restarts the app). Simon: `! sudo bash /home/shg/blade-book/scripts/wire_monitor.sh you@example.com`

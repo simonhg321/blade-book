@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """Maker-agnostic half of the decoder: the core knife fields every maker shares,
 the JSON schema the model is forced into, and the base prompt. A maker module
 supplies `EXT_PROPS` (its own fields) and `PROMPT` (what its cards/boxes say)."""

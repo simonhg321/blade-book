@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+// Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 // blade-book shared nav (plan 13): one /auth/me fetch → "sign in" becomes
 // "my register", the admin link shows for admins, and #signout works.
 // Included at the end of every page; never throws; textContent only.

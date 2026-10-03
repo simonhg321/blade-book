@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 # One-time: the shared libraries Playwright's headless Chromium needs (libatk, libnss3, …)
 # so Sky can screenshot pages on stark. Runs apt-get; needs sudo.
 #   sudo bash /home/shg/blade-book/scripts/headless_deps.sh

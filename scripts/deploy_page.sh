@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 # 2026-09-27: the knife page — names with the graphic, one top bar, next and
 # previous, the kit, the plate-only mark. Static pages, the app and the public
 # bundles go live together. Safe to run again: every step repeats cleanly.

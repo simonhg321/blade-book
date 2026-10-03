@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 # 2026-09-28: the app log keeps 90 days, and the terms and the FAQ say so.
 # The order matters: the app restarts FIRST, onto the handler that follows a
 # moved log. An app that has not restarted keeps writing into the file the

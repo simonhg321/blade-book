@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """
 bb/decode.py — the Decoder seam. Photos (≤1568 px JPEGs) + the owner's note go
 to ONE schema-forced model call and come back as a `Decoded` record. No agent

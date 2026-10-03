@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """GET /blade-book/api/search — public, auth optional (spec §9).
 Free: text search + card-lite results + aggregate counts.
 Paid (sub_status 'active' or admin): year range, damascus smith/pattern,

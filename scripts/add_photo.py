@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """Add a photo to a knife from a shell — the same path as the upload route
 (ingest → row → store → thumb), for a file that never went through the phone:
 

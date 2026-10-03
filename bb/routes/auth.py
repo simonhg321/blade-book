@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """
 bb/routes/auth.py — /blade-book/api/auth/*: magic link, whoami, sign-out.
 OIDC (google/apple) routes are added in the same blueprint by plan 02 task 7.

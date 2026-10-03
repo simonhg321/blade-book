@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 import time
 from urllib.parse import parse_qs, urlparse
 

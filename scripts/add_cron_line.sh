@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 # Put ONE line in a user's crontab and keep every other line as it is.
 #   add_cron_line.sh <user> <pattern> <line>
 # Any line that contains <pattern> is replaced by <line>, so a second run adds

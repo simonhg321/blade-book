@@ -15,7 +15,7 @@
 - Repo: `/home/shg/blade-book`. Branch `sec-batch-b` off `main` (`6617609` or later), in a worktree. Never work on `main` directly.
 - **LIVE-DB GUARD:** any non-pytest Python run (a shell, a script, a one-off) MUST first `export BLADEBOOK_CONFIG_DIR=/tmp/bbx/config BLADEBOOK_DATA_DIR=/tmp/bbx/data BLADEBOOK_LOG_DIR=/tmp/bbx/log BLADEBOOK_WWW_DIR=/tmp/bbx/www`. `bb.paths` defaults to `/var/lib/blade-book` and a bare `db.connect()` migrates the LIVE database. pytest is safe (conftest re-points every path).
 - Tests: `cd <worktree> && python3 -m pytest -q` (system python3; no venv). 543 tests pass on `main` at the start; the suite must stay green after every task.
-- Copyright header on every new file: `# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved`.
+- Copyright header on every new file: `# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)`.
 - Log addresses only where the code already does; never log tokens, cookies, or session ids. No secrets in tests or docs.
 - Schema: `db.SCHEMA_VERSION` goes 10 → 11 exactly once (Task 4 does it; later tasks reuse 11). New tables go in `db.SCHEMA` (`CREATE TABLE IF NOT EXISTS`, run on every connect); only the `ALTER` needs a `MIGRATIONS[11]` entry. Old workers re-stamp the old version until restart, so every migration statement must be idempotent (`_migrate` already tolerates `duplicate column`).
 - Frontend copy is lower-case, terse, cream palette (`#f6f1e7`), system-ui font — match `bb/auth.py:UNAUTHENTICATED_HTML`.
@@ -57,7 +57,7 @@
 - [ ] **Step 1: Write the failing test**
 
 ```python
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """Regression tests for security review 2026-09-04, batch B
 (docs/SECURITY-REVIEW-2026-09-04.md: M2, M7, M8, M9, L1, L3, L10). Each test
 is the reviewer's repro, inverted: it now asserts the safe behaviour."""
@@ -1107,7 +1107,7 @@ git commit -m "sec-b: M2b magic-link flow cookie + confirm page for unbound clic
 Create `tests/test_cdn.py`:
 
 ```python
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 import os
 
 from bb import cdn
@@ -1223,7 +1223,7 @@ Expected: FAIL — `ModuleNotFoundError: bb.cdn`.
 - [ ] **Step 3: Create `bb/cdn.py`**
 
 ```python
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """bb/cdn.py — Cloudflare edge cache purge (security review L3).
 
 The edge caches img/*.jpg for 4 h, so a photo that went private, a knife that

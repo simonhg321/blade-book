@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """The app log keeps 90 days, and the terms page says so.
 
 Every night scripts/rotate_log.py moves app.log aside, files its lines under

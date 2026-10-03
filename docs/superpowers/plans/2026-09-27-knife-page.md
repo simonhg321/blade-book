@@ -24,7 +24,7 @@
 - Kit chips show only a known "yes". "No" and "unknown" show nothing.
 - The word for the blue polishing cloth is "cloth" (Phase 3; do not introduce "napkin" or "rag" in copy).
 - Asset version after this plan: `?v=20260927` on every `vibe.css` and `nav.js` reference.
-- New files start with `# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved` (Python, shell).
+- New files start with `# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)` (Python, shell).
 - Commit messages end with the two attribution lines used in this repo's recent commits (`Co-Authored-By:` and `Claude-Session:`).
 
 ## Review Focus
@@ -1019,7 +1019,7 @@ pkill -f "[h]ttp.server 8765"; rm -rf "$PV"
 
 ```bash
 #!/bin/bash
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 # 2026-09-27: the knife page — names with the graphic, one top bar, next and
 # previous, the kit, the plate-only mark. Static pages, the app and the public
 # bundles go live together.

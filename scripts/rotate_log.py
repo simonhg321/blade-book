@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """Keep 90 days of the app log (bb/logkeep.py): file yesterday's lines under
 their day, delete the day files that have turned 90 days old.
 Cron: 00:07 daily, shg's crontab (installed by scripts/deploy_log_limit.sh,

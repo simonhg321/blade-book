@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """
 bb/store.py — the PhotoStore seam (spec §11). Keys, never paths:
   '{owner_id}/{knife_id}/{seq}.{ext}'        original, byte-exact, EXIF intact

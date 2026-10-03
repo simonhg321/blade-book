@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """bb/activity.py — who is using blade-book and where they are stuck, for the
 admin page (spec 2026-09-27-admin-activity-design.md).
 

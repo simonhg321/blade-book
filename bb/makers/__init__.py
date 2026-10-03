@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """Maker modules: prompt fragments, extension schema and consistency rules per
 maker. `crk` is the only deep module; `other` is the catch-all for every other
 brand (plan 14). Adding a maker = one module + one line in _REGISTRY + one

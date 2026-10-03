@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 # 2026-09-27: admin activity — the admin page shows who is stuck, who did what
 # and who came by; the terms and the FAQ say that we keep logs. Static pages and
 # the app go live together. Safe to run again: every step repeats cleanly.

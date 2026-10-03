@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """bb/routes/settings.py — the owner's settings: public-page options (plan 06),
 the register hero pin, and the account operations behind /me/settings (plan
 11: handle once, export, delete). The page key is write-only: the API reports

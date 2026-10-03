@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """Spec §5: PRIVATE_COLUMNS content never appears in /search — not in the
 index tables, not in any API byte. Enumerates db.PRIVATE_COLUMNS
 programmatically so a future column is caught the day it's added.

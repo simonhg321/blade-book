@@ -71,7 +71,7 @@
 - [ ] **Step 2: Write the failing tests.** Create `tests/test_activity.py`:
 
 ```python
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """bb/activity.py — who is using blade-book and where they are stuck."""
 import gzip
 import os
@@ -286,7 +286,7 @@ Expected: FAIL, `ImportError: cannot import name 'activity' from 'bb'`.
 - [ ] **Step 3: Implement.** Create `bb/activity.py`:
 
 ```python
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """bb/activity.py — who is using blade-book and where they are stuck, for the
 admin page (spec 2026-09-27-admin-activity-design.md).
 
@@ -1231,7 +1231,7 @@ git commit -m "activity: people, visitors, the guess, the summary"
 - [ ] **Step 1: Write the failing tests.** Create `tests/test_admin_activity_api.py`:
 
 ```python
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """GET /api/admin/activity — who is using blade-book and where they are stuck."""
 import os
 from datetime import datetime, timedelta, timezone
@@ -1446,7 +1446,7 @@ Before the `nav.js` script tag at the end, add:
 - [ ] **Step 4: Implement the script.** Create `html/admin/activity.js`:
 
 ```javascript
-/* Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved */
+/* Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE) */
 /* The admin page's activity sections: who is stuck, who did what, who came by.
    Text goes in with textContent only. The page's own script sends a signed-out
    or non-admin visitor home; this one stays quiet for them. */
@@ -1676,7 +1676,7 @@ Expected: FAIL, `FileNotFoundError`.
 
 ```bash
 #!/bin/bash
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 # 2026-09-27: admin activity — the admin page shows who is stuck, who did what
 # and who came by; the terms and the FAQ say that we keep logs. Static pages and
 # the app go live together. Safe to run again: every step repeats cleanly.

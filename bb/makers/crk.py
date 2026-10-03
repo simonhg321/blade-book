@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """Chris Reeve Knives: extension fields, what their cards and boxes say, SKU
 prefixes, era rules. Rules FLAG, they never block — a flagged record is still
 written and the flag is shown to the owner."""

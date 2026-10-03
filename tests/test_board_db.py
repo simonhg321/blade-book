@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """Schema v7 + board/hide helpers (plan 09). Helpers here (_seller, _old_knife)
 are imported by the other plan-09 test files."""
 from datetime import datetime, timedelta, timezone

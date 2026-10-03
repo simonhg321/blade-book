@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """bb/routes/billing.py — GET /blade-book/api/billing: the price line and, when
 signed in, where the caller stands against the gate (own numbers only). The
 intake and search pages read it so no price copy is baked into HTML."""

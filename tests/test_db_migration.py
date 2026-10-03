@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """Final-review BLOCKER 1: wants/intros have existed since schema v1 with a
 DIFFERENT shape (TEXT born_from/born_to, no intros.created, sent_at NOT
 NULL) — CREATE TABLE IF NOT EXISTS is a no-op against an existing table, so

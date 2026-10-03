@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """Delete draft knives untouched for 7 days, and their files (spec §7).
 Cron: 04:15 daily (installed by scripts/install.sh into shg's crontab)."""
 import logging

@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """GET /api/board + POST /api/board/<id>/contact (plan 09)."""
 from bb import db
 from tests.conftest import signed_in

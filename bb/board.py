@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """
 bb/board.py — the For Sale board (spec §9): the public card, the contact
 intro emails, and the abuse limits. Cards are publish.public_row() output

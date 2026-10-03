@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """Spec §9/§5: bb/match.py's intro emails are the OUTBOUND email surface —
 no db.PRIVATE_COLUMNS byte, and no owner session_secret, may ever leave in a
 sent message's to/subject/text/html/reply_to. Email addresses only appear

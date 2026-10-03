@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """bb/routes/board.py — /blade-book/api/board: the For Sale board (spec §9).
 GET is public. Contact + report need a session. Contact is claim-then-send
 like the match cron, but synchronous: the claim is deleted if the send

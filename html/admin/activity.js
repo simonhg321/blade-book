@@ -1,4 +1,4 @@
-/* Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved */
+/* Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE) */
 /* The admin page's activity sections: who is stuck, who did what, who came by.
    Text goes in with textContent only. The page's own script sends a signed-out
    or non-admin visitor home; this one stays quiet for them. */

@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """Regression tests for security review 2026-09-04, batch A
 (docs/SECURITY-REVIEW-2026-09-04.md: H1–H5, M1, L4–L6). Each test is the
 reviewer's repro, inverted: it now asserts the safe behaviour."""

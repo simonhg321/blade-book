@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """
 app.py — blade-book Flask app. gunicorn entry: `app:app` on 127.0.0.1:5004.
 Apache proxies /blade-book/api/ here and serves /blade-book/ static itself.

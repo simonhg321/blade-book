@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """
 bb/mail.py — the Mailer seam (spec §11). One interface, three impls:
 FakeMailer (tests), LogMailer (no RESEND_API_KEY — the link lands in

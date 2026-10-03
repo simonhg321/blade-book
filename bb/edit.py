@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """Validation for owner edits: which columns may change and what they accept.
 Enums come from the maker schema so the edit form, the decoder and the DB agree.
 Status, tag, owner and the sale columns are NOT editable here — they have their

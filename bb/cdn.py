@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """bb/cdn.py — Cloudflare edge cache purge (security review L3).
 
 The origin sends `public, max-age=300` for img/*.jpg (deploy/apache-*.conf),

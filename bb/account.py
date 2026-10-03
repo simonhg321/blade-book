@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """bb/account.py — the account-level operations behind /me/settings (plan 11):
 the one-time handle change, the everything-ZIP export, and complete account
 deletion. Pure functions over (con, store); the routes stay thin.

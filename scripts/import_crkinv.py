@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """One-off importer: Simon's crkinv collection → blade-book register.
 
   import_crkinv.py --handle simon-collector            dry run (prints the plan)

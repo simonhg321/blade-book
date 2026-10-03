@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """
 bb/db.py — the only module that touches SQLite. Every row except users is
 owned (owner_id). Private columns are listed once, here, so the leak test in

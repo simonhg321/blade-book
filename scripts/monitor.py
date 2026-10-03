@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """blade-book monitor — cron */5. Emails Simon (bb.mail) about ERROR lines,
 decode failure rate, backup age and new sign-ins; texts him (billboard's
 Twilio) only when the app is down or the disk is nearly full, and again when

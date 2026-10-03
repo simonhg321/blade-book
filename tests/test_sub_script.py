@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """scripts/sub.py — the ManualBilling flip from a shell (plan 10). In-process
 with the conftest env active; never run it from a shell without BLADEBOOK_*_DIR."""
 import importlib.util

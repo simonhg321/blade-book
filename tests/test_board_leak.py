@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """Spec §5 invariant, board edition: no db.PRIVATE_COLUMNS byte, no owner
 email/session_secret/public_key, may reach /api/board, /api/admin/reports,
 or either contact email (outside the designated to/reply_to slots). Seeds

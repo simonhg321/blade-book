@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """bb/config.py — load /etc/blade-book/.env into os.environ (secrets only:
 DECODER_MODEL, ANTHROPIC_API_KEY, RESEND_API_KEY, OIDC client ids, SESSION_KEY).
 Paths never live in .env; they come from bb/paths.py."""

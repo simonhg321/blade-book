@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """
 bb/routes/knives.py — /blade-book/api/knives/*: drafts, notes, photo slots.
 Every route is login_required and every db call carries g.user['id'], so a

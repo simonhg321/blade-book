@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """Handle + password sign-in for INVITED accounts only (2026-09-23, for one
 collector who will not hand out an email address). There is no route that
 creates such an account: only scripts/invite.py on the box does, so nobody

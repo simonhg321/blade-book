@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """bb/routes/admin.py — /blade-book/api/admin/*: the report queue and the
 three moderation verbs (spec §9 abuse: "Admin can hide, restore, or delete
 with a note"). Plan 10 added users + the ManualBilling flip; 2026-09-27 added

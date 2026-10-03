@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """bb/billing.py — the gate math (spec §10 can_add rules 1–3), the API summary,
 the one-line price. Pure functions; no DB."""
 import datetime as dt

@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """/api/admin/* — report queue + hide/restore/delete with a note (plan 09)."""
 from bb import db, publish
 from tests.conftest import signed_in

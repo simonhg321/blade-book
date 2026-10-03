@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 """Any maker without a module of its own (plan 14). No extension fields, no
 consistency rules: the core record + the owner's corrections ARE the record.
 A maker that earns deep reading gets its own module; until then it files here."""

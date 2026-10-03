@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Simon SGH — blade-book.com — All rights reserved
+# Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE)
 from bb import db, search
 from tests.conftest import signed_in
 from tests.test_search import _mk_user, _mk_knife, _rows
