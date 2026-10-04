@@ -21,7 +21,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument('handle')
     ap.add_argument('tag')
-    ap.add_argument('seq', type=int, choices=(1, 2, 3))
+    ap.add_argument('seq', type=int, choices=range(1, db.MAX_PHOTO_SLOTS + 1))
     ap.add_argument('file')
     ap.add_argument('--hero', action='store_true')
     ap.add_argument('--replace', action='store_true')

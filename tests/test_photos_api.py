@@ -210,3 +210,32 @@ def test_upload_flags_a_photo_too_small_to_read_a_card(client, mailer):
     assert r.status_code == 201 and r.get_json()['small'] is False
     r = _up(client, kid, 3, _jpeg(900, photos.MIN_LEGIBLE_PX + 1))   # portrait counts the long side
     assert r.get_json()['small'] is False
+
+
+# --- 2026-10-04: add photos to an existing knife without re-decoding ---
+# The vault page's "add photos" control relies on these two contracts.
+
+def test_adding_a_photo_to_a_live_knife_fills_next_slot_and_never_decodes(client, mailer, decoder, env):
+    signed_in(client, mailer)
+    kid = client.post(K + '/').get_json()['id']
+    assert _up(client, kid, 1).status_code == 201
+    con = db.connect()
+    con.execute("UPDATE knives SET status='live', hero_photo=1 WHERE id=?", (kid,)); con.commit()
+    con.close()
+    r = _up(client, kid, 2, name='glamour.jpg')
+    assert r.status_code == 201 and r.get_json()['seq'] == 2
+    k = client.get(f'{K}/{kid}').get_json()
+    assert [p['seq'] for p in k['photos']] == [1, 2]
+    assert k['hero_photo'] == 1          # the public face does not move on its own
+    assert decoder.calls == []           # storing a photo never re-runs the decode
+
+
+def test_seventh_photo_is_refused_without_touching_the_knife(client, mailer, env):
+    signed_in(client, mailer)
+    kid = client.post(K + '/').get_json()['id']
+    for seq in range(1, db.MAX_PHOTO_SLOTS + 1):
+        assert _up(client, kid, seq).status_code == 201
+    r = _up(client, kid, db.MAX_PHOTO_SLOTS + 1)
+    assert r.status_code == 400
+    k = client.get(f'{K}/{kid}').get_json()
+    assert len(k['photos']) == db.MAX_PHOTO_SLOTS
