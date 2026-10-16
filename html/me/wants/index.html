@@ -138,8 +138,9 @@
     TEXT_FIELDS.forEach(function (f) {
       if (w[f]) parts.push(f === 'keyword' ? '“' + w[f] + '”' : LABELS[f] + ' ' + w[f]);
     });
+    if (w.born_day) parts.push('born on ' + Number(w.born_day.slice(0, 2)) + '/' + Number(w.born_day.slice(3)) + ', any year, for sale or not');
     if (w.born_from || w.born_to) parts.push('born ' + (w.born_from || '…') + '–' + (w.born_to || '…'));
-    parts.push(w.mode);
+    if (!w.born_day) parts.push(w.mode);
     if (w.max_price != null) parts.push('≤ $' + w.max_price);
     return parts.length ? parts.join(' · ') : 'anything (all fields blank)';
   }

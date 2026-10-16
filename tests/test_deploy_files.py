@@ -1021,3 +1021,8 @@ def test_add_cron_line_with_only_our_line_in_the_table(tmp_path):
     r, table = _add_cron_line(tmp_path, CRON_LINE + '\n')
     assert r.returncode == 0, r.stderr
     assert table == CRON_LINE + '\n'
+
+
+def test_wants_page_summarises_a_born_day_want():
+    html = _read('html/me/wants/index.html')
+    assert "w.born_day" in html and "'born on '" in html
