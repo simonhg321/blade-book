@@ -321,14 +321,76 @@ def test_ordinary_wants_still_need_a_listed_knife():
 
 
 def test_born_day_intro_email_says_so(con):
-    wanter = _u(con)
+    wanter = _u(con, share_email_on_intro=1)          # both share — still no owner address: not listed
     owner = _u(con, email='o2@example.com', handle='o2-guy', share_email_on_intro=1)
     _mk_knife(con, owner['id'], born='2022-07-28')                             # keeping, public
     db.create_want(con, wanter['id'], {'born_day': '07-28'})
     m = FakeMailer()
-    assert match.run(con, m) == 2
-    to_wanter = next(x for x in m.sent if x['to'] == 'w@example.com')
+    # the knife is not listed: only the wanter hears — the owner is reached
+    # through "ask @handle", which carries the board's daily limits
+    assert match.run(con, m) == 1
+    assert [x['to'] for x in m.sent] == ['w@example.com']
+    to_wanter = m.sent[0]
     assert to_wanter['text'].startswith('Born on your date, 7/28:')
     assert 'July 28, 2022' in to_wanter['text']
-    to_owner = next(x for x in m.sent if x['to'] == 'o2@example.com')
+    assert 'Not listed for sale' in to_wanter['text'] and 'ask @o2-guy' in to_wanter['text']
+    assert to_wanter['reply_to'] is None and 'o2@example.com' not in to_wanter['text']
+    assert 'Reply to this email' not in to_wanter['text']
+    assert match.run(con, FakeMailer()) == 0                                   # one intro per pair, ever
+
+
+def test_born_day_intro_on_a_listed_knife_mails_both_sides(con):
+    wanter = _u(con)
+    owner = _u(con, email='o3@example.com', handle='o3-guy')
+    _sale_knife(con, owner['id'], born='2022-07-28')
+    db.create_want(con, wanter['id'], {'born_day': '07-28'})
+    m = FakeMailer()
+    assert match.run(con, m) == 2
+    to_owner = next(x for x in m.sent if x['to'] == 'o3@example.com')
     assert 'born on 7/28' in to_owner['text']
+    to_wanter = next(x for x in m.sent if x['to'] == 'w@example.com')
+    assert 'Not listed for sale' not in to_wanter['text']
+
+
+def test_born_day_intro_on_a_for_trade_knife_mails_both_sides(con):
+    wanter = _u(con)
+    owner = _u(con, email='o4@example.com', handle='o4-guy')
+    _mk_knife(con, owner['id'], born='2022-07-28', sale_status='for_trade')
+    db.create_want(con, wanter['id'], {'born_day': '07-28'})
+    m = FakeMailer()
+    assert match.run(con, m) == 2
+    assert {x['to'] for x in m.sent} == {'w@example.com', 'o4@example.com'}
+
+
+def test_ordinary_match_still_mails_both_sides(con):
+    wanter = _u(con)
+    owner = _u(con, email='o5@example.com', handle='o5-guy')
+    _sale_knife(con, owner['id'])
+    db.create_want(con, wanter['id'], {'model': 'Sebenza'})
+    m = FakeMailer()
+    assert match.run(con, m) == 2
+    assert {x['to'] for x in m.sent} == {'w@example.com', 'o5@example.com'}
+    assert all('Not listed for sale' not in x['text'] for x in m.sent)
+
+
+def test_born_day_privacy_gate_fails_closed():
+    w = _bd_want(born_day='07-28')
+    no_precision = _k(); del no_precision['born_on_precision']
+    assert not match.knife_matches(w, no_precision)
+    no_flag = _k(); del no_flag['owner_hide_born_day']
+    assert not match.knife_matches(w, no_flag)
+
+
+def test_born_day_run_respects_a_later_hide_born_day(con):
+    first = _u(con)
+    owner = _u(con, email='o6@example.com', handle='o6-guy')
+    _mk_knife(con, owner['id'], born='2022-07-28')
+    db.create_want(con, first['id'], {'born_day': '07-28'})
+    m = FakeMailer()
+    assert match.run(con, m) == 1 and m.sent[0]['to'] == 'w@example.com'
+    con.execute('UPDATE users SET hide_born_day = 1 WHERE id = ?', (owner['id'],)); con.commit()
+    second = _u(con, email='w2@example.com', handle='want-guy-2')
+    db.create_want(con, second['id'], {'born_day': '07-28'})
+    m2 = FakeMailer()
+    assert match.run(con, m2) == 0 and m2.sent == []
+    assert con.execute('SELECT count(*) FROM intros WHERE from_user = ?', (second['id'],)).fetchone()[0] == 0

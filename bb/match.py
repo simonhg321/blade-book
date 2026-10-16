@@ -2,7 +2,8 @@
 """
 bb/match.py — wants → intro emails (spec §9). Cron */15 via scripts/match_cron.py.
 
-One email to each side per (want, knife) pair, EVER: an intros row is
+One email to each side per (want, knife) pair, EVER (a born_day hit on a
+knife its owner never listed mails the wanter only): an intros row is
 claimed (db.claim_intro — deduped on from_user+knife_id, UNIQUE on
 want_id+knife_id) before anything is sent; a failed send leaves the claim
 with sent_at NULL and the next run retries it. Emails carry PUBLIC card
@@ -66,8 +67,9 @@ def knife_matches(want, k):
         if want.get(f) and (ext.get(f) or '').lower() != want[f].lower():
             return False
     if born_day:
-        # day precision, owner shows the day, month-day equal — any sale status
-        if (k.get('born_on_precision') or 'day') != 'day' or k.get('owner_hide_born_day'):
+        # day precision, owner shows the day, month-day equal — any sale status.
+        # Fails closed: a row missing the precision or the hide flag never matches.
+        if k.get('born_on_precision') != 'day' or k.get('owner_hide_born_day', 1):
             return False
         if (k.get('born_on') or '')[5:] != born_day:
             return False
@@ -116,25 +118,38 @@ def card_text(k, with_tag=True):
 _card_text = card_text   # kept for tests/test_match.py
 
 
+LISTED = ('for_sale', 'for_trade')
+
+
 def _emails_for(intro_row, want, k):
-    """Build (wanter_email_kwargs, owner_email_kwargs)."""
+    """Build the email kwargs to send: (wanter, owner), or (wanter,) alone
+    when a born_day want hits a knife its owner never listed — that owner is
+    reached through "ask @handle" on the date board, which carries the daily
+    limits; a want must not mail them (or hand out their address) for free."""
     url = f"{_base()}/@{k['owner_handle']}/{k['tag']}/"
-    share = (bool(want['_wanter_share']) and bool(k['owner_share_email'])
-             and mail.deliverable(want['_wanter_email']) and mail.deliverable(k['owner_email']))
     bd = want.get('born_day')
+    unlisted = bool(bd) and k.get('sale_status') not in LISTED
+    share = (not unlisted and bool(want['_wanter_share']) and bool(k['owner_share_email'])
+             and mail.deliverable(want['_wanter_email']) and mail.deliverable(k['owner_email']))
     bd_short = f"{int(bd[:2])}/{int(bd[3:])}" if bd else ''
+    if unlisted:
+        tail = f"Not listed for sale. Use “ask @{k['owner_handle']}” on the knife's card to reach the owner.\n"
+    elif share:
+        tail = "Reply to this email to reach the owner.\n"
+    else:
+        tail = ("The owner hasn't shared a contact address. Watch their register — "
+                "and if you both turn on email sharing in blade-book, future intros "
+                "will connect you directly.\n")
     to_wanter = {
         'to': want['_wanter_email'],
         'subject': f"blade-book: a match for your want — {k['tag']}",
         'text': ((f"Born on your date, {bd_short}: a knife on @{k['owner_handle']}'s register.\n\n" if bd else
                   f"A knife matching your want is on @{k['owner_handle']}'s register:\n\n")
-                 + f"{card_text(k)}\n{url}\n\n"
-                 + ("Reply to this email to reach the owner.\n" if share else
-                    "The owner hasn't shared a contact address. Watch their register — "
-                    "and if you both turn on email sharing in blade-book, future intros "
-                    "will connect you directly.\n")),
+                 + f"{card_text(k)}\n{url}\n\n" + tail),
         'reply_to': k['owner_email'] if share else None,
     }
+    if unlisted:
+        return (to_wanter,)
     to_owner = {
         'to': k['owner_email'],
         'subject': f"blade-book: someone wants your {k['tag']}",
