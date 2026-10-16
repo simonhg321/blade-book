@@ -170,7 +170,7 @@
     else if (me.handle === k.handle) { c.disabled = true; c.textContent = k.for_sale ? 'your listing' : 'your knife'; }
     else { c.textContent = label; c.addEventListener('click', function () { openContact(k); }); }
     var r = art.querySelector('.rep');
-    if (!me || me.handle === k.handle || !k.for_sale) r.hidden = true;
+    if (!me || me.handle === k.handle) r.hidden = true;
     else r.addEventListener('click', function () { openReport(k); });
     return art;
   }

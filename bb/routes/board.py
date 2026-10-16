@@ -127,14 +127,16 @@ def report_knife(knife_id):
     con = db.connect()
     try:
         k = db.get_knife_any(con, knife_id)
-        # only knives that are (or were, until hidden) ON the board are reportable —
-        # the board is the only place a stranger can see them (review H5/L7)
-        if k is None or k['status'] != 'live' or not k['is_public'] or k['sale_status'] != 'for_sale':
+        # only knives a stranger can see (or could, until hidden) are reportable
+        # (review H5/L7). Since the date board, that is any PUBLIC knife — for
+        # sale or not — so the test is db.public_knife, not db.board_knife.
+        if (k is None or k['status'] != 'live' or not k['is_public']
+                or k['sale_status'] in ('sold', 'consigned')):
             return jsonify({'error': 'not found'}), 404
         if k['owner_id'] == g.user['id']:
             return jsonify({'error': "that's your own knife"}), 400
-        if not k['hidden_at'] and db.board_knife(con, knife_id) is None:
-            return jsonify({'error': 'not found'}), 404          # for sale but never on the board (owner ineligible)
+        if not k['hidden_at'] and db.public_knife(con, knife_id) is None:
+            return jsonify({'error': 'not found'}), 404          # not visible to a stranger
         owner = db.get_user(con, k['owner_id'])
         # private or key-gated owners never appear on the board — a reporter
         # could not legitimately see such a knife, so treat it as not found.

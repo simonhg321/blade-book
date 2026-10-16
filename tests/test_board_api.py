@@ -228,3 +228,27 @@ def test_contact_refuses_sold_and_consigned_knives(client, mailer, con):
     assert client.post(f"{B}/{cons['id']}/contact", json={}).status_code == 404
     assert mailer.sent == []
     assert con.execute("SELECT count(*) FROM intros WHERE kind = 'board'").fetchone()[0] == 0
+
+
+def test_report_works_on_any_visible_knife(client, mailer, con, monkeypatch):
+    """The date board shows keeping knives to strangers, so they are reportable;
+    a private (or sold) knife is not visible and stays 404."""
+    from bb import publish
+    from tests.test_reports_api import _reporter_with_knife
+    monkeypatch.setattr(publish, 'schedule', lambda owner_id: None)
+    owner = _mk_user(con, email='kr@example.com', handle='kr-guy')      # fresh, unverified: no board gate
+    k = _mk_knife(con, owner['id'], born='2022-07-28')                   # keeping
+    private = _mk_knife(con, owner['id'], is_public=0)
+    sold = _mk_knife(con, owner['id'], sale_status='sold')
+    signed_in(client, mailer, email='rep@example.com')
+    r = client.post(f"{B}/{k['id']}/report", json={'reason': 'stolen photos'})
+    assert r.status_code == 200 and r.get_json() == {'ok': True, 'hidden': False}
+    assert client.post(f"{B}/{private['id']}/report", json={'reason': 'stolen photos'}).status_code == 404
+    assert client.post(f"{B}/{sold['id']}/report", json={'reason': 'stolen photos'}).status_code == 404
+    client.post('/blade-book/api/auth/signout')
+    hidden = None
+    for e in ('kc1@example.com', 'kc2@example.com', 'kc3@example.com'):
+        _reporter_with_knife(client, mailer, con, e)
+        hidden = client.post(f"{B}/{k['id']}/report", json={'reason': 'stolen photos'}).get_json()['hidden']
+        client.post('/blade-book/api/auth/signout')
+    assert hidden is True and db.public_knife(con, k['id']) is None      # three counting reports hide it

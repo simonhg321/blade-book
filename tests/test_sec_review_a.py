@@ -113,11 +113,16 @@ def test_three_fresh_accounts_cannot_hide_a_knife(client, mailer, con):
     assert db.get_knife_any(con, k['id'])['hidden_at'] is None
 
 
-def test_report_only_accepts_board_listings(client, mailer, con):
+def test_report_only_accepts_knives_a_stranger_can_see(client, mailer, con):
+    """Was 'board listings only'; the date board (2026-10-15) shows keeping
+    knives to strangers, so any visible public knife is reportable — a
+    private one still is not."""
     s = _seller(con)
-    k = _mk_knife(con, s['id'])                                   # keeping — never on the board
+    k = _mk_knife(con, s['id'])                                   # keeping — on the date board
+    private = _mk_knife(con, s['id'], is_public=0)
     signed_in(client, mailer, email='r@example.com')
-    assert client.post(f"{B}/{k['id']}/report", json={'reason': 'not for sale even'}).status_code == 404
+    assert client.post(f"{B}/{k['id']}/report", json={'reason': 'not for sale even'}).status_code == 200
+    assert client.post(f"{B}/{private['id']}/report", json={'reason': 'never public'}).status_code == 404
 
 
 # --- M1: state-changing API calls must come from our own origin ----------------
@@ -202,11 +207,15 @@ def test_decodes_are_rate_limited_per_minute(client, mailer, decoder):
     assert r.status_code == 429 and 'slow down' in r.get_json()['error']
 
 
-def test_report_needs_a_knife_that_is_actually_on_the_board(client, mailer, con):
+def test_report_needs_a_knife_that_is_actually_visible(client, mailer, con):
+    """An unverified owner's for-sale knife is off the For Sale board but ON the
+    date board (no owner gate there) — so it is reportable; private is not."""
     owner = _mk_user(con, email='unv@example.com', handle='unv-guy')     # unverified: never board-eligible
     k = _mk_knife(con, owner['id'], sale_status='for_sale', asking_price=100)
+    private = _mk_knife(con, owner['id'], sale_status='for_sale', asking_price=100, is_public=0)
     signed_in(client, mailer, email='r@example.com')
-    assert client.post(f"{B}/{k['id']}/report", json={'reason': 'not even listed'}).status_code == 404
+    assert client.post(f"{B}/{k['id']}/report", json={'reason': 'not even listed'}).status_code == 200
+    assert client.post(f"{B}/{private['id']}/report", json={'reason': 'not even public'}).status_code == 404
 
 
 def test_origin_gate_uses_base_url_scheme(client, mailer, monkeypatch):
