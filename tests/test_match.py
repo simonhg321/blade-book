@@ -281,3 +281,54 @@ def test_match_retry_lane_ignores_board_claims(con):
     assert match.run(con, m) == 0 and m.sent == []
     row = con.execute('SELECT sent_at FROM intros WHERE id = ?', (iid,)).fetchone()
     assert row['sent_at'] is None
+
+
+def _bd_want(**over):
+    base = {f: None for f in db.WANT_FIELDS} | {'mode': 'either', 'maker': 'crk'}
+    return dict(base, **over)
+
+
+def _k(**over):
+    k = {'maker': 'crk', 'model': 'Sebenza', 'blade_shape': '', 'blade_steel': '',
+         'born_on': '2022-07-28', 'born_on_precision': 'day', 'owner_hide_born_day': 0,
+         'sale_status': 'keeping', 'asking_price': None,
+         'ext': {'generation': '31', 'size': 'Small'}, 'notes_public': ''}
+    return dict(k, **over)
+
+
+def test_born_day_matches_any_sale_status_and_any_maker():
+    w = _bd_want(born_day='07-28')
+    assert match.knife_matches(w, _k())                                        # keeping
+    assert match.knife_matches(w, _k(sale_status='for_trade'))
+    assert match.knife_matches(w, _k(sale_status='for_sale', asking_price=900))
+    assert match.knife_matches(w, _k(maker='spyderco'))                        # the date is the criterion
+    assert not match.knife_matches(w, _k(born_on='2022-07-29'))
+    assert not match.knife_matches(w, _k(born_on='2022-07', born_on_precision='month'))
+    assert not match.knife_matches(w, _k(owner_hide_born_day=1))
+
+
+def test_born_day_keeps_the_other_criteria_and_the_price_gate():
+    assert not match.knife_matches(_bd_want(born_day='07-28', model='Inkosi'), _k())
+    assert match.knife_matches(_bd_want(born_day='07-28', model='Sebenza'), _k())
+    w = _bd_want(born_day='07-28', max_price=500)
+    assert match.knife_matches(w, _k())                                        # keeping: no price to fail
+    assert not match.knife_matches(w, _k(sale_status='for_sale', asking_price=900))
+    assert match.knife_matches(w, _k(sale_status='for_sale', asking_price=400))
+
+
+def test_ordinary_wants_still_need_a_listed_knife():
+    assert not match.knife_matches(_bd_want(model='Sebenza'), _k())            # keeping, no born_day
+
+
+def test_born_day_intro_email_says_so(con):
+    wanter = _u(con)
+    owner = _u(con, email='o2@example.com', handle='o2-guy', share_email_on_intro=1)
+    _mk_knife(con, owner['id'], born='2022-07-28')                             # keeping, public
+    db.create_want(con, wanter['id'], {'born_day': '07-28'})
+    m = FakeMailer()
+    assert match.run(con, m) == 2
+    to_wanter = next(x for x in m.sent if x['to'] == 'w@example.com')
+    assert to_wanter['text'].startswith('Born on your date, 7/28:')
+    assert 'July 28, 2022' in to_wanter['text']
+    to_owner = next(x for x in m.sent if x['to'] == 'o2@example.com')
+    assert 'born on 7/28' in to_owner['text']

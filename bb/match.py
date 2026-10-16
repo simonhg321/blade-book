@@ -56,20 +56,31 @@ def _born_year(k):
 
 def knife_matches(want, k):
     ext = k.get('ext') or {}
+    born_day = want.get('born_day')
     for f in ENUM_FIELDS:
+        if f == 'maker' and born_day:
+            continue                                   # a birthday want is brand-blind
         if want.get(f) and (k.get(f) or '').lower() != want[f].lower():
             return False
     for f in EXT_ENUM_FIELDS:
         if want.get(f) and (ext.get(f) or '').lower() != want[f].lower():
             return False
-    mode = want.get('mode') or 'either'
+    if born_day:
+        # day precision, owner shows the day, month-day equal — any sale status
+        if (k.get('born_on_precision') or 'day') != 'day' or k.get('owner_hide_born_day'):
+            return False
+        if (k.get('born_on') or '')[5:] != born_day:
+            return False
+    else:
+        mode = want.get('mode') or 'either'
+        ss = k.get('sale_status')
+        if mode == 'trade' and ss != 'for_trade':
+            return False
+        if mode == 'sale' and ss != 'for_sale':
+            return False
+        if mode == 'either' and ss not in ('for_trade', 'for_sale'):
+            return False
     ss = k.get('sale_status')
-    if mode == 'trade' and ss != 'for_trade':
-        return False
-    if mode == 'sale' and ss != 'for_sale':
-        return False
-    if mode == 'either' and ss not in ('for_trade', 'for_sale'):
-        return False
     if want.get('max_price') and ss == 'for_sale':
         if not k.get('asking_price') or k['asking_price'] > want['max_price']:
             return False
@@ -110,11 +121,14 @@ def _emails_for(intro_row, want, k):
     url = f"{_base()}/@{k['owner_handle']}/{k['tag']}/"
     share = (bool(want['_wanter_share']) and bool(k['owner_share_email'])
              and mail.deliverable(want['_wanter_email']) and mail.deliverable(k['owner_email']))
+    bd = want.get('born_day')
+    bd_short = f"{int(bd[:2])}/{int(bd[3:])}" if bd else ''
     to_wanter = {
         'to': want['_wanter_email'],
         'subject': f"blade-book: a match for your want — {k['tag']}",
-        'text': (f"A knife matching your want is on @{k['owner_handle']}'s register:\n\n"
-                 f"{card_text(k)}\n{url}\n\n"
+        'text': ((f"Born on your date, {bd_short}: a knife on @{k['owner_handle']}'s register.\n\n" if bd else
+                  f"A knife matching your want is on @{k['owner_handle']}'s register:\n\n")
+                 + f"{card_text(k)}\n{url}\n\n"
                  + ("Reply to this email to reach the owner.\n" if share else
                     "The owner hasn't shared a contact address. Watch their register — "
                     "and if you both turn on email sharing in blade-book, future intros "
@@ -125,7 +139,8 @@ def _emails_for(intro_row, want, k):
         'to': k['owner_email'],
         'subject': f"blade-book: someone wants your {k['tag']}",
         'text': (f"@{want['_wanter_handle']} has a want matching your {k['tag']} "
-                 f"({card_text(k, with_tag=False)}).\n{url}\n\n"
+                 + (f"— born on {bd_short} — " if bd else '')
+                 + f"({card_text(k, with_tag=False)}).\n{url}\n\n"
                  + ("Reply to this email to reach them.\n" if share else
                     "The wanter hasn't shared a contact address. If you both turn on "
                     "email sharing in blade-book, future intros will connect you "
