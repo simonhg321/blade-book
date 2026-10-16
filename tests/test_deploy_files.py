@@ -1058,3 +1058,11 @@ def test_landing_sign_in_returns_to_a_blade_book_path_only():
                    "localStorage.removeItem('bbNext')", "30 * 60 * 1000", "startsWith('/blade-book/')", "startsWith('/blade-book//')",
                    "location.replace(", 'Sign in to continue'):
         assert needle in html, needle
+
+
+def test_deploy_date_board_script():
+    s = _read('scripts/deploy_date_board.sh')
+    for needle in ('set -euo pipefail', 'cp -r "$CODE/html/." "$WWW/"', 'supervisorctl restart blade_book',
+                   '/blade-book/api/healthz', "/blade-book/api/born?d=7/28", 'BORN ON YOUR DATE', 'sudo -u shg'):
+        assert needle in s, needle
+    assert 'publish_sweep' not in s                      # register pages do not change
