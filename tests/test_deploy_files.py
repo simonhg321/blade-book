@@ -445,9 +445,11 @@ def test_board_page_wiring():
                    'id="bornform"', 'name="born"', 'FIND IT', 'id="results"', 'LATEST FOR SALE',
                    "'Born on '", "', other years'", "'Born within a week of '", 'days_off',
                    "'tell me when one is born on '", "'/blade-book/api/wants'", 'born_day',
-                   'history.replaceState', "'?born='", 'not listed', "'&next='", 'encodeURIComponent'):
+                   'history.replaceState', "'?born='", 'not listed', "'&next='", 'encodeURIComponent',
+                   "'/blade-book/board/' + location.search"):
         assert needle in html, needle
     assert 'innerHTML' not in html and 'fonts.googleapis.com' not in html
+    assert 'og:url' not in html          # a canonical og:url would strip ?born= from shared links
     assert 'THE BOARD</h1>' not in html and 'newest first.</p>' not in html
     for rel in ('index.html', 'search/index.html'):
         assert '/blade-book/board/' in open(os.path.join(ROOT, 'html', rel)).read(), rel
@@ -716,6 +718,9 @@ def test_static_pages_carry_full_og_card():
                        '<meta name="twitter:card" content="summary_large_image">'):
             assert needle in head, (rel, needle)
         url = 'https://blade-book.com/' + rel.replace('index.html', '')
+        if rel == 'board/index.html':     # the date board's links carry ?born= — no canonical og:url
+            assert 'og:url' not in head, rel
+            continue
         assert f'<meta property="og:url" content="{url}">' in head, (rel, url)
 
 

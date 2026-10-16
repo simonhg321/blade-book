@@ -9,7 +9,6 @@
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:site_name" content="blade-book">
-<meta property="og:url" content="https://blade-book.com/board/">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/svg+xml" href="/blade-book/mark.svg">
@@ -136,7 +135,7 @@
     return req(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
   }
   function money(n) { return '$' + Number(n).toLocaleString('en-US', { maximumFractionDigits: 0 }); }
-  function signIn() { location.href = '/blade-book/?auth=required' + '&next=' + encodeURIComponent(location.pathname + location.search); }
+  function signIn() { location.href = '/blade-book/?auth=required' + '&next=' + encodeURIComponent('/blade-book/board/' + location.search); }
   function offText(n) {
     if (!n) return '';
     if (n === 1) return 'born the day after your date';
