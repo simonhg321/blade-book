@@ -194,6 +194,11 @@ def test_public_knife_is_any_visible_public_knife(con):
     draft = db.create_draft_knife(con, u['id'])
     assert db.public_knife(con, draft['id']) is None
     assert db.public_knife(con, 999999) is None
+    # sold or consigned: the piece left the collection — off every public surface
+    sold = _mk_knife(con, u['id'], sale_status='sold')
+    assert db.public_knife(con, sold['id']) is None
+    consigned = _mk_knife(con, u['id'], sale_status='consigned')
+    assert db.public_knife(con, consigned['id']) is None
     # a private profile or a key-gated register hides every knife
     con.execute('UPDATE users SET profile_private = 1 WHERE id = ?', (u['id'],)); con.commit()
     assert db.public_knife(con, keeping['id']) is None
@@ -216,6 +221,8 @@ def test_date_board_knives_filters_by_month_day_and_visibility(con):
     _mk_knife(con, u['id'], born='2022-08-01')                                     # outside the list
     _mk_knife(con, u['id'], born='2022-07-28', is_public=0)                        # private
     _mk_knife(con, u['id'], born='2022-07-28', hidden_at=db.now())                 # hidden
+    _mk_knife(con, u['id'], born='2022-07-28', sale_status='sold')                 # sold
+    _mk_knife(con, u['id'], born='2022-07-28', sale_status='consigned')            # consigned
     month_only = _mk_knife(con, u['id'], born='2022-07')
     con.execute("UPDATE knives SET born_on_precision = 'month' WHERE id = ?", (month_only['id'],))
     con.commit()

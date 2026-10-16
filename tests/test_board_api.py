@@ -216,3 +216,15 @@ def test_contact_limits_apply_to_keeping_knives_too(client, mailer, con):
     for k in ks[:board.MAX_PER_SELLER_PER_DAY]:
         assert client.post(f"{B}/{k['id']}/contact", json={}).status_code == 200
     assert client.post(f"{B}/{ks[-1]['id']}/contact", json={}).status_code == 429
+
+
+def test_contact_refuses_sold_and_consigned_knives(client, mailer, con):
+    owner = _mk_user(con, email='gone@example.com', handle='gone-guy')
+    sold = _mk_knife(con, owner['id'], born='2022-07-28', sale_status='sold')
+    cons = _mk_knife(con, owner['id'], born='2022-07-28', sale_status='consigned')
+    signed_in(client, mailer, email='asker@example.com')
+    mailer.sent.clear()
+    assert client.post(f"{B}/{sold['id']}/contact", json={}).status_code == 404
+    assert client.post(f"{B}/{cons['id']}/contact", json={}).status_code == 404
+    assert mailer.sent == []
+    assert con.execute("SELECT count(*) FROM intros WHERE kind = 'board'").fetchone()[0] == 0

@@ -996,21 +996,26 @@ def all_public_knives(con):
     not sold/consigned, owner not private and not key-gated (a gated
     register is link+key only — never matched, plan 06/07 precedent);
     hidden (reports/admin) knives are excluded — plan 09."""
-    out = []
-    for r in con.execute(
-            "SELECT k.*, u.handle AS owner_handle, u.email AS owner_email, "
-            "u.share_email_on_intro AS owner_share_email, "
-            "u.hide_born_day AS owner_hide_born_day "
-            "FROM knives k JOIN users u ON u.id = k.owner_id "
-            "WHERE k.status = 'live' AND k.is_public = 1 "
-            "AND k.sale_status NOT IN ('sold', 'consigned') "
-            "AND k.hidden_at IS NULL "
-            "AND u.profile_private = 0 "
-            "AND (u.public_key IS NULL OR trim(u.public_key) = '') "
-            "ORDER BY k.id"):
-        d = _knife_row(con, r)
-        out.append(d)
-    return out
+    return [_knife_row(con, r) for r in con.execute(_PUBLIC_SELECT + ' ORDER BY k.id')]
+
+
+# ONE predicate for "a stranger may see this knife": live, public, not
+# sold/consigned (pieces that left the collection or sit with a dealer leave
+# the public surface), not hidden, owner not private and not key-gated.
+# Shared by the wants matcher (all_public_knives) and the date board
+# (public_knife / date_board_knives) so the two can never drift apart again.
+_PUBLIC_BASE = ("k.status = 'live' AND k.is_public = 1 "
+                "AND k.sale_status NOT IN ('sold', 'consigned') "
+                "AND k.hidden_at IS NULL "
+                "AND u.profile_private = 0 AND (u.public_key IS NULL OR trim(u.public_key) = '')")
+# The date board (spec 2026-10-15 §2): any PUBLIC knife, for sale or not — the
+# base with no for-sale clause and no owner eligibility gate: a hit is not a
+# listing; the abuse limits sit on the asker's side.
+_PUBLIC_WHERE = _PUBLIC_BASE
+_PUBLIC_SELECT = ("SELECT k.*, u.handle AS owner_handle, u.email AS owner_email, "
+                  "u.share_email_on_intro AS owner_share_email, "
+                  "u.hide_born_day AS owner_hide_born_day "
+                  "FROM knives k JOIN users u ON u.id = k.owner_id WHERE " + _PUBLIC_WHERE)
 
 
 BOARD_MIN_KNIFE_AGE_DAYS = 7
@@ -1020,10 +1025,8 @@ BOARD_MIN_KNIFE_AGE_DAYS = 7
 _BOARD_OWNER_OK = ("(u.is_admin = 1 OR (u.verified_at IS NOT NULL AND EXISTS ("
                    "SELECT 1 FROM knives k2 WHERE k2.owner_id = u.id AND k2.status = 'live' "
                    "AND k2.created <= ?)))")
-_BOARD_WHERE = ("k.status = 'live' AND k.is_public = 1 AND k.sale_status = 'for_sale' "
-                "AND k.hidden_at IS NULL "
-                "AND u.profile_private = 0 AND (u.public_key IS NULL OR trim(u.public_key) = '') "
-                "AND " + _BOARD_OWNER_OK)
+# the public base plus for-sale (which already excludes sold/consigned) plus the owner gate
+_BOARD_WHERE = _PUBLIC_BASE + " AND k.sale_status = 'for_sale' AND " + _BOARD_OWNER_OK
 _BOARD_SELECT = ("SELECT k.*, u.handle AS owner_handle, u.email AS owner_email, "
                  "u.share_email_on_intro AS owner_share_email, "
                  "u.hide_born_day AS owner_hide_born_day "
@@ -1069,15 +1072,6 @@ def board_knife(con, knife_id):
                                        (_board_cutoff(), knife_id)).fetchone())
 
 
-# The date board (spec 2026-10-15 §2): any PUBLIC knife, for sale or not. The
-# board predicate minus the for-sale clause and minus the owner eligibility
-# gate — a hit is not a listing; the abuse limits sit on the asker's side.
-_PUBLIC_WHERE = ("k.status = 'live' AND k.is_public = 1 AND k.hidden_at IS NULL "
-                 "AND u.profile_private = 0 AND (u.public_key IS NULL OR trim(u.public_key) = '')")
-_PUBLIC_SELECT = ("SELECT k.*, u.handle AS owner_handle, u.email AS owner_email, "
-                  "u.share_email_on_intro AS owner_share_email, "
-                  "u.hide_born_day AS owner_hide_born_day "
-                  "FROM knives k JOIN users u ON u.id = k.owner_id WHERE " + _PUBLIC_WHERE)
 # day-precision only: month-only knives and owners who hide the day are not on the date board
 _DATED = ("k.born_on_precision = 'day' AND u.hide_born_day = 0 "
           "AND k.born_on GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'")
@@ -1085,7 +1079,7 @@ _DATED = ("k.born_on_precision = 'day' AND u.hide_born_day = 0 "
 
 def public_knife(con, knife_id):
     """One public knife by id (any sale status), or None when it is not visible
-    for ANY reason (private, hidden, draft, private/gated owner, no such id)."""
+    for ANY reason (private, hidden, draft, sold/consigned, private/gated owner, no such id)."""
     return _knife_row(con, con.execute(_PUBLIC_SELECT + ' AND k.id = ?', (knife_id,)).fetchone())
 
 

@@ -67,3 +67,15 @@ def test_born_fresh_account_knife_is_findable(client, con):
     u = _mk_user(con, email='n@example.com', handle='n-guy')          # unverified, knife created now
     k = _mk_knife(con, u['id'], born='2022-07-28')
     assert [c['id'] for c in client.get(N + '?d=07-28').get_json()['same_day']] == [k['id']]
+
+
+def test_born_leaves_out_sold_and_consigned_knives(client, con):
+    u = _mk_user(con, email='sc@example.com', handle='sc-guy')
+    kept = _mk_knife(con, u['id'], born='2022-07-28')
+    sold = _mk_knife(con, u['id'], born='2022-07-28', sale_status='sold')
+    cons = _mk_knife(con, u['id'], born='1999-07-28', sale_status='consigned')
+    near_sold = _mk_knife(con, u['id'], born='2022-07-30', sale_status='sold')
+    j = client.get(N + '?d=7/28/1999').get_json()
+    ids = {k['id'] for g in ('exact', 'same_day', 'near') for k in j[g]}
+    assert ids == {kept['id']}
+    assert not ids & {sold['id'], cons['id'], near_sold['id']}
