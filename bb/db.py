@@ -1057,6 +1057,37 @@ def board_knife(con, knife_id):
                                        (_board_cutoff(), knife_id)).fetchone())
 
 
+# The date board (spec 2026-10-15 §2): any PUBLIC knife, for sale or not. The
+# board predicate minus the for-sale clause and minus the owner eligibility
+# gate — a hit is not a listing; the abuse limits sit on the asker's side.
+_PUBLIC_WHERE = ("k.status = 'live' AND k.is_public = 1 AND k.hidden_at IS NULL "
+                 "AND u.profile_private = 0 AND (u.public_key IS NULL OR trim(u.public_key) = '')")
+_PUBLIC_SELECT = ("SELECT k.*, u.handle AS owner_handle, u.email AS owner_email, "
+                  "u.share_email_on_intro AS owner_share_email, "
+                  "u.hide_born_day AS owner_hide_born_day "
+                  "FROM knives k JOIN users u ON u.id = k.owner_id WHERE " + _PUBLIC_WHERE)
+# day-precision only: month-only knives and owners who hide the day are not on the date board
+_DATED = ("k.born_on_precision = 'day' AND u.hide_born_day = 0 "
+          "AND k.born_on GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'")
+
+
+def public_knife(con, knife_id):
+    """One public knife by id (any sale status), or None when it is not visible
+    for ANY reason (private, hidden, draft, private/gated owner, no such id)."""
+    return _knife_row(con, con.execute(_PUBLIC_SELECT + ' AND k.id = ?', (knife_id,)).fetchone())
+
+
+def date_board_knives(con, month_days):
+    """Every visible, day-dated knife whose month-day is in `month_days`
+    (['07-28', ...]). Ranking happens in bb/born.rank(); this is the candidate pull."""
+    mds = [md for md in month_days if re.fullmatch(r'\d{2}-\d{2}', md or '')]
+    if not mds:
+        return []
+    ph = ','.join('?' * len(mds))
+    return [_knife_row(con, r) for r in con.execute(
+        _PUBLIC_SELECT + f' AND {_DATED} AND substr(k.born_on, 6) IN ({ph}) ORDER BY k.id', mds)]
+
+
 def claim_intro(con, want_id, knife_id, from_user, to_user, kind='match', message=None):
     """Claim an intro between a want and knife. For kind='match', dedupes on
     (from_user, knife_id) regardless of want_id — this is what actually

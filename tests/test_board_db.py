@@ -180,3 +180,56 @@ def test_board_card_honours_hide_born_day(con):
     k = _mk_knife(con, s['id'], sale_status='for_sale', asking_price=5)
     c = board.card(db.board_knife(con, k['id']))
     assert c['born'] == 'March 2008' and c['born_on'] == '2008-03'
+
+
+def test_public_knife_is_any_visible_public_knife(con):
+    u = _mk_user(con, email='p@example.com', handle='p-guy')
+    keeping = _mk_knife(con, u['id'])
+    assert db.public_knife(con, keeping['id'])['id'] == keeping['id']
+    assert db.public_knife(con, keeping['id'])['owner_handle'] == 'p-guy'
+    private = _mk_knife(con, u['id'], is_public=0)
+    assert db.public_knife(con, private['id']) is None
+    hidden = _mk_knife(con, u['id'], hidden_at=db.now())
+    assert db.public_knife(con, hidden['id']) is None
+    draft = db.create_draft_knife(con, u['id'])
+    assert db.public_knife(con, draft['id']) is None
+    assert db.public_knife(con, 999999) is None
+    # a private profile or a key-gated register hides every knife
+    con.execute('UPDATE users SET profile_private = 1 WHERE id = ?', (u['id'],)); con.commit()
+    assert db.public_knife(con, keeping['id']) is None
+    con.execute("UPDATE users SET profile_private = 0, public_key = 'k' WHERE id = ?", (u['id'],)); con.commit()
+    assert db.public_knife(con, keeping['id']) is None
+
+
+def test_public_knife_ignores_the_board_owner_gate(con):
+    """A fresh, unverified account's public knife is still a public knife (spec §2)."""
+    u = _mk_user(con, email='new@example.com', handle='new-guy')      # verified_at NULL, knife created now
+    k = _mk_knife(con, u['id'])
+    assert db.board_knife(con, k['id']) is None                        # not for sale, owner not eligible
+    assert db.public_knife(con, k['id'])['id'] == k['id']
+
+
+def test_date_board_knives_filters_by_month_day_and_visibility(con):
+    u = _mk_user(con, email='d@example.com', handle='d-guy')
+    a = _mk_knife(con, u['id'], born='2022-07-28')
+    b = _mk_knife(con, u['id'], born='1999-07-28', sale_status='for_sale', asking_price=500)
+    _mk_knife(con, u['id'], born='2022-08-01')                                     # outside the list
+    _mk_knife(con, u['id'], born='2022-07-28', is_public=0)                        # private
+    _mk_knife(con, u['id'], born='2022-07-28', hidden_at=db.now())                 # hidden
+    month_only = _mk_knife(con, u['id'], born='2022-07')
+    con.execute("UPDATE knives SET born_on_precision = 'month' WHERE id = ?", (month_only['id'],))
+    con.commit()
+    rows = db.date_board_knives(con, ['07-28', '07-29'])
+    assert [r['id'] for r in rows] == [a['id'], b['id']]
+    assert rows[0]['owner_handle'] == 'd-guy' and 'owner_email' in rows[0]
+    # owner hides the day → every knife of theirs leaves the date board
+    con.execute('UPDATE users SET hide_born_day = 1 WHERE id = ?', (u['id'],)); con.commit()
+    assert db.date_board_knives(con, ['07-28']) == []
+
+
+def test_date_board_knives_requires_a_full_date(con):
+    u = _mk_user(con, email='f@example.com', handle='f-guy')
+    k = _mk_knife(con, u['id'], born='2022-07-28')
+    con.execute("UPDATE knives SET born_on = '2022-07' WHERE id = ?", (k['id'],)); con.commit()   # precision still 'day'
+    assert db.date_board_knives(con, ['07-28', '07']) == []
+    assert db.date_board_knives(con, []) == []
