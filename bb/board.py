@@ -74,12 +74,13 @@ def contact_emails(buyer, k, message):
         'reply_to': buyer['email'] if share else None,
     }
     my_block = f"Your message:\n{message}\n\n" if message else ''
+    who = 'seller' if listed else 'owner'           # a keeping knife has an owner, not a seller
     to_buyer = {
         'to': buyer['email'],
         'subject': subject_buyer,
         'text': (f"{lead_buyer}\n{url}\n\n{my_block}"
-                 + ("Reply to this email to reach the seller.\n" if share else
-                    "The seller hasn't shared a contact address. Watch their register — "
+                 + (f"Reply to this email to reach the {who}.\n" if share else
+                    f"The {who} hasn't shared a contact address. Watch their register — "
                     "and if you both turn on email sharing in blade-book, future intros "
                     "will connect you directly.\n")),
         'reply_to': k['owner_email'] if share else None,

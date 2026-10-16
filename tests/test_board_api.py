@@ -185,6 +185,7 @@ def test_contact_on_a_keeping_knife_asks_the_owner(client, mailer, con):
     assert 'not listed for sale' in to_owner['text'] and 'date board' in to_owner['text']
     assert 'on the board' not in to_owner['text'] and 'interested' not in to_owner['subject']
     assert f"We asked @keeper about their {k['tag']}" in to_buyer['text'] and 'not listed for sale' in to_buyer['text']
+    assert 'the owner' in to_buyer['text'].lower() and 'seller' not in to_buyer['text'].lower()
     rows = [dict(r) for r in con.execute("SELECT * FROM intros WHERE kind = 'board'")]
     assert len(rows) == 1 and rows[0]['to_user'] == owner['id']
 
