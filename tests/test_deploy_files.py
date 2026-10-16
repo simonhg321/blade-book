@@ -437,13 +437,18 @@ def test_wants_page_wiring():
 
 def test_board_page_wiring():
     html = open(os.path.join(ROOT, 'html', 'board', 'index.html')).read()
-    for needle in ('THE BOARD', "'/blade-book/api/board'", "'/auth/me'", 'id="cards"', 'id="more"',
-                   'id="tpl"', 'id="cdlg"', 'id="rdlg"', '/contact', '/report', 'contact seller', 'report',
-                   'maxlength="500"', '429', '502', 'sign in to contact', 'bbmark', '/blade-book/mark.svg',
-                   'href="/blade-book/vibe.css?v=20260927"', 'seller_note', 'asking_price', 'listed_at',
-                   "'/blade-book/@' + k.handle + '/img/' + k.img_t"):
+    for needle in ('BORN ON YOUR DATE', "'/blade-book/api/board'", "'/blade-book/api/born'", "'/auth/me'",
+                   'id="cards"', 'id="more"', 'id="tpl"', 'id="cdlg"', 'id="rdlg"', '/contact', '/report',
+                   'contact seller', "'ask @' + k.handle", 'report', 'maxlength="500"', '429', '502',
+                   'sign in to ask', 'bbmark', '/blade-book/mark.svg', 'href="/blade-book/vibe.css?v=20260927"',
+                   'seller_note', 'asking_price', 'listed_at', "'/blade-book/@' + k.handle + '/img/' + k.img_t",
+                   'id="bornform"', 'name="born"', 'FIND IT', 'id="results"', 'LATEST FOR SALE',
+                   "'Born on '", "', other years'", "'Born within a week of '", 'days_off',
+                   "'tell me when one is born on '", "'/blade-book/api/wants'", 'born_day',
+                   'history.replaceState', "'?born='", 'not listed', "'&next='", 'encodeURIComponent'):
         assert needle in html, needle
     assert 'innerHTML' not in html and 'fonts.googleapis.com' not in html
+    assert 'THE BOARD</h1>' not in html and 'newest first.</p>' not in html
     for rel in ('index.html', 'search/index.html'):
         assert '/blade-book/board/' in open(os.path.join(ROOT, 'html', rel)).read(), rel
 
@@ -1026,3 +1031,10 @@ def test_add_cron_line_with_only_our_line_in_the_table(tmp_path):
 def test_wants_page_summarises_a_born_day_want():
     html = _read('html/me/wants/index.html')
     assert "w.born_day" in html and "'born on '" in html
+
+
+def test_board_page_order_search_then_results_then_feed():
+    html = _read('html/board/index.html')
+    assert html.index('id="bornform"') < html.index('id="results"') < html.index('LATEST FOR SALE') < html.index('id="cards"')
+    assert 'og:description" content="Is there a knife born on your date?' in html
+    assert "days after your date" in html and "days before your date" in html and "the day before your date" in html

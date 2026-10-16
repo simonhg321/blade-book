@@ -2,9 +2,9 @@
 <!-- Copyright (c) 2026 Simon SGH — blade-book.com — Licensed under the Elastic License 2.0 (see LICENSE) -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>blade-book — the board</title>
-<meta property="og:title" content="The board — blade-book">
-<meta property="og:description" content="Knives for sale from registered collectors — newest first.">
+<title>blade-book — born on your date</title>
+<meta property="og:title" content="Born on your date — blade-book">
+<meta property="og:description" content="Is there a knife born on your date? Search every registered collector's knives by birthday — for sale or not, you can ask the owner.">
 <meta property="og:image" content="https://blade-book.com/og.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -45,18 +45,38 @@
   dialog textarea{width:100%;font:inherit;padding:.6rem;border:1px solid var(--line);border-radius:8px;min-height:90px;box-sizing:border-box}
   dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
   .cta{display:block;text-align:center;padding:1.1rem 0;font-size:1.2rem;font-weight:800;letter-spacing:.06em;background:var(--accent);color:#fff;border-radius:14px;text-decoration:none;margin:26px 0 10px}
+  #bornform{display:flex;gap:8px;margin:0 0 6px}
+  #bornform input{flex:1;font:inherit;font-size:1.1rem;padding:.7rem .8rem;border:2px solid var(--ink);border-radius:10px;min-width:0}
+  #bornform .btn{white-space:nowrap}
+  .hint{text-align:center;color:var(--muted);font-size:.85rem;margin:0 0 14px}
+  #results h2,#feed h2{font-family:'Bebas Neue',Impact,sans-serif;font-weight:400;font-size:1.6rem;letter-spacing:.06em;margin:22px 0 10px}
+  .group{display:grid;gap:14px}
+  .knife .off{color:var(--muted);font-size:.82rem;margin-top:2px}
+  .knife .price.nl{background:var(--soft);color:var(--ink)}
+  #wantrow{text-align:center;margin:22px 0 6px}
+  #wantrow .btn{font-size:.95rem}
 </style>
 
 <div class="bb-top"><a class="brand" href="/blade-book/"><img src="/blade-book/mark.svg" alt="" width="22" height="22">BLADE-BOOK</a><nav aria-label="blade-book"><a href="/blade-book/search/">search</a><a href="/blade-book/board/">the board</a><a class="bb-auth" href="/blade-book/me/">sign in</a></nav></div>
 <div class="page">
 <header>
   <a href="/blade-book/"><img class="bbmark" src="/blade-book/mark.svg" alt="blade-book" width="72"></a>
-  <h1>THE BOARD</h1>
+  <h1>BORN ON YOUR DATE</h1>
 </header>
-<p class="lede">Knives for sale from registered collectors, newest first.</p>
+<p class="lede">Type a date — a birthday, an anniversary, the day you got the first one. See every registered knife born on it. Not for sale? Ask the owner anyway.</p>
+<form id="bornform" autocomplete="off">
+  <input id="born" name="born" type="text" inputmode="numeric" maxlength="32" placeholder="7/28 or 7/28/1999" aria-label="a date">
+  <button class="btn accent" type="submit">FIND IT</button>
+</form>
+<p class="hint">month and day are enough — the year is optional</p>
 <div id="status" aria-live="polite"></div>
-<div id="cards"></div>
-<button id="more" class="btn alt" type="button" hidden>show more</button>
+<div id="results"></div>
+<div id="wantrow" hidden><button id="wantbtn" class="btn alt" type="button"></button></div>
+<section id="feed">
+  <h2>LATEST FOR SALE</h2>
+  <div id="cards"></div>
+  <button id="more" class="btn alt" type="button" hidden>show more</button>
+</section>
 
 <template id="tpl">
   <article class="knife">
@@ -64,6 +84,7 @@
     <div class="body">
       <div class="name"></div>
       <div class="sub"></div>
+      <div class="off"></div>
       <span class="price"></span>
       <div class="note hidden"></div>
       <div class="acts">
@@ -75,7 +96,7 @@
 </template>
 
 <dialog id="cdlg">
-  <h2>Contact the seller</h2>
+  <h2>Contact the owner</h2>
   <p id="cwho"></p>
   <textarea id="cmsg" maxlength="500" placeholder="optional — a line about what you're after, or an offer"></textarea>
   <div class="row"><button class="btn link" type="button" id="ccancel">cancel</button><button class="btn" type="button" id="csend">send intro</button></div>
@@ -96,9 +117,11 @@
 (function () {
   var API = '/blade-book/api';
   var BOARD = '/blade-book/api/board';
+  var BORN = '/blade-book/api/born';
+  var WANTS = '/blade-book/api/wants';
   var LIMIT = 24;
   var $ = function (id) { return document.getElementById(id); };
-  var me = null, offset = 0, total = 0, current = null, loading = false;
+  var me = null, offset = 0, total = 0, current = null, loading = false, query = null;
 
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function clear(n) { while (n.firstChild) n.removeChild(n.firstChild); }
@@ -113,6 +136,13 @@
     return req(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
   }
   function money(n) { return '$' + Number(n).toLocaleString('en-US', { maximumFractionDigits: 0 }); }
+  function signIn() { location.href = '/blade-book/?auth=required' + '&next=' + encodeURIComponent(location.pathname + location.search); }
+  function offText(n) {
+    if (!n) return '';
+    if (n === 1) return 'born the day after your date';
+    if (n === -1) return 'born the day before your date';
+    return 'born ' + Math.abs(n) + (n > 0 ? ' days after your date' : ' days before your date');
+  }
 
   function renderCard(k) {
     var art = $('tpl').content.firstElementChild.cloneNode(true);
@@ -128,34 +158,82 @@
     var bits = [];
     if (k.born) bits.push('born ' + k.born);
     bits.push('@' + k.handle);
-    if (k.listed_at) bits.push('listed ' + k.listed_at.slice(0, 10));
+    if (k.for_sale && k.listed_at) bits.push('listed ' + k.listed_at.slice(0, 10));
     art.querySelector('.sub').textContent = bits.join(' · ');
-    art.querySelector('.price').textContent = k.asking_price ? 'asking ' + money(k.asking_price) : 'FOR SALE · inquire';
+    art.querySelector('.off').textContent = offText(k.days_off);
+    var price = art.querySelector('.price');
+    if (k.for_sale) price.textContent = k.asking_price ? 'asking ' + money(k.asking_price) : 'FOR SALE · inquire';
+    else { price.textContent = 'not listed'; price.classList.add('nl'); }
     if (k.seller_note) { var n = art.querySelector('.note'); n.textContent = k.seller_note; n.classList.remove('hidden'); }
     var c = art.querySelector('.contact');
-    if (!me) { c.textContent = 'sign in to contact'; c.addEventListener('click', function () { location.href = '/blade-book/?auth=required'; }); }
-    else if (me.handle === k.handle) { c.disabled = true; c.textContent = 'your listing'; }
-    else c.addEventListener('click', function () { openContact(k); });
+    var label = k.for_sale ? 'contact seller' : 'ask @' + k.handle;
+    if (!me) { c.textContent = k.for_sale ? 'sign in to contact' : 'sign in to ask'; c.addEventListener('click', signIn); }
+    else if (me.handle === k.handle) { c.disabled = true; c.textContent = k.for_sale ? 'your listing' : 'your knife'; }
+    else { c.textContent = label; c.addEventListener('click', function () { openContact(k); }); }
     var r = art.querySelector('.rep');
-    if (!me || me.handle === k.handle) r.hidden = true;
+    if (!me || me.handle === k.handle || !k.for_sale) r.hidden = true;
     else r.addEventListener('click', function () { openReport(k); });
     return art;
   }
+
+  function renderGroup(box, heading, cards) {
+    if (!cards || !cards.length) return 0;
+    box.appendChild(el('h2', null, heading));
+    var g = el('div', 'group');
+    cards.forEach(function (k) { g.appendChild(renderCard(k)); });
+    box.appendChild(g);
+    return cards.length;
+  }
+
+  function search(text, push) {
+    text = (text || '').trim();
+    if (!text) return;
+    say('looking…');
+    req(BORN + '?d=' + encodeURIComponent(text)).then(function (res) {
+      var box = $('results'); clear(box);
+      if (res.status !== 200) { say(res.j.error || 'could not search', true); $('wantrow').hidden = true; return; }
+      say('');
+      query = res.j.query;
+      $('born').value = text;
+      if (push) history.replaceState(null, '', '?born=' + query.url);
+      var md = query.label.replace(/, \d{4}$/, '');
+      var n = renderGroup(box, 'Born on ' + query.label, res.j.exact)
+            + renderGroup(box, 'Born on ' + md + ', other years', res.j.same_day)
+            + renderGroup(box, 'Born within a week of ' + md, res.j.near);
+      if (!n) box.appendChild(el('div', 'empty', 'Nothing within a week of ' + md + ' yet.'));
+      $('wantbtn').textContent = 'tell me when one is born on ' + query.short;
+      $('wantrow').hidden = false;
+    }).catch(function () { say('could not reach the server', true); });
+  }
+
+  $('bornform').addEventListener('submit', function (ev) { ev.preventDefault(); search($('born').value, true); });
+
+  $('wantbtn').addEventListener('click', function () {
+    if (!query) return;
+    if (!me) { signIn(); return; }
+    var bd = ('0' + query.month).slice(-2) + '-' + ('0' + query.day).slice(-2);
+    $('wantbtn').disabled = true;
+    post(WANTS, { born_day: bd }).then(function (res) {
+      $('wantbtn').disabled = false;
+      if (res.status === 401) { signIn(); return; }
+      if (!res.ok) { say('✗ ' + (res.j.error || 'could not save that'), true); return; }
+      say('✓ we’ll email you when a knife born on ' + query.short + ' goes public');
+      window.scrollTo(0, 0);
+    }).catch(function () { $('wantbtn').disabled = false; say('could not reach the server', true); });
+  });
 
   function load() {
     if (loading) return;
     loading = true;
     $('more').disabled = true;
-    say('loading…');
     req(BOARD + '?limit=' + LIMIT + '&offset=' + offset).then(function (res) {
       loading = false;
       $('more').disabled = false;
       if (res.status !== 200) { say(res.j.error || 'could not load the board', true); return; }
-      say('');
       total = res.j.count;
       var box = $('cards');
       if (offset === 0) clear(box);
-      if (!total) { box.appendChild(el('div', 'empty', 'nothing on the board yet — list a knife from your register')); }
+      if (!total) { box.appendChild(el('div', 'empty', 'nothing for sale yet — list a knife from your register')); }
       (res.j.knives || []).forEach(function (k) { box.appendChild(renderCard(k)); });
       offset += (res.j.knives || []).length;
       $('more').hidden = offset >= total;
@@ -164,7 +242,7 @@
 
   function openContact(k) {
     current = k;
-    $('cwho').textContent = 'One intro email goes to @' + k.handle + ' about ' + (k.name || k.tag) + ', and a copy to you. Up to three intros per seller per day.';
+    $('cwho').textContent = 'One intro email goes to @' + k.handle + ' about ' + (k.name || k.tag) + ', and a copy to you. Up to three intros per owner per day.';
     $('cmsg').value = '';
     $('cdlg').showModal();
   }
@@ -174,7 +252,7 @@
     $('csend').disabled = true;
     post(BOARD + '/' + k.id + '/contact', { message: $('cmsg').value.trim() }).then(function (res) {
       $('csend').disabled = false;
-      if (res.status === 401) { location.href = '/blade-book/?auth=required'; return; }
+      if (res.status === 401) { signIn(); return; }
       if (res.status === 429 || res.status === 502 || !res.ok) { say('✗ ' + (res.j.error || 'could not send'), true); $('cdlg').close(); return; }
       $('cdlg').close();
       say('✓ intro sent to @' + k.handle + ' — check your email for the copy');
@@ -196,7 +274,7 @@
     post(BOARD + '/' + k.id + '/report', { reason: reason }).then(function (res) {
       $('rsend').disabled = false;
       $('rdlg').close();
-      if (res.status === 401) { location.href = '/blade-book/?auth=required'; return; }
+      if (res.status === 401) { signIn(); return; }
       if (!res.ok) { say('✗ ' + (res.j.error || 'could not report'), true); return; }
       say(res.j.hidden ? '✓ reported — the listing is now hidden pending review' : '✓ reported — thank you');
       window.scrollTo(0, 0);
@@ -205,7 +283,11 @@
 
   $('more').addEventListener('click', load);
 
-  req(API + '/auth/me').then(function (res) { me = res.ok ? res.j : null; }).catch(function () { me = null; }).then(load);
+  req(API + '/auth/me').then(function (res) { me = res.ok ? res.j : null; }).catch(function () { me = null; }).then(function () {
+    load();
+    var born = new URLSearchParams(location.search).get('born');
+    if (born) search(born, true);
+  });
 })();
 </script>
 <script src="/blade-book/nav.js?v=20260927" defer></script>
