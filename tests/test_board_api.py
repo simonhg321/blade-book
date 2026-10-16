@@ -72,8 +72,8 @@ def test_contact_validation_and_not_found(client, mailer, con):
     assert client.post(f"{B}/{k['id']}/contact", json={'message': 5}).status_code == 400
     assert client.post(f"{B}/{k['id']}/contact", json=[1]).status_code == 400
     assert client.post(f"{B}/999999/contact", json={}).status_code == 404
-    keeping = _mk_knife(con, s['id'])
-    assert client.post(f"{B}/{keeping['id']}/contact", json={}).status_code == 404   # not on the board
+    private = _mk_knife(con, s['id'], is_public=0)
+    assert client.post(f"{B}/{private['id']}/contact", json={}).status_code == 404   # not public (keeping knives are now contactable)
     db.hide_knife(con, k['id'], 'admin', 'x')
     assert client.post(f"{B}/{k['id']}/contact", json={}).status_code == 404         # hidden → not on the board
 
@@ -167,3 +167,52 @@ def test_contact_no_reply_to_when_only_buyer_shares_off(client, mailer, con):
     for m in mailer.sent:
         assert m['reply_to'] is None
         assert 'quiet@example.com' not in m['text'] and 's@example.com' not in m['text']
+
+
+def test_contact_on_a_keeping_knife_asks_the_owner(client, mailer, con):
+    """The date board: 'ask the owner' works on any public knife (spec §3)."""
+    owner = _mk_user(con, email='keep@example.com', handle='keeper')
+    k = _mk_knife(con, owner['id'], born='2022-07-28')                       # sale_status keeping, fresh account
+    assert db.board_knife(con, k['id']) is None
+    buyer = signed_in(client, mailer, email='asker@example.com')
+    mailer.sent.clear()
+    r = client.post(f"{B}/{k['id']}/contact", json={'message': 'Born on my son\'s birthday — would you sell?'})
+    assert r.status_code == 200 and r.get_json() == {'ok': True}
+    to_owner = next(m for m in mailer.sent if m['to'] == 'keep@example.com')
+    to_buyer = next(m for m in mailer.sent if m['to'] == 'asker@example.com')
+    assert to_owner['subject'] == f"blade-book: someone asked about your {k['tag']}"
+    assert f"@{buyer['handle']} asked about your {k['tag']}" in to_owner['text']
+    assert 'not listed for sale' in to_owner['text'] and 'date board' in to_owner['text']
+    assert 'on the board' not in to_owner['text'] and 'interested' not in to_owner['subject']
+    assert f"We asked @keeper about their {k['tag']}" in to_buyer['text'] and 'not listed for sale' in to_buyer['text']
+    rows = [dict(r) for r in con.execute("SELECT * FROM intros WHERE kind = 'board'")]
+    assert len(rows) == 1 and rows[0]['to_user'] == owner['id']
+
+
+def test_contact_for_sale_wording_is_unchanged(client, mailer, con):
+    s, k = _listing(con)
+    signed_in(client, mailer, email='buyer@example.com')
+    mailer.sent.clear()
+    assert client.post(f"{B}/{k['id']}/contact", json={}).status_code == 200
+    to_seller = next(m for m in mailer.sent if m['to'] == 's@example.com')
+    assert 'someone on the board is interested in your' in to_seller['subject']
+    assert 'not listed' not in to_seller['text']
+
+
+def test_contact_still_refuses_private_and_hidden_knives(client, mailer, con):
+    owner = _mk_user(con, email='pv@example.com', handle='pv-guy')
+    private = _mk_knife(con, owner['id'], is_public=0)
+    hidden = _mk_knife(con, owner['id'], hidden_at=db.now())
+    signed_in(client, mailer, email='asker@example.com')
+    assert client.post(f"{B}/{private['id']}/contact", json={}).status_code == 404
+    assert client.post(f"{B}/{hidden['id']}/contact", json={}).status_code == 404
+
+
+def test_contact_limits_apply_to_keeping_knives_too(client, mailer, con):
+    from bb import board
+    owner = _mk_user(con, email='lim@example.com', handle='lim-guy')
+    ks = [_mk_knife(con, owner['id']) for _ in range(board.MAX_PER_SELLER_PER_DAY + 1)]
+    signed_in(client, mailer, email='asker@example.com')
+    for k in ks[:board.MAX_PER_SELLER_PER_DAY]:
+        assert client.post(f"{B}/{k['id']}/contact", json={}).status_code == 200
+    assert client.post(f"{B}/{ks[-1]['id']}/contact", json={}).status_code == 429

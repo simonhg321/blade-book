@@ -64,7 +64,7 @@ def contact_seller(knife_id):
         return jsonify({'error': str(e)}), 400
     con = db.connect()
     try:
-        k = db.board_knife(con, knife_id)
+        k = db.public_knife(con, knife_id)      # any public knife: the date board's "ask the owner"
         if k is None:
             return jsonify({'error': 'not found'}), 404
         if k['owner_id'] == g.user['id']:

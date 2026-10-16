@@ -48,13 +48,26 @@ def contact_emails(buyer, k, message):
     share = (bool(buyer.get('share_email_on_intro')) and bool(k.get('owner_share_email'))
              and mail.deliverable(buyer['email']) and mail.deliverable(k['owner_email']))
     text = match.card_text(k)
+    listed = k.get('sale_status') == 'for_sale'
+    if not listed:
+        text = f'{text} · not listed for sale'
     msg_block = (f"Their message (written by @{buyer['handle']} on blade-book — "
                  f"we haven't checked it):\n{message}\n\n") if message else ''
+    if listed:
+        subject_owner = f"blade-book: someone on the board is interested in your {k['tag']}"
+        lead_owner = f"@{buyer['handle']} is interested in your {k['tag']} on the board ({text})."
+        subject_buyer = f"blade-book: we told @{k['owner_handle']} you're interested in {k['tag']}"
+        lead_buyer = f"We let @{k['owner_handle']} know you're interested in their {k['tag']} ({text})."
+    else:
+        subject_owner = f"blade-book: someone asked about your {k['tag']}"
+        lead_owner = (f"@{buyer['handle']} asked about your {k['tag']} ({text}). "
+                      f"They found it on the date board.")
+        subject_buyer = f"blade-book: we asked @{k['owner_handle']} about {k['tag']}"
+        lead_buyer = f"We asked @{k['owner_handle']} about their {k['tag']} ({text})."
     to_seller = {
         'to': k['owner_email'],
-        'subject': f"blade-book: someone on the board is interested in your {k['tag']}",
-        'text': (f"@{buyer['handle']} is interested in your {k['tag']} on the board "
-                 f"({text}).\n{url}\n\n{msg_block}"
+        'subject': subject_owner,
+        'text': (f"{lead_owner}\n{url}\n\n{msg_block}"
                  + ("Reply to this email to reach them.\n" if share else
                     "They haven't shared a contact address. If you both turn on email "
                     "sharing in blade-book, future intros will connect you directly.\n")),
@@ -63,9 +76,8 @@ def contact_emails(buyer, k, message):
     my_block = f"Your message:\n{message}\n\n" if message else ''
     to_buyer = {
         'to': buyer['email'],
-        'subject': f"blade-book: we told @{k['owner_handle']} you're interested in {k['tag']}",
-        'text': (f"We let @{k['owner_handle']} know you're interested in their {k['tag']} "
-                 f"({text}).\n{url}\n\n{my_block}"
+        'subject': subject_buyer,
+        'text': (f"{lead_buyer}\n{url}\n\n{my_block}"
                  + ("Reply to this email to reach the seller.\n" if share else
                     "The seller hasn't shared a contact address. Watch their register — "
                     "and if you both turn on email sharing in blade-book, future intros "
