@@ -1038,3 +1038,23 @@ def test_board_page_order_search_then_results_then_feed():
     assert html.index('id="bornform"') < html.index('id="results"') < html.index('LATEST FOR SALE') < html.index('id="cards"')
     assert 'og:description" content="Is there a knife born on your date?' in html
     assert "days after your date" in html and "days before your date" in html and "the day before your date" in html
+
+
+def test_landing_leads_with_a_knife_born_on_your_day():
+    html = _read('html/index.html')
+    hero = html.split('<header class="hero">')[1].split('</header>')[0]
+    assert 'A knife born on <em>your day.</em>' in hero
+    assert 'action="/blade-book/board/"' in hero and 'method="get"' in hero and 'name="born"' in hero
+    assert 'FIND IT' in hero and 'placeholder="7/28 or 7/28/1999"' in hero
+    assert 'One photo. Your whole collection, on the record.' in hero          # the old headline lives on as the lede
+    assert 'START YOUR REGISTER' in hero and 'SEE A REAL ONE' in hero
+    assert hero.index('name="born"') < hero.index('START YOUR REGISTER')
+    assert 'K75' in hero                                                       # the Night Sky caption stays
+
+
+def test_landing_sign_in_returns_to_a_blade_book_path_only():
+    html = _read('html/index.html')
+    for needle in ("get('next')", "sessionStorage.setItem('bbNext'", "sessionStorage.getItem('bbNext')",
+                   "sessionStorage.removeItem('bbNext')", "startsWith('/blade-book/')", "startsWith('/blade-book//')",
+                   "location.replace(", 'Sign in to continue'):
+        assert needle in html, needle
