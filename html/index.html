@@ -73,7 +73,7 @@ html{scroll-behavior:smooth}
 .hero form.born{display:flex;gap:10px;max-width:34em;margin:0 0 18px}
 .hero form.born input{flex:1;min-width:0;font:inherit;font-size:1.15rem;padding:.85rem 1rem;border:2px solid #fff;border-radius:12px;background:rgba(255,255,255,.96);color:#111}
 .hero form.born .btn{white-space:nowrap}
-.hero p.sub{font-size:.95rem;opacity:.85;margin:0 0 22px;max-width:34em}
+.hero p.sub{font-size:.95rem;color:#fff;opacity:.85;margin:0 0 22px;max-width:34em}
 .cta{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
 .cta .btn{font-size:1rem;padding:.9rem 1.3rem;text-decoration:none;display:inline-block}
 .cta .ghost{background:transparent;border-color:#fff;color:#fff}
@@ -173,7 +173,7 @@ main{padding:40px 0 50px}
     <h1 class="bb-display">A knife born on <em>your day.</em></h1>
     <p class="lede">Type a date — a birthday, an anniversary — and see every registered knife born on it. Not for sale? Ask the owner anyway.</p>
     <form class="born" action="/blade-book/board/" method="get" autocomplete="off">
-      <input name="born" type="text" inputmode="numeric" maxlength="32" placeholder="7/28 or 7/28/1999" aria-label="a date" required>
+      <input name="born" type="text" maxlength="32" placeholder="7/28 or 7/28/1999" aria-label="a date" required>
       <button class="btn accent" type="submit">FIND IT</button>
     </form>
     <p class="sub">blade-book is a register for knife collectors. One photo. Your whole collection, on the record.</p>
@@ -380,20 +380,29 @@ main{padding:40px 0 50px}
   const msg = (t, err) => { for (const id of ['msg', 'sent-msg']) { $(id).textContent = t; $(id).className = 'msg' + (err ? ' err' : ''); } };
 
   const flag = new URLSearchParams(location.search).get('auth');
+  const okPath = p => typeof p === 'string' && p.startsWith('/blade-book/') && !p.startsWith('/blade-book//');
   const nextRaw = new URLSearchParams(location.search).get('next');
-  if (nextRaw && nextRaw.startsWith('/blade-book/') && !nextRaw.startsWith('/blade-book//')) {
-    try { sessionStorage.setItem('bbNext', nextRaw); } catch (e) {}
+  if (okPath(nextRaw)) {
+    try { localStorage.setItem('bbNext', JSON.stringify({p: nextRaw, t: Date.now()})); } catch (e) {}
   }
   let bbNext = null;
-  try { bbNext = sessionStorage.getItem('bbNext'); } catch (e) {}
+  try {
+    const raw = localStorage.getItem('bbNext');
+    if (raw !== null) {
+      let rec = null;
+      try { rec = JSON.parse(raw); } catch (e) {}
+      if (rec && okPath(rec.p) && Date.now() - rec.t < 30 * 60 * 1000) bbNext = rec.p;
+      else localStorage.removeItem('bbNext');
+    }
+  } catch (e) {}
   if (flag === 'expired') msg('That link has expired or was already used — request a new one.', true);
   if (flag === 'failed') msg('Sign-in did not complete. Try again.', true);
   if (flag === 'required') msg(bbNext ? 'Sign in to continue \u2014 we\u2019ll take you back.' : 'Sign in to see your register.', true);
   if (flag === 'unverified') msg('Your sign-in provider has not verified that email address — use the email link instead.', true);
 
   const me = await fetch(API + '/me', {credentials: 'same-origin'});
-  if (me.ok && bbNext && bbNext.startsWith('/blade-book/') && !bbNext.startsWith('/blade-book//')) {
-    try { sessionStorage.removeItem('bbNext'); } catch (e) {}
+  if (me.ok && bbNext) {
+    try { localStorage.removeItem('bbNext'); } catch (e) {}
     location.replace(bbNext);
     return;
   }

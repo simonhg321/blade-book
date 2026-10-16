@@ -1184,7 +1184,7 @@ Body, replacing everything from `<header>` through `<button id="more" ...>`:
 </header>
 <p class="lede">Type a date — a birthday, an anniversary, the day you got the first one. See every registered knife born on it. Not for sale? Ask the owner anyway.</p>
 <form id="bornform" autocomplete="off">
-  <input id="born" name="born" type="text" inputmode="numeric" maxlength="32" placeholder="7/28 or 7/28/1999" aria-label="a date">
+  <input id="born" name="born" type="text" maxlength="32" placeholder="7/28 or 7/28/1999" aria-label="a date">
   <button class="btn accent" type="submit">FIND IT</button>
 </form>
 <p class="hint">month and day are enough — the year is optional</p>
@@ -1479,7 +1479,7 @@ Claude-Session: https://claude.ai/code/session_01VfqgG6C2YWucfnqGWoS7Xf"
 
 **Interfaces:**
 - Consumes: `/blade-book/board/?born=` (Task 8).
-- Produces: `GET /blade-book/?auth=required&next=<path>` stores `next` in `sessionStorage['bbNext']`; once `/api/auth/me` is OK on the landing, a stored `bbNext` that starts with `/blade-book/` and does not start with `/blade-book//` is cleared and navigated to.
+- Produces: `GET /blade-book/?auth=required&next=<path>` stores `next` in `localStorage['bbNext']` as `{p, t}` (survives the magic link opening in a new tab; expires after 30 minutes); once `/api/auth/me` is OK on the landing, a valid unexpired `bbNext` whose path starts with `/blade-book/` and not `/blade-book//` is cleared and navigated to.
 
 - [ ] **Step 1: Write the failing tests** (append to `tests/test_deploy_files.py`)
 
@@ -1498,8 +1498,8 @@ def test_landing_leads_with_a_knife_born_on_your_day():
 
 def test_landing_sign_in_returns_to_a_blade_book_path_only():
     html = _read('html/index.html')
-    for needle in ("get('next')", "sessionStorage.setItem('bbNext'", "sessionStorage.getItem('bbNext')",
-                   "sessionStorage.removeItem('bbNext')", "startsWith('/blade-book/')", "startsWith('/blade-book//')",
+    for needle in ("get('next')", "localStorage.setItem('bbNext'", "localStorage.getItem('bbNext')",
+                   "localStorage.removeItem('bbNext')", "30 * 60 * 1000", "startsWith('/blade-book/')", "startsWith('/blade-book//')",
                    "location.replace(", 'Sign in to continue'):
         assert needle in html, needle
 ```
@@ -1515,7 +1515,7 @@ Expected: FAIL
 .hero form.born{display:flex;gap:10px;max-width:34em;margin:0 0 18px}
 .hero form.born input{flex:1;min-width:0;font:inherit;font-size:1.15rem;padding:.85rem 1rem;border:2px solid #fff;border-radius:12px;background:rgba(255,255,255,.96);color:#111}
 .hero form.born .btn{white-space:nowrap}
-.hero p.sub{font-size:.95rem;opacity:.85;margin:0 0 22px;max-width:34em}
+.hero p.sub{font-size:.95rem;color:#fff;opacity:.85;margin:0 0 22px;max-width:34em}
 ```
 
 - [ ] **Step 4: Hero markup** — replace the `<h1>`, `<p class="lede">` and `<div class="cta">` inside `<header class="hero">` with:
@@ -1524,7 +1524,7 @@ Expected: FAIL
     <h1 class="bb-display">A knife born on <em>your day.</em></h1>
     <p class="lede">Type a date — a birthday, an anniversary — and see every registered knife born on it. Not for sale? Ask the owner anyway.</p>
     <form class="born" action="/blade-book/board/" method="get" autocomplete="off">
-      <input name="born" type="text" inputmode="numeric" maxlength="32" placeholder="7/28 or 7/28/1999" aria-label="a date" required>
+      <input name="born" type="text" maxlength="32" placeholder="7/28 or 7/28/1999" aria-label="a date" required>
       <button class="btn accent" type="submit">FIND IT</button>
     </form>
     <p class="sub">blade-book is a register for knife collectors. One photo. Your whole collection, on the record.</p>
@@ -1539,12 +1539,21 @@ Leave the K75 `<span class="cap">` as it is. Check the phone media query block (
 - [ ] **Step 5: Sign-in return in the landing JS** — right after `const flag = new URLSearchParams(location.search).get('auth');` add:
 
 ```javascript
+  const okPath = p => typeof p === 'string' && p.startsWith('/blade-book/') && !p.startsWith('/blade-book//');
   const nextRaw = new URLSearchParams(location.search).get('next');
-  if (nextRaw && nextRaw.startsWith('/blade-book/') && !nextRaw.startsWith('/blade-book//')) {
-    try { sessionStorage.setItem('bbNext', nextRaw); } catch (e) {}
+  if (okPath(nextRaw)) {
+    try { localStorage.setItem('bbNext', JSON.stringify({p: nextRaw, t: Date.now()})); } catch (e) {}
   }
   let bbNext = null;
-  try { bbNext = sessionStorage.getItem('bbNext'); } catch (e) {}
+  try {
+    const raw = localStorage.getItem('bbNext');
+    if (raw !== null) {
+      let rec = null;
+      try { rec = JSON.parse(raw); } catch (e) {}
+      if (rec && okPath(rec.p) && Date.now() - rec.t < 30 * 60 * 1000) bbNext = rec.p;
+      else localStorage.removeItem('bbNext');
+    }
+  } catch (e) {}
 ```
 
 Change the `required` message line to:
@@ -1556,8 +1565,8 @@ Change the `required` message line to:
 Right after `const me = await fetch(API + '/me', {credentials: 'same-origin'});` add:
 
 ```javascript
-  if (me.ok && bbNext && bbNext.startsWith('/blade-book/') && !bbNext.startsWith('/blade-book//')) {
-    try { sessionStorage.removeItem('bbNext'); } catch (e) {}
+  if (me.ok && bbNext) {
+    try { localStorage.removeItem('bbNext'); } catch (e) {}
     location.replace(bbNext);
     return;
   }

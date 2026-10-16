@@ -1054,7 +1054,7 @@ def test_landing_leads_with_a_knife_born_on_your_day():
 
 def test_landing_sign_in_returns_to_a_blade_book_path_only():
     html = _read('html/index.html')
-    for needle in ("get('next')", "sessionStorage.setItem('bbNext'", "sessionStorage.getItem('bbNext')",
-                   "sessionStorage.removeItem('bbNext')", "startsWith('/blade-book/')", "startsWith('/blade-book//')",
+    for needle in ("get('next')", "localStorage.setItem('bbNext'", "localStorage.getItem('bbNext')",
+                   "localStorage.removeItem('bbNext')", "30 * 60 * 1000", "startsWith('/blade-book/')", "startsWith('/blade-book//')",
                    "location.replace(", 'Sign in to continue'):
         assert needle in html, needle
