@@ -47,3 +47,11 @@ def test_wants_json_validation(client, mailer):
     signed_in(client, mailer)
     # Test that non-dict JSON comes back 400
     assert client.post(W, json={'model': ['x']}).status_code == 400
+
+
+def test_born_day_want_over_the_api(client, mailer):
+    signed_in(client, mailer)
+    r = client.post(W, json={'born_day': '07-28'})
+    assert r.status_code == 200 and r.get_json()['born_day'] == '07-28'
+    assert client.get(W).get_json()['wants'][0]['born_day'] == '07-28'
+    assert client.post(W, json={'born_day': '7/28'}).status_code == 400

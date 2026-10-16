@@ -79,3 +79,19 @@ def test_claim_intro_fires_once(con):
     assert len(db.unsent_intros(con)) == 1
     db.mark_intro_sent(con, i, 're_123')
     assert db.unsent_intros(con) == []
+
+
+def test_schema_v15_born_day_column(con):
+    assert 'born_day' in {r[1] for r in con.execute('PRAGMA table_info(wants)')}
+    assert 'born_day' in db.WANT_FIELDS and 'born_day' in db.WANT_CRITERIA
+
+
+def test_born_day_want_validation(con):
+    u = _u(con)
+    w = db.create_want(con, u['id'], {'born_day': '07-28'})          # on its own it says what is wanted
+    assert w['born_day'] == '07-28' and w['mode'] == 'either'
+    assert db.create_want(con, u['id'], {'born_day': '02-29'})['born_day'] == '02-29'
+    for bad in ('7/28', '7-28', '13-01', '02-30', '00-10', '07-28-1999', 728, '', '  ', ['07-28']):
+        with pytest.raises(ValueError) as e:
+            db.create_want(con, u['id'], {'born_day': bad})
+        assert str(e.value) == 'bad field', bad

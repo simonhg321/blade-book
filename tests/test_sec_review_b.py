@@ -152,8 +152,8 @@ def test_tombstone_expires_after_90_days(con):
 
 
 def test_schema_is_v11(con):
-    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == 14
-    assert db.SCHEMA_VERSION == 14
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == 15
+    assert db.SCHEMA_VERSION == 15
 
 
 # --- L1: sign-out revokes THIS cookie; sign-out-everywhere still revokes all ----

@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 
 from bb import paths
 
-SCHEMA_VERSION = 14
+SCHEMA_VERSION = 15
 MAX_PHOTO_SLOTS = 6              # photo slots per knife; 3 → 6 on 2026-09-22 (v13 rebuilds the CHECK)
 MAKER_KEYS = ('crk', 'other')   # mirrors bb.makers.MAKERS — db never imports makers (test pins them equal)
 
@@ -25,9 +25,9 @@ EVENT_TYPES = ('photographed', 'decoded', 'edited', 'for_trade', 'for_sale',
                'traded', 'sold', 'consigned', 'withdrawn')
 WANT_MODES = ('trade', 'sale', 'either')
 WANT_FIELDS = ('maker', 'model', 'generation', 'size', 'blade_shape', 'blade_steel',
-               'keyword', 'born_from', 'born_to', 'mode', 'max_price')
+               'keyword', 'born_from', 'born_to', 'born_day', 'mode', 'max_price')
 MAX_ACTIVE_WANTS = 20
-WANT_CRITERIA = ('model', 'generation', 'size', 'blade_shape', 'blade_steel', 'keyword', 'born_from', 'born_to')
+WANT_CRITERIA = ('model', 'generation', 'size', 'blade_shape', 'blade_steel', 'keyword', 'born_from', 'born_to', 'born_day')
 WANT_TEXT_MAX = 200
 WANT_MAX_YEAR_SPAN = 25          # born_from..born_to alone counts only when it is a real window
 DECODES_PER_MINUTE = 3
@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS wants (
   model TEXT, generation TEXT, size TEXT, blade_shape TEXT, blade_steel TEXT,
   keyword TEXT,
   born_from INTEGER, born_to INTEGER,
+  born_day TEXT,
   mode TEXT NOT NULL DEFAULT 'either' CHECK (mode IN ('trade','sale','either')),
   max_price INTEGER,
   active INTEGER NOT NULL DEFAULT 1,
@@ -355,6 +356,9 @@ MIGRATIONS = {
     # 2026-09-23: invited handle+password accounts (scripts/invite.py) — one column,
     # NULL for every email account. 'duplicate column' tolerated for old workers.
     14: ['ALTER TABLE users ADD COLUMN password_hash TEXT'],
+    # 2026-10-15 date board: a want on a birthday (MM-DD), any sale status.
+    # 'duplicate column' tolerated for old workers; fresh DBs get it from WANTS_DDL.
+    15: ['ALTER TABLE wants ADD COLUMN born_day TEXT'],
 }
 
 
@@ -915,6 +919,14 @@ def create_want(con, owner_id, fields):
             lo, hi = (1000, 3000) if field.startswith('born') else (0, 10_000_000)
             if isinstance(fields[field], bool) or not lo <= n <= hi:
                 raise ValueError(f'{field} out of range')
+    if 'born_day' in fields and fields['born_day'] is not None:
+        bd = fields['born_day']
+        if not isinstance(bd, str) or not re.fullmatch(r'\d{2}-\d{2}', bd):
+            raise ValueError('bad field')
+        try:
+            datetime(2000, int(bd[:2]), int(bd[3:]))       # leap year: 02-29 is a legal birthday
+        except ValueError:
+            raise ValueError('bad field') from None
     for field in text_fields:
         v = fields.get(field)
         if isinstance(v, str) and len(v) > WANT_TEXT_MAX:
@@ -923,7 +935,7 @@ def create_want(con, owner_id, fields):
     # knife on the platform and mail the wanter every seller's address (review H4)
     def _real(c):
         v = fields.get(c)
-        if c.startswith('born'):
+        if c in ('born_from', 'born_to'):
             return False                      # judged as a pair below
         return bool(v) and re.search(r'\w', str(v)) is not None   # zero-width junk is not a criterion
     bf, bt = fields.get('born_from'), fields.get('born_to')
