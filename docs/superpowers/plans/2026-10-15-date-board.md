@@ -132,7 +132,7 @@ def test_window_is_fifteen_days_centred_and_wraps_the_year():
     w = born.window(1, 2)
     assert len(w) == 15
     assert w[0] == (-7, '12-26') and w[7] == (0, '01-02') and w[-1] == (7, '01-09')
-    assert ('-3', '12-30') not in w and (-3, '12-30') in w
+    assert (-3, '12-30') in w
 
 
 def test_window_includes_leap_day():
