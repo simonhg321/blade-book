@@ -130,7 +130,7 @@
     bits.push('@' + k.handle);
     if (k.listed_at) bits.push('listed ' + k.listed_at.slice(0, 10));
     art.querySelector('.sub').textContent = bits.join(' · ');
-    art.querySelector('.price').textContent = k.asking_price ? 'asking ' + money(k.asking_price) : 'FOR SALE';
+    art.querySelector('.price').textContent = k.asking_price ? 'asking ' + money(k.asking_price) : 'FOR SALE · inquire';
     if (k.seller_note) { var n = art.querySelector('.note'); n.textContent = k.seller_note; n.classList.remove('hidden'); }
     var c = art.querySelector('.contact');
     if (!me) { c.textContent = 'sign in to contact'; c.addEventListener('click', function () { location.href = '/blade-book/?auth=required'; }); }

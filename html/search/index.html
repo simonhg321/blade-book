@@ -173,7 +173,7 @@
     var sale = art.querySelector('.sale');
     if (k.for_sale) {
       var t = 'FOR SALE';
-      if (k.asking_price) t += ' · $' + k.asking_price;
+      t += k.asking_price ? ' · $' + k.asking_price : ' · inquire';
       sale.textContent = t;
       sale.classList.remove('hidden');
     }

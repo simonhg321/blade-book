@@ -504,7 +504,7 @@ main{padding:40px 0 50px}
       const b = document.createElement('div'); b.className = 'b';
       const name = document.createElement('b'); name.textContent = k.name || k.tag; b.appendChild(name);
       const p = document.createElement('span'); p.className = 'p';
-      p.textContent = k.asking_price ? '$' + Number(k.asking_price).toLocaleString('en-US', {maximumFractionDigits: 0}) : 'for sale';
+      p.textContent = k.asking_price ? '$' + Number(k.asking_price).toLocaleString('en-US', {maximumFractionDigits: 0}) : 'inquire';
       b.appendChild(p);
       b.appendChild(document.createTextNode(' · @' + k.handle));
       a.appendChild(b);

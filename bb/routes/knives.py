@@ -264,8 +264,7 @@ def sale_knife(knife_id):
         counterparty = edit._text(body.get('counterparty'), edit.SHORT, 'counterparty') or None
     except edit.EditError as e:
         return jsonify({'error': str(e)}), 400
-    if status == 'for_sale' and asking is None:
-        return jsonify({'error': 'asking price required to list for sale'}), 400
+    # no asking_price on a for_sale knife = "inquire": the board shows it without a number
     con = db.connect()
     try:
         k = db.get_knife(con, g.user['id'], knife_id)

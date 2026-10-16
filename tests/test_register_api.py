@@ -91,8 +91,8 @@ def test_sale_controls(client, mailer):
     r = client.post(f'{K}/{kid}/sale', json={'sale_status': 'for_sale', 'asking_price': 500})
     assert r.status_code == 409 and 'board' in r.get_json()['error']                # fresh account: not eligible
     _age_knife(kid)
-    r = client.post(f'{K}/{kid}/sale', json={'sale_status': 'for_sale'})
-    assert r.status_code == 400 and 'asking' in r.get_json()['error']
+    r = client.post(f'{K}/{kid}/sale', json={'sale_status': 'for_sale'})                # no price = inquire
+    assert r.status_code == 200 and r.get_json()['sale_status'] == 'for_sale' and r.get_json()['asking_price'] is None
     r = client.post(f'{K}/{kid}/sale', json={'sale_status': 'for_sale', 'asking_price': 500, 'seller_note': 'mint'})
     assert r.status_code == 200 and r.get_json()['sale_status'] == 'for_sale' and r.get_json()['asking_price'] == 500
     assert client.post(f'{K}/{kid}/sale', json={'sale_status': 'lost'}).status_code == 400
@@ -101,7 +101,8 @@ def test_sale_controls(client, mailer):
     r = client.post(f'{K}/{kid}/sale', json={'sale_status': 'sold', 'amount': 450, 'counterparty': '@bob'})
     assert r.status_code == 200 and r.get_json()['sale_status'] == 'sold'
     con = db.connect(); owner = r.get_json()['owner_id']
-    assert [(e['type'], e['amount']) for e in db.list_events(con, owner, kid)][1:] == [('for_sale', 500), ('sold', 450)]
+    # the inquire listing is the status change; the later 500 is a price edit, not a new event
+    assert [(e['type'], e['amount']) for e in db.list_events(con, owner, kid)][1:] == [('for_sale', None), ('sold', 450)]
 
 
 def test_public_toggle_bulk_and_full(client, mailer, app):

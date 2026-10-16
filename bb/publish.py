@@ -565,7 +565,7 @@ def _knife_page(row, handle, gated, nav=None):
     born = f'born {e(row["born"])} · ' if row.get('born') else ''
     out += f'<p class="by">{born}in <a href="../">@{e(handle)}</a>’s register</p>\n'
     if row.get('for_sale'):
-        price = f" · ${row['asking_price']:g}" if row.get('asking_price') else ''
+        price = f" · ${row['asking_price']:g}" if row.get('asking_price') else ' · inquire'
         out += f'<p class="sale">FOR SALE{price}</p>\n'
         if row.get('seller_note'):
             out += f'<p>{e(row["seller_note"])}</p>\n'
@@ -873,7 +873,7 @@ def _index_html(rows, user, gated, featured_tag=None):
         fborn = f'<span class="fborn">born {e(hero_row["born"])}</span>' if hero_row.get('born') else ''
         fbadge = ''
         if hero_row.get('for_sale'):
-            fprice = f" · ${hero_row['asking_price']:g}" if hero_row.get('asking_price') else ''
+            fprice = f" · ${hero_row['asking_price']:g}" if hero_row.get('asking_price') else ' · inquire'
             fbadge = f'<span class="badge-sale">FOR SALE{fprice}</span>'
         elif hero_row.get('for_trade'):
             fbadge = '<span class="badge-sale">FOR TRADE</span>'
@@ -902,7 +902,7 @@ def _index_html(rows, user, gated, featured_tag=None):
         name = full_name(row)
         badge = '<span></span>'
         if row.get('for_sale'):
-            price = f" · ${row['asking_price']:g}" if row.get('asking_price') else ''
+            price = f" · ${row['asking_price']:g}" if row.get('asking_price') else ' · inquire'
             badge = f'<span class="badge-sale">FOR SALE{price}</span>'
         elif row.get('for_trade'):
             badge = '<span class="badge-sale">FOR TRADE</span>'
