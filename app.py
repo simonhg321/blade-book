@@ -184,7 +184,7 @@ def create_app(mailer=None, store=None, decoder=None, billing_impl=None, lookup=
         VERSION=_version(),
     )
 
-    from bb.routes import auth as auth_routes, knives as knife_routes, settings as settings_routes, search as search_routes, wants as wants_routes, board as board_routes, admin as admin_routes, billing as billing_routes
+    from bb.routes import auth as auth_routes, knives as knife_routes, settings as settings_routes, search as search_routes, wants as wants_routes, board as board_routes, born as born_routes, admin as admin_routes, billing as billing_routes
     app.register_blueprint(api)
     app.register_blueprint(auth_routes.bp)
     app.register_blueprint(knife_routes.bp)
@@ -192,6 +192,7 @@ def create_app(mailer=None, store=None, decoder=None, billing_impl=None, lookup=
     app.register_blueprint(search_routes.bp)
     app.register_blueprint(wants_routes.bp)
     app.register_blueprint(board_routes.bp)
+    app.register_blueprint(born_routes.bp)
     app.register_blueprint(admin_routes.bp)
     app.register_blueprint(billing_routes.bp)
     log.info('blade-book app created, version %s, data %s, mailer %s, decoder %s',

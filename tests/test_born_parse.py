@@ -78,3 +78,46 @@ def test_labels():
     assert born.url_form(None, 7, 28) == '07-28'
     assert born.short(7, 28) == '7/28'
     assert born.short(11, 6) == '11/6'
+
+
+def _row(i, born):
+    return {'id': i, 'born_on': born}
+
+
+def test_rank_three_groups_one_row_each_closest_first():
+    rows = [_row(1, '1999-07-28'), _row(2, '2022-07-28'), _row(3, '2010-07-28'),
+            _row(4, '2020-07-31'), _row(5, '2021-07-25'), _row(6, '2019-07-30'),
+            _row(7, '2022-08-05'), _row(8, '2018-07-20')]
+    r = born.rank(1999, 7, 28, rows)
+    assert [x['id'] for _, x in r['exact']] == [1]
+    assert [x['id'] for _, x in r['same_day']] == [2, 3]                 # most recent year first
+    assert [(off, x['id']) for off, x in r['near']] == [(2, 6), (-3, 5), (3, 4)]   # |off| asc, then year desc (2021 before 2020 at distance 3)
+    # 8/05 is +8 and 7/20 is -8: outside the week
+    ids = [x['id'] for g in r.values() for _, x in g]
+    assert 7 not in ids and 8 not in ids and len(ids) == len(set(ids))
+
+
+def test_rank_without_a_year_has_no_exact_group():
+    rows = [_row(1, '1999-07-28'), _row(2, '2022-07-28')]
+    r = born.rank(None, 7, 28, rows)
+    assert r['exact'] == [] and [x['id'] for _, x in r['same_day']] == [2, 1]
+
+
+def test_rank_wraps_the_year_end_and_handles_leap_day():
+    r = born.rank(None, 1, 2, [_row(1, '2021-12-30'), _row(2, '2020-01-05')])
+    assert [(off, x['id']) for off, x in r['near']] == [(-3, 1), (3, 2)]     # same distance: newest year first
+    r = born.rank(None, 2, 29, [_row(1, '2020-02-29'), _row(2, '2021-03-01'), _row(3, '2019-02-28')])
+    assert [x['id'] for _, x in r['same_day']] == [1]
+    assert [(off, x['id']) for off, x in r['near']] == [(1, 2), (-1, 3)]
+
+
+def test_rank_caps_each_group():
+    rows = [_row(i, f'{1950 + i}-07-28') for i in range(40)]
+    r = born.rank(None, 7, 28, rows)
+    assert len(r['same_day']) == born.GROUP_CAP == 24
+    assert r['same_day'][0][1]['id'] == 39                                 # newest years survive the cap
+
+
+def test_rank_ignores_rows_without_a_full_date():
+    r = born.rank(None, 7, 28, [_row(1, '2022-07'), _row(2, ''), _row(3, None), _row(4, '2022-07-28')])
+    assert [x['id'] for _, x in r['same_day']] == [4]

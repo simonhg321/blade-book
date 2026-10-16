@@ -113,3 +113,38 @@ def url_form(year, month, day):
 
 def short(month, day):
     return f'{month}/{day}'
+
+
+GROUP_CAP = 24
+_FULL = re.compile(r'^(\d{4})-(\d{2})-(\d{2})$')
+
+
+def rank(year, month, day, rows):
+    """Split candidate rows (dicts with 'born_on') into exact / same_day / near.
+    Each value is a list of (days_off, row). A row lands in one group only.
+    exact: y-m-d equal (empty when no year). same_day: m-d equal, newest year
+    first. near: within WINDOW_DAYS by the leap-year calendar, |days_off| asc
+    then newest year, then days_off (after before before). Caps at GROUP_CAP."""
+    offsets = {md: off for off, md in window(month, day)}
+    exact, same, near = [], [], []
+    for r in rows:
+        m = _FULL.match(r.get('born_on') or '')
+        if not m:
+            continue
+        y, md = int(m.group(1)), f'{m.group(2)}-{m.group(3)}'
+        if md not in offsets:
+            continue
+        off = offsets[md]
+        if off == 0:
+            if year is not None and y == year:
+                exact.append((0, r, y))
+            else:
+                same.append((0, r, y))
+        else:
+            near.append((off, r, y))
+    exact.sort(key=lambda t: t[1].get('id') or 0)
+    same.sort(key=lambda t: (-t[2], t[1].get('id') or 0))
+    near.sort(key=lambda t: (abs(t[0]), -t[2], -t[0], t[1].get('id') or 0))
+    return {'exact': [(o, r) for o, r, _ in exact[:GROUP_CAP]],
+            'same_day': [(o, r) for o, r, _ in same[:GROUP_CAP]],
+            'near': [(o, r) for o, r, _ in near[:GROUP_CAP]]}
