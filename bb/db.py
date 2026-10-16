@@ -921,7 +921,7 @@ def create_want(con, owner_id, fields):
                 raise ValueError(f'{field} out of range')
     if 'born_day' in fields and fields['born_day'] is not None:
         bd = fields['born_day']
-        if not isinstance(bd, str) or not re.fullmatch(r'\d{2}-\d{2}', bd):
+        if not isinstance(bd, str) or not re.fullmatch(r'[0-9]{2}-[0-9]{2}', bd):
             raise ValueError('bad field')
         try:
             datetime(2000, int(bd[:2]), int(bd[3:]))       # leap year: 02-29 is a legal birthday
@@ -1086,7 +1086,7 @@ def public_knife(con, knife_id):
 def date_board_knives(con, month_days):
     """Every visible, day-dated knife whose month-day is in `month_days`
     (['07-28', ...]). Ranking happens in bb/born.rank(); this is the candidate pull."""
-    mds = [md for md in month_days if re.fullmatch(r'\d{2}-\d{2}', md or '')]
+    mds = [md for md in month_days if re.fullmatch(r'[0-9]{2}-[0-9]{2}', md or '')]
     if not mds:
         return []
     ph = ','.join('?' * len(mds))

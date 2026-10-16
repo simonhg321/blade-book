@@ -42,6 +42,7 @@ def test_two_digit_year_pivots_on_the_current_year():
     '', '   ', '7', 'abc', '13/40', '0/10', '7/0', '7/32', '2/30', '4/31',
     '7/28/1800', '7/28/2101', '1800-07-28', 'Smarch 1', 'July', '7/28/999',
     'x' * 33, '7/28/1999/1', '7//28',
+    '٧/٢٨', '٧/28', 'July ٢٨',      # non-ASCII digits: \d would take them
 ])
 def test_parse_rejects(text):
     with pytest.raises(born.BornError) as e:

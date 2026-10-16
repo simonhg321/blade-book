@@ -18,7 +18,7 @@ MIN_REASON = 3
 
 CARD_FIELDS = ('model', 'variant', 'generation', 'size', 'born', 'born_on',
                'damascus_smith', 'damascus_pattern', 'special_edition',
-               'notes_public', 'for_sale', 'asking_price', 'seller_note')
+               'notes_public', 'for_sale', 'for_trade', 'asking_price', 'seller_note')
 
 
 def card(k):

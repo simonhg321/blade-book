@@ -162,6 +162,7 @@
     art.querySelector('.off').textContent = offText(k.days_off);
     var price = art.querySelector('.price');
     if (k.for_sale) price.textContent = k.asking_price ? 'asking ' + money(k.asking_price) : 'FOR SALE · inquire';
+    else if (k.for_trade) { price.textContent = 'FOR TRADE'; price.classList.add('nl'); }
     else { price.textContent = 'not listed'; price.classList.add('nl'); }
     if (k.seller_note) { var n = art.querySelector('.note'); n.textContent = k.seller_note; n.classList.remove('hidden'); }
     var c = art.querySelector('.contact');
@@ -197,10 +198,11 @@
       if (push) history.replaceState(null, '', '?born=' + query.url);
       var md = query.label.replace(/, \d{4}$/, '');
       var n = renderGroup(box, 'Born on ' + query.label, res.j.exact)
-            + renderGroup(box, 'Born on ' + md + ', other years', res.j.same_day)
+            + renderGroup(box, 'Born on ' + md + (query.year ? ', other years' : ''), res.j.same_day)
             + renderGroup(box, 'Born within a week of ' + md, res.j.near);
       if (!n) box.appendChild(el('div', 'empty', 'Nothing within a week of ' + md + ' yet.'));
       $('wantbtn').textContent = 'tell me when one is born on ' + query.short;
+      $('wantbtn').disabled = false;
       $('wantrow').hidden = false;
     }).catch(function () { say('could not reach the server', true); });
   }
@@ -213,9 +215,9 @@
     var bd = ('0' + query.month).slice(-2) + '-' + ('0' + query.day).slice(-2);
     $('wantbtn').disabled = true;
     post(WANTS, { born_day: bd }).then(function (res) {
-      $('wantbtn').disabled = false;
-      if (res.status === 401) { signIn(); return; }
-      if (!res.ok) { say('✗ ' + (res.j.error || 'could not save that'), true); return; }
+      if (res.status === 401) { $('wantbtn').disabled = false; signIn(); return; }
+      if (!res.ok) { $('wantbtn').disabled = false; say('✗ ' + (res.j.error || 'could not save that'), true); return; }
+      $('wantbtn').textContent = '✓ watching ' + query.short;      // stays disabled: no duplicate wants
       say('✓ we’ll email you when a knife born on ' + query.short + ' goes public');
       window.scrollTo(0, 0);
     }).catch(function () { $('wantbtn').disabled = false; say('could not reach the server', true); });

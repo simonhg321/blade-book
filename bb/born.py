@@ -6,7 +6,7 @@ parse()  : free text → (year | None, month, day). Year optional. Two-digit yea
 window() : the ±7 day neighbourhood of a month-day, computed in the leap year
            2000 so 02-29 is a real day and the year end wraps (12-30 is 3 days
            before 01-02).
-rank()   : see Task 3 — added there.
+rank()   : split candidates into exact / same_day / near (see its docstring).
 """
 import datetime as dt
 import re
@@ -20,10 +20,10 @@ _MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july',
            'august', 'september', 'october', 'november', 'december']
 MONTH_NAMES = [m.capitalize() for m in _MONTHS]
 
-_NUMERIC_MDY = re.compile(r'^(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2}|\d{4}))?$')
-_NUMERIC_YMD = re.compile(r'^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$')
-_NAME_FIRST = re.compile(r'^([a-z]+)\.?\s+(\d{1,2})(?:,?\s+(\d{4}))?$')
-_DAY_FIRST = re.compile(r'^(\d{1,2})\s+([a-z]+)\.?(?:,?\s+(\d{4}))?$')
+_NUMERIC_MDY = re.compile(r'^([0-9]{1,2})[/-]([0-9]{1,2})(?:[/-]([0-9]{2}|[0-9]{4}))?$')
+_NUMERIC_YMD = re.compile(r'^([0-9]{4})[/-]([0-9]{1,2})[/-]([0-9]{1,2})$')
+_NAME_FIRST = re.compile(r'^([a-z]+)\.?\s+([0-9]{1,2})(?:,?\s+([0-9]{4}))?$')
+_DAY_FIRST = re.compile(r'^([0-9]{1,2})\s+([a-z]+)\.?(?:,?\s+([0-9]{4}))?$')
 
 
 class BornError(ValueError):
@@ -116,7 +116,7 @@ def short(month, day):
 
 
 GROUP_CAP = 24
-_FULL = re.compile(r'^(\d{4})-(\d{2})-(\d{2})$')
+_FULL = re.compile(r'^([0-9]{4})-([0-9]{2})-([0-9]{2})$')
 
 
 def rank(year, month, day, rows):
@@ -124,7 +124,7 @@ def rank(year, month, day, rows):
     Each value is a list of (days_off, row). A row lands in one group only.
     exact: y-m-d equal (empty when no year). same_day: m-d equal, newest year
     first. near: within WINDOW_DAYS by the leap-year calendar, |days_off| asc
-    then newest year, then days_off (after before before). Caps at GROUP_CAP."""
+    then newest year, then after-the-date before before-the-date. Caps at GROUP_CAP."""
     offsets = {md: off for off, md in window(month, day)}
     exact, same, near = [], [], []
     for r in rows:

@@ -79,3 +79,10 @@ def test_born_leaves_out_sold_and_consigned_knives(client, con):
     ids = {k['id'] for g in ('exact', 'same_day', 'near') for k in j[g]}
     assert ids == {kept['id']}
     assert not ids & {sold['id'], cons['id'], near_sold['id']}
+
+
+def test_born_card_says_for_trade(client, con):
+    u = _mk_user(con, email='tr@example.com', handle='tr-guy')
+    k = _mk_knife(con, u['id'], born='2022-07-28', sale_status='for_trade')
+    c = client.get(N + '?d=7/28').get_json()['same_day'][0]
+    assert c['id'] == k['id'] and c['for_trade'] == 1 and c.get('for_sale', 0) == 0

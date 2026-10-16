@@ -2,14 +2,11 @@
 """GET /blade-book/api/born?d=<text> — the date board (spec 2026-10-15 §2).
 Public, no session. Parse → candidate pull (db.date_board_knives) → rank →
 board cards (bb/board.card strips everything private) plus days_off."""
-import logging
-
 from flask import Blueprint, jsonify, request
 
 from bb import board, born, db, paths
 
 bp = Blueprint('born', __name__, url_prefix=paths.API_PREFIX + '/born')
-log = logging.getLogger('blade-book.born')
 
 
 @bp.get('', strict_slashes=False)

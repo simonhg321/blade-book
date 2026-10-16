@@ -446,7 +446,7 @@ def test_board_page_wiring():
                    "'Born on '", "', other years'", "'Born within a week of '", 'days_off',
                    "'tell me when one is born on '", "'/blade-book/api/wants'", 'born_day',
                    'history.replaceState', "'?born='", 'not listed', "'&next='", 'encodeURIComponent',
-                   "'/blade-book/board/' + location.search"):
+                   "'/blade-book/board/' + location.search", 'for_trade', 'FOR TRADE', "'✓ watching '"):
         assert needle in html, needle
     assert 'innerHTML' not in html and 'fonts.googleapis.com' not in html
     assert 'og:url' not in html          # a canonical og:url would strip ?born= from shared links
@@ -1068,6 +1068,7 @@ def test_landing_sign_in_returns_to_a_blade_book_path_only():
 def test_deploy_date_board_script():
     s = _read('scripts/deploy_date_board.sh')
     for needle in ('set -euo pipefail', 'cp -r "$CODE/html/." "$WWW/"', 'supervisorctl restart blade_book',
-                   '/blade-book/api/healthz', "/blade-book/api/born?d=7/28", 'BORN ON YOUR DATE', 'sudo -u shg'):
+                   '/blade-book/api/healthz', "/blade-book/api/born?d=7/28", 'BORN ON YOUR DATE', 'sudo -u shg',
+                   'curl -sf --max-time 10 http://127.0.0.1:5004/blade-book/api/healthz'):
         assert needle in s, needle
     assert 'publish_sweep' not in s                      # register pages do not change

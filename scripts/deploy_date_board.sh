@@ -14,7 +14,7 @@ if ! supervisorctl restart blade_book; then
 fi
 up=''
 for i in 1 2 3 4 5 6 7 8 9 10; do
-  if up=$(curl -sf http://127.0.0.1:5004/blade-book/api/healthz); then break; fi
+  if up=$(curl -sf --max-time 10 http://127.0.0.1:5004/blade-book/api/healthz); then break; fi
   up=''; sleep 1
 done
 if [ -z "$up" ]; then
