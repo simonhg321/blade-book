@@ -12,11 +12,11 @@
   section.card{margin:12px 0}
   section.card p{margin:8px 0}
   section.card .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-  section.card input[type=text]{font:inherit;padding:.6rem .8rem;border:2px solid var(--ink);border-radius:10px;background:#fff;flex:1;min-width:0}
+  section.card input[type=text],section.card input[type=password]{font:inherit;padding:.6rem .8rem;border:2px solid var(--ink);border-radius:10px;background:#fff;flex:1;min-width:0}
   section.card .row button{flex-shrink:0}
   @media (max-width:480px){
     section.card .row{flex-direction:column;align-items:stretch}
-    section.card .row input[type=text],section.card .row button{width:100%}
+    section.card .row input[type=text],section.card .row input[type=password],section.card .row button{width:100%}
   }
   dl{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:0}
   dt{color:var(--muted)}
@@ -50,6 +50,14 @@
     <div class="row"><label class="vh" for="newhandle">new handle</label><input type="text" id="newhandle" maxlength="24" autocomplete="off" spellcheck="false" placeholder="new handle"><button class="btn alt" type="button" id="changehandle">change</button></div>
   </div>
   <p class="muted" id="handledone" hidden>Handle changed — that was the one.</p>
+</section>
+
+<section class="card" id="passwordcard">
+  <h2 class="bb-display">PASSWORD</h2>
+  <p class="muted" id="pwnote"></p>
+  <div class="row"><label class="vh" for="newpassword">new password</label><input type="password" id="newpassword" minlength="12" maxlength="256" autocomplete="new-password" placeholder="new password (12+ characters)"><button class="btn alt" type="button" id="setpassword">set password</button></div>
+  <p class="muted">The email link keeps working either way, and it is the only way back in if you forget this.</p>
+  <p id="pwremovebox" hidden><button class="btn link" type="button" id="removepassword">remove the password</button></p>
 </section>
 
 <section class="card">
@@ -110,6 +118,11 @@
     $('handledone').hidden = !!s.can_change_handle;
     $('confirm').placeholder = 'type ' + s.handle + ' to confirm';
     $('delete').disabled = $('confirm').value.trim() !== s.handle;
+    $('pwnote').textContent = s.has_password
+      ? 'Set. Sign in with @' + s.handle + ' and this password anywhere the email is out of reach — the sign-in page has a "have a handle and password?" link.'
+      : 'Optional. Set one to sign in as @' + s.handle + ' where you cannot get at your email, like a work machine.';
+    $('setpassword').textContent = s.has_password ? 'change password' : 'set password';
+    $('pwremovebox').hidden = !(s.has_password && s.email);
   }
 
   function loadSettings() {
@@ -145,6 +158,30 @@
       $('newhandle').value = '';
       render(res.j);
     }).catch(function (e) { $('changehandle').disabled = false; if (e.message !== 'sign in') say('✗ ' + e.message, true); });
+  });
+
+  $('setpassword').addEventListener('click', function () {
+    var pw = $('newpassword').value;
+    if (pw.length < 12) { say('✗ 12 characters or more', true); return; }
+    $('setpassword').disabled = true; say('saving…');
+    json('POST', '/settings/password', { password: pw }).then(function (res) {
+      $('setpassword').disabled = false;
+      if (!res.ok) { say('✗ ' + (res.j.error || 'could not set the password'), true); return; }
+      say('password set — sign in with @' + res.j.handle + ' and this password');
+      $('newpassword').value = '';
+      render(res.j);
+    }).catch(function (e) { $('setpassword').disabled = false; if (e.message !== 'sign in') say('✗ ' + e.message, true); });
+  });
+  $('newpassword').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('setpassword').click(); });
+
+  $('removepassword').addEventListener('click', function () {
+    if (!confirm('Remove the password? The email link stays the way in.')) return;
+    say('removing…');
+    json('POST', '/settings/password', { password: null }).then(function (res) {
+      if (!res.ok) { say('✗ ' + (res.j.error || 'could not remove'), true); return; }
+      say('password removed');
+      render(res.j);
+    }).catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); });
   });
 
   $('signoutall').addEventListener('click', function () {

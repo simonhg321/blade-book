@@ -440,9 +440,11 @@ def create_password_user(con, handle, display_name, password):
 
 
 def set_password(con, user_id, password):
+    """Store a new password hash, or clear it when password is None (the
+    owner closing that door from settings, 2026-10-19)."""
     from bb import auth
     con.execute('UPDATE users SET password_hash = ? WHERE id = ?',
-                (auth.hash_password(password), user_id))
+                (auth.hash_password(password) if password is not None else None, user_id))
     con.commit()
 
 

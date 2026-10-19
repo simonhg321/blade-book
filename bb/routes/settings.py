@@ -16,6 +16,7 @@ log = logging.getLogger('blade-book.settings')
 bp = Blueprint('settings', __name__, url_prefix=paths.API_PREFIX + '/settings')
 
 MAX_KEY = 64
+MIN_PASSWORD, MAX_PASSWORD = 12, 256   # the sign-in route caps at 256 too
 EXPORT_EVERY_S = 600           # one ZIP per user per 10 minutes; in-process, resets on restart
 _last_export = {}              # user_id -> time.monotonic() of the last export
 
@@ -46,6 +47,7 @@ def _view(u):
             'featured_knife_id': u.get('featured_knife_id'),
             'email': u['email'] if mail.deliverable(u['email']) else None,
             'sign_in': 'password' if u.get('password_hash') else 'email',
+            'has_password': bool(u.get('password_hash')),
             'created': u['created'],
             'handle_changed_at': u.get('handle_changed_at'),
             'can_change_handle': not u.get('handle_changed_at'),
@@ -111,6 +113,35 @@ def patch_settings():
         publish.schedule(g.user['id'])
         log.info('settings changed for @%s: %s', u['handle'],
                  sorted(fields) + (['handle'] if new_handle is not None else []))
+    return jsonify(_view(u))
+
+
+# --- a password on any account (2026-10-19) --------------------------------------
+
+@bp.post('/password')
+@auth.login_required
+def set_password():
+    """Set, replace or remove (password: null) the handle+password door on the
+    signed-in account, so the owner can sign in where their email is out of
+    reach. The magic link keeps working and is the only reset path, so an
+    invited account (no deliverable email) may not remove its only door."""
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict) or 'password' not in body:
+        return jsonify({'error': 'send {"password": "..."} or {"password": null}'}), 400
+    password = body['password']
+    if password is not None:
+        if not isinstance(password, str) or not MIN_PASSWORD <= len(password) <= MAX_PASSWORD:
+            return jsonify({'error': f'password must be {MIN_PASSWORD} to {MAX_PASSWORD} characters'}), 400
+    elif not mail.deliverable(g.user['email']):
+        return jsonify({'error': 'this account has no email on file, so the password is '
+                                 'its only way in — it cannot be removed'}), 400
+    con = db.connect()
+    try:
+        db.set_password(con, g.user['id'], password)
+        u = db.get_user(con, g.user['id'])
+    finally:
+        con.close()
+    log.info('password %s for @%s', 'set' if password is not None else 'removed', u['handle'])
     return jsonify(_view(u))
 
 

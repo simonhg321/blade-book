@@ -98,3 +98,71 @@ def test_featured_knife_id_change_schedules_publish(client, mailer, con, monkeyp
                         type('P', (), {'schedule': staticmethod(calls.append)})())
     client.patch(S, json={'featured_knife_id': k['id']})
     assert len(calls) == 1
+
+
+# --- a password on any account (2026-10-19) ----------------------------------------
+# Sign in from a machine where the email is out of reach: the owner sets a
+# password from settings and the existing handle+password route takes it.
+
+AUTH = '/blade-book/api/auth'
+
+
+def _pw_sign_in(client, handle, password):
+    return client.post(AUTH + '/password', json={'handle': handle, 'password': password},
+                       headers={'X-Forwarded-For': '10.0.0.9'})
+
+
+def test_set_password_then_sign_in_by_handle(client, mailer):
+    me = signed_in(client, mailer)
+    assert client.get(S).get_json()['has_password'] is False
+    r = client.post(S + '/password', json={'password': 'correct horse battery'})
+    assert r.status_code == 200, r.data
+    j = r.get_json()
+    assert j['has_password'] is True
+    assert j['email'] == 'sam@example.com'           # the email stays; this is an extra door
+    client.post(AUTH + '/signout')
+    assert client.get(AUTH + '/me').status_code == 401
+    r = _pw_sign_in(client, me['handle'], 'correct horse battery')
+    assert r.status_code == 200, r.data
+    assert client.get(AUTH + '/me').get_json()['handle'] == me['handle']
+
+
+def test_set_password_replaces_the_old_one(client, mailer):
+    me = signed_in(client, mailer)
+    client.post(S + '/password', json={'password': 'first password here'})
+    client.post(S + '/password', json={'password': 'second password here'})
+    client.post(AUTH + '/signout')
+    assert _pw_sign_in(client, me['handle'], 'first password here').status_code == 401
+    assert _pw_sign_in(client, me['handle'], 'second password here').status_code == 200
+
+
+def test_remove_password_closes_that_door(client, mailer):
+    me = signed_in(client, mailer)
+    client.post(S + '/password', json={'password': 'correct horse battery'})
+    r = client.post(S + '/password', json={'password': None})
+    assert r.status_code == 200 and r.get_json()['has_password'] is False
+    client.post(AUTH + '/signout')
+    assert _pw_sign_in(client, me['handle'], 'correct horse battery').status_code == 401
+
+
+def test_password_rules(client, mailer):
+    signed_in(client, mailer)
+    assert client.post(S + '/password', json={'password': 'short'}).status_code == 400
+    assert client.post(S + '/password', json={'password': 'x' * 257}).status_code == 400
+    assert client.post(S + '/password', json={'password': 12345678901234}).status_code == 400
+    assert client.post(S + '/password', json={}).status_code == 400
+    assert client.post(S + '/password', json=[1]).status_code == 400
+    assert client.get(S).get_json()['has_password'] is False
+
+
+def test_password_requires_auth(client):
+    assert client.post(S + '/password', json={'password': 'correct horse battery'}).status_code == 401
+
+
+def test_invited_account_cannot_remove_its_only_door(client, con):
+    db.create_password_user(con, 'riverstone', 'a collector', 'correct horse battery')
+    assert _pw_sign_in(client, 'riverstone', 'correct horse battery').status_code == 200
+    r = client.post(S + '/password', json={'password': None})
+    assert r.status_code == 400
+    assert 'email' in r.get_json()['error']
+    assert client.get(S).get_json()['has_password'] is True
