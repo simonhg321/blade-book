@@ -1097,3 +1097,17 @@ def test_landing_has_the_passkey_button():
     assert 'innerHTML' not in html
     how = _read('html/how/index.html')
     assert 'Or a passkey: Face ID, Touch ID or your phone' in how
+
+
+def test_deploy_passkeys_script():
+    path = os.path.join(ROOT, 'scripts', 'deploy_passkeys.sh')
+    sh = open(path).read()
+    assert subprocess.run(['bash', '-n', path]).returncode == 0
+    for needle in ('set -euo pipefail', "--break-system-packages 'webauthn>=3.0'", 'import webauthn, jwt, cbor2',
+                   'supervisorctl restart blade_book', '/blade-book/api/healthz',
+                   '/blade-book/api/auth/passkey/begin', '/blade-book/api/settings/passkeys/begin',
+                   'sudo -u shg -H cp -r', 'id="passkeycard"', 'STOP:'):
+        assert needle in sh, needle
+    assert sh.index('import webauthn, jwt, cbor2') < sh.index('supervisorctl restart blade_book')   # prove the import before restarting
+    assert 'publish_sweep' not in sh
+    assert 'webauthn>=3.0' in _read('requirements.txt')
