@@ -3,13 +3,15 @@
 bb/routes/auth.py — /blade-book/api/auth/*: magic link, whoami, sign-out.
 OIDC (google/apple) routes are added in the same blueprint by plan 02 task 7.
 """
+import base64
+import json
 import logging
 import re
 import secrets
 
 from flask import Blueprint, current_app, g, jsonify, redirect, request
 
-from bb import auth, db, mail, oidc, paths
+from bb import auth, db, mail, oidc, passkeys, paths
 
 log = logging.getLogger('blade-book.auth')
 
@@ -159,6 +161,92 @@ def password_sign_in():
         con.close()
     log.info('password sign-in: @%s from %s', user['handle'], auth.client_ip())
     return jsonify(auth.self_view(user))
+
+
+# --- passkeys (2026-10-19) -------------------------------------------------------------
+# One button, no handle: the browser finds the passkey itself (discoverable
+# credential). The challenge rides in the bb_passkey flow cookie (300 s, single
+# use, path /blade-book/api so the settings blueprint shares it). Every failure
+# is one generic 401; the reason goes to the log.
+
+PASSKEY_FAIL = {'error': 'that passkey did not work'}
+
+
+def _passkey_refuse(reason, handle='?'):
+    if 'sign count' in reason.lower():
+        reason += ' — possible cloned authenticator; the owner can remove it under settings'
+    log.warning('passkey sign-in refused for @%s from %s: %s', handle, auth.client_ip(), reason)
+    resp = jsonify(PASSKEY_FAIL)
+    resp.status_code = 401
+    return auth.clear_flow_cookie(resp, passkeys.COOKIE, path=auth.FLOW_PATH_API)
+
+
+@bp.post('/passkey/begin')
+def passkey_sign_in_begin():
+    if not passkeys.available():
+        return jsonify({'error': 'passkeys are not set up here'}), 503
+    if request.host.split(':', 1)[0] != passkeys.rp_id():
+        return jsonify({'error': 'passkeys work on ' + passkeys.rp_id() + ' only'}), 404
+    con = db.connect()
+    try:
+        reason = auth.check_rate_limits(con)
+    finally:
+        con.close()
+    if reason:
+        log.warning('passkey begin rate limited from %s: %s', auth.client_ip(), reason)
+        return jsonify({'error': reason}), 429
+    challenge = passkeys.new_challenge()
+    resp = jsonify({'options': json.loads(passkeys.authentication_options(challenge))})
+    return auth.set_flow_cookie(resp, passkeys.COOKIE, passkeys.encode_challenge(challenge),
+                                passkeys.FLOW_TTL_S, path=auth.FLOW_PATH_API)
+
+
+@bp.post('/passkey/finish')
+def passkey_sign_in_finish():
+    if not passkeys.available():
+        return jsonify({'error': 'passkeys are not set up here'}), 503
+    con = db.connect()
+    try:
+        reason = auth.check_rate_limits(con)
+        if reason:
+            log.warning('passkey finish rate limited from %s: %s', auth.client_ip(), reason)
+            return jsonify({'error': reason}), 429
+        body = request.get_json(silent=True)
+        cred = body.get('credential') if isinstance(body, dict) else None
+        if not isinstance(cred, dict) or not isinstance(cred.get('id'), str) or len(cred['id']) > 1024:
+            return _passkey_refuse('malformed body')
+        challenge = passkeys.decode_challenge(auth.flow_value(passkeys.COOKIE))
+        if challenge is None:
+            return _passkey_refuse('no challenge cookie (expired, replayed or missing)')
+        try:
+            cred_id = base64.urlsafe_b64decode(cred['id'] + '=' * (-len(cred['id']) % 4))
+        except (ValueError, TypeError):
+            return _passkey_refuse('credential id is not base64url')
+        row = db.passkey_by_credential_id(con, cred_id)
+        if row is None:
+            return _passkey_refuse('unknown credential')
+        user = db.get_user(con, row['user_id'])
+        if user is None:
+            return _passkey_refuse('credential without a user')
+        try:
+            new_count = passkeys.verify_authentication(cred, challenge, row['public_key'], row['sign_count'])
+        except passkeys.PasskeyError as e:
+            return _passkey_refuse(str(e), user['handle'])
+        uh = (cred.get('response') or {}).get('userHandle') if isinstance(cred.get('response'), dict) else None
+        if uh:
+            try:
+                uh_bytes = base64.urlsafe_b64decode(uh + '=' * (-len(uh) % 4))
+            except (ValueError, TypeError):
+                uh_bytes = b''
+            if uh_bytes != str(user['id']).encode('ascii'):
+                return _passkey_refuse('user handle does not match the credential owner', user['handle'])
+        db.touch_passkey(con, row['id'], new_count)
+        auth.login(con, user)
+    finally:
+        con.close()
+    log.info('passkey sign-in: @%s from %s (passkey %s)', user['handle'], auth.client_ip(), row['id'])
+    resp = jsonify(auth.self_view(user))
+    return auth.clear_flow_cookie(resp, passkeys.COOKIE, path=auth.FLOW_PATH_API)
 
 
 @bp.get('/me')

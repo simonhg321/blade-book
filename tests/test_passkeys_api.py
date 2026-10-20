@@ -129,3 +129,120 @@ def test_registration_503_without_the_library(client, mailer, monkeypatch):
     assert r.status_code == 503 and r.get_json() == {'error': 'passkeys are not set up here'}
     assert client.post(S + '/finish', json={'credential': {}}).status_code == 503
     assert client.get(S).get_json() == {'available': False, 'passkeys': []}
+
+
+# --- sign-in -----------------------------------------------------------------------------
+
+def _sign_in(client, auth, **forge):
+    opts = _opts(client.post(A + '/passkey/begin', headers={'X-Forwarded-For': '10.0.0.9'}))
+    return client.post(A + '/passkey/finish', json={'credential': auth.assert_(opts, **forge)},
+                       headers={'X-Forwarded-For': '10.0.0.9'})
+
+
+def _registered(client, mailer):
+    me = signed_in(client, mailer)
+    auth = SoftAuthenticator(RP, ORIGIN)
+    register_passkey(client, auth)
+    client.post(A + '/signout')
+    assert client.get(A + '/me').status_code == 401
+    return me, auth
+
+
+def test_passkey_sign_in_lands_a_session(client, mailer, con):
+    me, auth = _registered(client, mailer)
+    r = _sign_in(client, auth)
+    assert r.status_code == 200, r.data
+    assert r.get_json()['handle'] == me['handle']
+    assert client.get(A + '/me').status_code == 200
+    row = db.passkey_by_credential_id(con, auth.credential_id)
+    assert row['sign_count'] == 1 and row['last_used']
+    assert client.get_cookie('bb_passkey', path='/blade-book/api') is None     # cleared on finish
+
+
+def test_sign_in_begin_options(client, mailer):
+    r = client.post(A + '/passkey/begin')
+    o = r.get_json()['options']
+    assert r.status_code == 200 and o['rpId'] == 'localhost' and o['userVerification'] == 'required'
+    assert not o.get('allowCredentials')
+    c = client.get_cookie('bb_passkey', path='/blade-book/api')
+    assert c is not None and c.http_only and c.max_age == 300
+
+
+def test_every_failure_is_the_same_401(client, mailer, con):
+    """Unknown credential, forged origin, forged challenge, replay, no UV, rollback, wrong user handle."""
+    me, auth = _registered(client, mailer)
+    stranger = SoftAuthenticator(RP, ORIGIN)
+    stranger.user_handle = auth.user_handle
+    bodies = set()
+    for r in (_sign_in(client, stranger),
+              _sign_in(client, auth, origin='https://evil.example'),
+              _sign_in(client, auth, challenge='AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'),
+              _sign_in(client, auth, user_handle=b'999')):                    # review focus 4
+        assert r.status_code == 401, r.data
+        bodies.add(json.dumps(r.get_json(), sort_keys=True))
+    assert bodies == {'{"error": "that passkey did not work"}'}
+    # replay: a finished challenge cannot be used again (review focus 1)
+    opts = _opts(client.post(A + '/passkey/begin'))
+    cred = auth.assert_(opts)
+    assert client.post(A + '/passkey/finish', json={'credential': cred}).status_code == 200
+    client.post(A + '/signout')
+    assert client.post(A + '/passkey/finish', json={'credential': cred}).status_code == 401
+    # no cookie at all
+    client.post(A + '/passkey/begin'); client.delete_cookie('bb_passkey', path='/blade-book/api')
+    assert client.post(A + '/passkey/finish', json={'credential': auth.assert_(opts)}).status_code == 401
+    # UV off
+    auth.uv = False
+    assert _sign_in(client, auth).status_code == 401
+    auth.uv = True
+    # sign count rollback: every assert_() above bumped the authenticator's counter, so read what
+    # the row holds after the one successful finish and present exactly that again (not greater)
+    stored = db.passkey_by_credential_id(con, auth.credential_id)['sign_count']
+    assert stored > 0
+    assert _sign_in(client, auth, sign_count=stored).status_code == 401
+    assert db.passkey_by_credential_id(con, auth.credential_id)['sign_count'] == stored   # row untouched
+    # garbage bodies
+    client.post(A + '/passkey/begin')
+    assert client.post(A + '/passkey/finish', json={'credential': 'x'}).status_code == 401
+    assert client.post(A + '/passkey/finish', json=[]).status_code == 401
+    assert client.get(A + '/me').status_code == 401
+
+
+def test_zero_sign_count_passkeys_sign_in_every_time(client, mailer, con):
+    me, auth = _registered(client, mailer)
+    for _ in range(2):
+        assert _sign_in(client, auth, sign_count=0).status_code == 200
+        client.post(A + '/signout')
+    assert db.passkey_by_credential_id(con, auth.credential_id)['sign_count'] == 0
+
+
+def test_removed_passkey_no_longer_signs_in(client, mailer):
+    me, auth = _registered(client, mailer)
+    assert _sign_in(client, auth).status_code == 200
+    pid = client.get(S).get_json()['passkeys'][0]['id']
+    client.delete(f'{S}/{pid}')
+    client.post(A + '/signout')
+    assert _sign_in(client, auth).status_code == 401
+
+
+def test_sign_in_counts_against_the_ip_rate_limit(client, mailer, monkeypatch):
+    from bb import auth as auth_mod
+    monkeypatch.setattr(auth_mod, 'IP_ATTEMPTS_PER_HOUR', 3)
+    for _ in range(3):
+        client.post(A + '/passkey/begin', headers={'X-Forwarded-For': '10.9.9.9'})
+    r = client.post(A + '/passkey/begin', headers={'X-Forwarded-For': '10.9.9.9'})
+    assert r.status_code == 429
+    r = client.post(A + '/passkey/finish', json={'credential': {}}, headers={'X-Forwarded-For': '10.9.9.9'})
+    assert r.status_code == 429
+
+
+def test_sign_in_503_without_the_library(client, monkeypatch):
+    monkeypatch.setattr(passkeys, 'available', lambda: False)
+    assert client.post(A + '/passkey/begin').status_code == 503
+    assert client.post(A + '/passkey/finish', json={'credential': {}}).status_code == 503
+
+
+def test_sign_in_404_on_the_alias_host(client):
+    """Review focus 2: a passkey for blade-book.com can never verify on the alias vhost."""
+    r = client.post(A + '/passkey/begin', base_url='http://billboard.instockornot.club')
+    assert r.status_code == 404
+    assert client.get_cookie('bb_passkey', path='/blade-book/api') is None
