@@ -3,13 +3,15 @@
 the register hero pin, and the account operations behind /me/settings (plan
 11: handle once, export, delete). The page key is write-only: the API reports
 has_key, never the key itself."""
+import json
 import logging
 import os
+import sqlite3
 import time
 
 from flask import Blueprint, current_app, g, jsonify, request, send_file
 
-from bb import account, auth, db, mail, paths, publish
+from bb import account, auth, db, mail, passkeys, paths, publish
 
 log = logging.getLogger('blade-book.settings')
 
@@ -143,6 +145,104 @@ def set_password():
         con.close()
     log.info('password %s for @%s', 'set' if password is not None else 'removed', u['handle'])
     return jsonify(_view(u))
+
+
+# --- passkeys (2026-10-19) -------------------------------------------------------------
+# Registration is a two-step dance bound to the browser by the bb_passkey flow
+# cookie (challenge, 5 minutes, single use). The sign-in half lives in
+# routes/auth.py. Unavailable library → 503 and the page hides the button.
+
+PASSKEY_NAME_MAX = 40
+
+
+def _passkeys_view(con):
+    return {'available': passkeys.available(),
+            'passkeys': db.passkeys_for_user(con, g.user['id'])}
+
+
+@bp.get('/passkeys', strict_slashes=False)      # the page calls '/settings/passkeys/'; no 308 hop
+@auth.login_required
+def list_passkeys():
+    con = db.connect()
+    try:
+        return jsonify(_passkeys_view(con))
+    finally:
+        con.close()
+
+
+@bp.post('/passkeys/begin')
+@auth.login_required
+def passkey_register_begin():
+    if not passkeys.available():
+        return jsonify({'error': 'passkeys are not set up here'}), 503
+    con = db.connect()
+    try:
+        if db.count_passkeys(con, g.user['id']) >= passkeys.MAX_PASSKEYS:
+            return jsonify({'error': 'ten passkeys is the limit — remove one first'}), 400
+        exclude = [r[0] for r in con.execute('SELECT credential_id FROM passkeys WHERE user_id = ?',
+                                             (g.user['id'],)).fetchall()]
+    finally:
+        con.close()
+    challenge = passkeys.new_challenge()
+    options = passkeys.registration_options(g.user['id'], g.user['handle'], g.user.get('display_name'),
+                                            exclude, challenge)
+    resp = jsonify({'options': json.loads(options)})
+    return auth.set_flow_cookie(resp, passkeys.COOKIE, passkeys.encode_challenge(challenge),
+                                passkeys.FLOW_TTL_S, path=auth.FLOW_PATH_API)
+
+
+@bp.post('/passkeys/finish')
+@auth.login_required
+def passkey_register_finish():
+    if not passkeys.available():
+        return jsonify({'error': 'passkeys are not set up here'}), 503
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict) or not isinstance(body.get('credential'), dict):
+        return _clear_passkey_cookie(jsonify({'error': 'send the credential the browser produced'}), 400)
+    name = body.get('name')
+    if name is not None:
+        if not isinstance(name, str) or len(name.strip()) > PASSKEY_NAME_MAX:
+            return _clear_passkey_cookie(jsonify({'error': f'name must be {PASSKEY_NAME_MAX} characters or fewer'}), 400)
+        name = name.strip() or None
+    challenge = passkeys.decode_challenge(auth.flow_value(passkeys.COOKIE))
+    if challenge is None:
+        return _clear_passkey_cookie(jsonify({'error': 'that took too long — start again'}), 400)
+    try:
+        reg = passkeys.verify_registration(body['credential'], challenge)
+    except passkeys.PasskeyError as e:
+        log.warning('passkey registration failed for @%s: %s', g.user['handle'], e)
+        return _clear_passkey_cookie(jsonify({'error': f'could not verify that passkey: {e}'}), 400)
+    con = db.connect()
+    try:
+        try:
+            db.add_passkey(con, g.user['id'], reg.credential_id, reg.public_key, reg.sign_count,
+                           reg.transports, name or passkeys.device_name(request.headers.get('User-Agent')))
+        except sqlite3.IntegrityError:
+            return _clear_passkey_cookie(jsonify({'error': 'that passkey is already registered'}), 400)
+        view = _passkeys_view(con)
+    finally:
+        con.close()
+    log.info('passkey added for @%s (%s)', g.user['handle'], view['passkeys'][-1]['name'])
+    return _clear_passkey_cookie(jsonify(view), 200)
+
+
+@bp.delete('/passkeys/<int:passkey_id>')
+@auth.login_required
+def passkey_remove(passkey_id):
+    con = db.connect()
+    try:
+        if not db.remove_passkey(con, g.user['id'], passkey_id):
+            return jsonify({'error': 'no such passkey'}), 404
+        view = _passkeys_view(con)
+    finally:
+        con.close()
+    log.info('passkey removed for @%s (id %s)', g.user['handle'], passkey_id)
+    return jsonify(view)
+
+
+def _clear_passkey_cookie(resp, status):
+    resp.status_code = status
+    return auth.clear_flow_cookie(resp, passkeys.COOKIE, path=auth.FLOW_PATH_API)
 
 
 # --- account operations (plan 11) --------------------------------------------------
