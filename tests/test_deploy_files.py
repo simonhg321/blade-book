@@ -565,7 +565,8 @@ def test_settings_page_wiring():
                    'id="signoutall"', 'id="export"', 'id="confirm"', 'id="delete"',
                    'one change, ever', 'real and complete', 'type your handle',
                    "location.href = '/blade-book/?deleted=1'", 'href="/blade-book/me/"',
-                   'href="/blade-book/vibe.css?v=20260927"', 'bbmark', '/blade-book/mark.svg', 'class="bb-display"'):
+                   'href="/blade-book/vibe.css?v=20260927"', 'bbmark', '/blade-book/mark.svg', 'class="bb-display"',
+                   'id="passkeycard"', "'/settings/passkeys'"):
         assert needle in html, needle
     assert 'innerHTML' not in html and 'fonts.googleapis.com' not in html
     assert '<!-- Copyright (c) 2026 Simon SGH' in html
@@ -1072,3 +1073,16 @@ def test_deploy_date_board_script():
                    'curl -sf --max-time 10 http://127.0.0.1:5004/blade-book/api/healthz'):
         assert needle in s, needle
     assert 'publish_sweep' not in s                      # register pages do not change
+
+
+def test_settings_page_passkeys_card():
+    html = _read('html/me/settings/index.html')
+    for needle in ('id="passkeycard"', 'PASSKEYS', 'id="addpasskey"', 'id="passkeylist"', 'id="passkeynote"',
+                   "'/settings/passkeys/begin'", "'/settings/passkeys/finish'", "'/settings/passkeys/'",
+                   'navigator.credentials.create', 'window.PublicKeyCredential',
+                   'parseCreationOptionsFromJSON', 'this browser cannot make passkeys',
+                   'passkeys are not set up here', 'Face ID, Touch ID or your phone',
+                   'shows a QR code', 'Remove this passkey?'):
+        assert needle in html, needle
+    assert 'innerHTML' not in html
+    assert html.index('id="passwordcard"') < html.index('id="passkeycard"') < html.index('SUBSCRIPTION')

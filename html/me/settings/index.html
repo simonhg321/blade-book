@@ -30,6 +30,11 @@
   .muted{color:var(--muted);font-size:.9rem}
   #export,#exportcsv{display:inline-block;margin-top:10px;margin-right:8px}
   .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .pklist{list-style:none;margin:8px 0 0;padding:0}
+  .pklist li{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;padding:6px 0;border-top:1px solid #e4ddcf}
+  .pklist li strong{flex:1}
+  .pklist .when{color:var(--muted);font-size:.9rem}
+  .pklist .btn.link{padding:0}
 </style>
 
 <header class="bb-head">
@@ -58,6 +63,14 @@
   <div class="row"><label class="vh" for="newpassword">new password</label><input type="password" id="newpassword" minlength="12" maxlength="256" autocomplete="new-password" placeholder="new password (12+ characters)"><button class="btn alt" type="button" id="setpassword">set password</button></div>
   <p class="muted">The email link keeps working either way, and it is the only way back in if you forget this.</p>
   <p id="pwremovebox" hidden><button class="btn link" type="button" id="removepassword">remove the password</button></p>
+</section>
+
+<section class="card" id="passkeycard">
+  <h2 class="bb-display">PASSKEYS</h2>
+  <p class="muted">Face ID, Touch ID or your phone. Works on a borrowed machine too: it shows a QR code, you scan it with your iPhone.</p>
+  <p id="passkeynote" class="muted" hidden></p>
+  <p><button class="btn alt" type="button" id="addpasskey">add a passkey</button></p>
+  <ul id="passkeylist" class="pklist"></ul>
 </section>
 
 <section class="card">
@@ -184,6 +197,70 @@
     }).catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); });
   });
 
+  // --- passkeys (2026-10-19): add from any device, list, remove -------------------
+  var b64u = {
+    dec: function (s) { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; var bin = atob(s), out = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i); return out.buffer; },
+    enc: function (buf) { var b = new Uint8Array(buf), s = ''; for (var i = 0; i < b.length; i++) s += String.fromCharCode(b[i]); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+  };
+  function creationOptions(o) {
+    if (window.PublicKeyCredential && PublicKeyCredential.parseCreationOptionsFromJSON) return PublicKeyCredential.parseCreationOptionsFromJSON(o);
+    o.challenge = b64u.dec(o.challenge); o.user.id = b64u.dec(o.user.id);
+    (o.excludeCredentials || []).forEach(function (c) { c.id = b64u.dec(c.id); });
+    return o;
+  }
+  function credentialJSON(c) {
+    if (c.toJSON) return c.toJSON();
+    return { id: c.id, rawId: b64u.enc(c.rawId), type: c.type, authenticatorAttachment: c.authenticatorAttachment || null,
+             response: { clientDataJSON: b64u.enc(c.response.clientDataJSON), attestationObject: b64u.enc(c.response.attestationObject),
+                         transports: c.response.getTransports ? c.response.getTransports() : [] } };
+  }
+  var PASSKEYS = '/settings/passkeys';
+  function whenText(iso) { return iso ? iso.slice(0, 10) : 'never'; }
+  function renderPasskeys(j) {
+    var ul = $('passkeylist');
+    while (ul.firstChild) ul.removeChild(ul.firstChild);
+    if (!j.available) { $('passkeynote').textContent = 'passkeys are not set up here'; $('passkeynote').hidden = false; $('addpasskey').hidden = true; return; }
+    if (!window.PublicKeyCredential) { $('passkeynote').textContent = 'this browser cannot make passkeys'; $('passkeynote').hidden = false; $('addpasskey').hidden = true; }
+    if (!j.passkeys.length) { var li = document.createElement('li'); li.className = 'when'; li.textContent = 'none yet'; ul.appendChild(li); return; }
+    j.passkeys.forEach(function (p) {
+      var li = document.createElement('li');
+      var name = document.createElement('strong'); name.textContent = p.name; li.appendChild(name);
+      var when = document.createElement('span'); when.className = 'when';
+      when.textContent = 'added ' + whenText(p.created) + ' · last used ' + whenText(p.last_used); li.appendChild(when);
+      var rm = document.createElement('button'); rm.type = 'button'; rm.className = 'btn link'; rm.textContent = 'remove';
+      rm.addEventListener('click', function () {
+        if (!confirm('Remove this passkey? ' + p.name + ' will no longer sign in.')) return;
+        api(PASSKEYS + '/' + p.id, { method: 'DELETE' }).then(function (res) {
+          if (!res.ok) { say('✗ ' + (res.j.error || 'could not remove'), true); return; }
+          say('passkey removed'); renderPasskeys(res.j);
+        }).catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); });
+      });
+      li.appendChild(rm);
+      ul.appendChild(li);
+    });
+  }
+  function loadPasskeys() {
+    return api('/settings/passkeys/').then(function (res) { if (res.ok) renderPasskeys(res.j); }).catch(function () {});
+  }
+  $('addpasskey').addEventListener('click', function () {
+    $('addpasskey').disabled = true; say('your device will ask you to confirm…');
+    json('POST', '/settings/passkeys/begin', {}).then(function (res) {
+      if (!res.ok) { throw new Error(res.j.error || 'could not start'); }
+      return navigator.credentials.create({ publicKey: creationOptions(res.j.options) });
+    }).then(function (cred) {
+      if (!cred) throw new Error('no passkey was made');
+      return json('POST', '/settings/passkeys/finish', { credential: credentialJSON(cred) });
+    }).then(function (res) {
+      $('addpasskey').disabled = false;
+      if (!res.ok) { say('✗ ' + (res.j.error || 'could not add the passkey'), true); return; }
+      say('passkey added'); renderPasskeys(res.j);
+    }).catch(function (e) {
+      $('addpasskey').disabled = false;
+      if (e.message === 'sign in') return;
+      say('✗ ' + (e.name === 'NotAllowedError' ? 'cancelled' : e.message), true);
+    });
+  });
+
   $('signoutall').addEventListener('click', function () {
     api('/auth/signout-all', { method: 'POST' }).then(function () { location.href = '/blade-book/'; })
       .catch(function (e) { if (e.message !== 'sign in') say('✗ ' + e.message, true); });
@@ -203,7 +280,7 @@
     }).catch(function (e) { if (e.message !== 'sign in') { say('✗ ' + e.message, true); $('delete').disabled = false; } });
   });
 
-  api('/auth/me').then(function () { return Promise.all([loadSettings(), loadBilling()]); })
+  api('/auth/me').then(function () { return Promise.all([loadSettings(), loadBilling(), loadPasskeys()]); })
     .catch(function (e) { if (e.message !== 'sign in') say('✗ could not reach blade-book', true); });
 })();
 </script>
