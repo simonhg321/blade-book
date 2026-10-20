@@ -40,6 +40,8 @@ _SHAPES = tuple((kind, re.compile(rx), extra) for kind, rx, extra in (
     ('signed_in', rf'^magic link sign-in \(confirmed\): {_E} \(@{_H}\)$', {'how': 'confirmed'}),
     ('handle_changed', rf'^handle changed: @(?P<old>[A-Za-z0-9][A-Za-z0-9-]*) -> @{_H} \(user \d{{1,9}}\)$', {}),
     ('signed_in', rf'^password sign-in: @{_H} from {_IP}$', {'how': 'password'}),
+    ('signed_in', rf'^passkey sign-in: @{_H} from {_IP} \(passkey \d{{1,9}}\)$', {'how': 'passkey'}),
+    ('password_failed', rf'^passkey sign-in refused for @{_H} from {_IP}: ', {}),
     ('signed_in', rf'^(?P<how>(?!magic\b|password\b)[a-z]+) sign-in: {_E} \(@{_H}\)$', {}),
     ('link_requested', rf'^magic link requested for {_E} from {_IP}$', {}),
     ('link_unbound', rf'^magic link for {_E} opened unbound from {_IP} \(signed in: [A-Za-z0-9-]+\)$', {}),

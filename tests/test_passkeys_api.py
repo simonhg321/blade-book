@@ -57,7 +57,7 @@ def test_begin_sets_a_short_browser_bound_cookie_and_excludes_existing(client, m
 
 
 def test_finish_needs_the_cookie_and_the_cookie_is_single_use(client, mailer):
-    """Review focus 1."""
+    """Review focus 1. Single-use in this browser: finish clears the cookie; the server keeps no spent list (spec §3)."""
     signed_in(client, mailer)
     auth = SoftAuthenticator(RP, ORIGIN)
     opts = _opts(client.post(S + '/begin'))
@@ -181,7 +181,7 @@ def test_every_failure_is_the_same_401(client, mailer, con):
         assert r.status_code == 401, r.data
         bodies.add(json.dumps(r.get_json(), sort_keys=True))
     assert bodies == {'{"error": "that passkey did not work"}'}
-    # replay: a finished challenge cannot be used again (review focus 1)
+    # replay: single-use in this browser: finish clears the cookie; the server keeps no spent list (spec §3)
     opts = _opts(client.post(A + '/passkey/begin'))
     cred = auth.assert_(opts)
     assert client.post(A + '/passkey/finish', json={'credential': cred}).status_code == 200

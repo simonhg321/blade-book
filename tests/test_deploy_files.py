@@ -1090,7 +1090,7 @@ def test_settings_page_passkeys_card():
 
 def test_landing_has_the_passkey_button():
     html = _read('html/index.html')
-    for needle in ('id="passkey-btn"', 'Sign in with a passkey', "'/passkey/begin'", "'/passkey/finish'",
+    for needle in ("pk.id = 'passkey-btn'", 'Sign in with a passkey', "'/passkey/begin'", "'/passkey/finish'",
                    'navigator.credentials.get', 'parseRequestOptionsFromJSON', 'window.PublicKeyCredential',
                    'cancelled, or no passkey on this device', 'that passkey did not work'):
         assert needle in html, needle
@@ -1103,11 +1103,12 @@ def test_deploy_passkeys_script():
     path = os.path.join(ROOT, 'scripts', 'deploy_passkeys.sh')
     sh = open(path).read()
     assert subprocess.run(['bash', '-n', path]).returncode == 0
-    for needle in ('set -euo pipefail', "--break-system-packages 'webauthn>=3.0'", 'import webauthn, jwt, cbor2',
+    for needle in ('set -euo pipefail', "--break-system-packages 'webauthn>=3.0,<4'", 'import webauthn, jwt, cbor2',
                    'supervisorctl restart blade_book', '/blade-book/api/healthz',
                    '/blade-book/api/auth/passkey/begin', '/blade-book/api/settings/passkeys/begin',
-                   'sudo -u shg -H cp -r', 'id="passkeycard"', 'STOP:'):
+                   'sudo -u shg -H cp -r', 'id="passkeycard"', 'STOP:', 'def passkey_sign_in_begin', 'merge and pull first'):
         assert needle in sh, needle
     assert sh.index('import webauthn, jwt, cbor2') < sh.index('supervisorctl restart blade_book')   # prove the import before restarting
+    assert sh.index('def passkey_sign_in_begin') < sh.index('supervisorctl restart blade_book')   # the code guard comes before the restart
     assert 'publish_sweep' not in sh
-    assert 'webauthn>=3.0' in _read('requirements.txt')
+    assert 'webauthn>=3.0,<4' in _read('requirements.txt')

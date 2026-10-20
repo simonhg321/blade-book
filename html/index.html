@@ -431,7 +431,7 @@ main{padding:40px 0 50px}
         $('regcount').textContent = n ? n + (n > 1 ? ' knives' : ' knife') + ' in your register' : 'your register is empty — add the first knife';
       }).catch(() => {});
   } else {
-    // passkeys (2026-10-19): one button (id="passkey-btn"); the browser or phone picks the account.
+    // passkeys (2026-10-19): one button; the browser or phone picks the account.
     // Hidden where the browser cannot do WebAuthn or the host is not the RP id (alias vhost).
     if (window.PublicKeyCredential && location.hostname !== 'billboard.instockornot.club') {
       const box = $('providers');

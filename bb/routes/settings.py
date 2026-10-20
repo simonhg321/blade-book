@@ -149,7 +149,7 @@ def set_password():
 
 # --- passkeys (2026-10-19) -------------------------------------------------------------
 # Registration is a two-step dance bound to the browser by the bb_passkey flow
-# cookie (challenge, 5 minutes, single use). The sign-in half lives in
+# cookie (challenge, 5 minutes, single use in this browser). The sign-in half lives in
 # routes/auth.py. Unavailable library → 503 and the page hides the button.
 
 PASSKEY_NAME_MAX = 40

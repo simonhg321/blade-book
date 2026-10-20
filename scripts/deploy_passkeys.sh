@@ -7,12 +7,16 @@
 set -euo pipefail
 CODE=/home/shg/blade-book; WWW=/var/www/html/blade-book
 # 1/4 the library, for the user gunicorn runs as (same precedent as wire_anthropic.sh)
-sudo -u shg -H python3 -m pip install --user --quiet --break-system-packages 'webauthn>=3.0'
+sudo -u shg -H python3 -m pip install --user --quiet --break-system-packages 'webauthn>=3.0,<4'
 if ! sudo -u shg -H python3 -c 'import webauthn, jwt, cbor2; print("webauthn", webauthn.__version__)'; then
   echo "STOP: python3 cannot import webauthn (or PyJWT broke with the newer cryptography). Nothing restarted." >&2
   exit 1
 fi
 echo "1/4 library present"
+if ! grep -q 'def passkey_sign_in_begin' "$CODE/bb/routes/auth.py"; then
+  echo "STOP: $CODE is not on the passkeys commit — merge and pull first. Nothing restarted." >&2
+  exit 1
+fi
 sudo -u shg -H cp -r "$CODE/html/." "$WWW/"
 echo "2/4 static pages copied"
 if ! supervisorctl restart blade_book; then
@@ -29,7 +33,7 @@ if [ -z "$up" ]; then
   exit 1
 fi
 echo "3/4 app restarted: $up"
-# the sign-in begin must answer 200 with a challenge: proves the library loaded under gunicorn and v16 is in
+# the sign-in begin must answer 200 with a challenge: proves the library loaded under gunicorn (the table itself is created by SCHEMA on connect)
 begin=$(curl -s --max-time 10 -X POST -H 'Host: blade-book.com' http://127.0.0.1:5004/blade-book/api/auth/passkey/begin || true)
 if grep -q '"challenge"' <<<"$begin"; then echo "ok   /blade-book/api/auth/passkey/begin answers with a challenge"; else echo "STOP: passkey begin did not answer with a challenge: $begin" >&2; exit 1; fi
 code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 -X POST http://127.0.0.1:5004/blade-book/api/settings/passkeys/begin || true)

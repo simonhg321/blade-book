@@ -166,7 +166,7 @@ def password_sign_in():
 # --- passkeys (2026-10-19) -------------------------------------------------------------
 # One button, no handle: the browser finds the passkey itself (discoverable
 # credential). The challenge rides in the bb_passkey flow cookie (300 s, single
-# use, path /blade-book/api so the settings blueprint shares it). Every failure
+# use in this browser, path /blade-book/api so the settings blueprint shares it). Every failure
 # is one generic 401; the reason goes to the log.
 
 PASSKEY_FAIL = {'error': 'that passkey did not work'}

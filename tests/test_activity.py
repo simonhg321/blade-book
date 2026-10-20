@@ -61,6 +61,8 @@ SHAPES = [
     ('magic link sign-in (confirmed): sam@example.com (@sam)', {'kind': 'signed_in', 'email': 'sam@example.com', 'handle': 'sam', 'how': 'confirmed'}),
     ('handle changed: @old-name -> @new-name (user 7)', {'kind': 'handle_changed', 'old': 'old-name', 'handle': 'new-name'}),
     ('password sign-in: @riverstone from 2001:db8:4181:bdd0::1', {'kind': 'signed_in', 'handle': 'riverstone', 'ip': '2001:db8:4181:bdd0::1', 'how': 'password'}),
+    ('passkey sign-in: @riverstone from 203.0.113.9 (passkey 4)', {'kind': 'signed_in', 'handle': 'riverstone', 'ip': '203.0.113.9', 'how': 'passkey'}),
+    ('passkey sign-in refused for @riverstone from 203.0.113.9: unknown credential', {'kind': 'password_failed', 'handle': 'riverstone', 'ip': '203.0.113.9'}),
     ('google sign-in: sam@example.com (@sam)', {'kind': 'signed_in', 'email': 'sam@example.com', 'handle': 'sam', 'how': 'google'}),
     ('magic link requested for sam@example.com from 203.0.113.9', {'kind': 'link_requested', 'email': 'sam@example.com', 'ip': '203.0.113.9'}),
     ('magic link for sam@example.com opened unbound from 203.0.113.9 (signed in: -)', {'kind': 'link_unbound', 'email': 'sam@example.com', 'ip': '203.0.113.9'}),
