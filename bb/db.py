@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 
 from bb import paths
 
-SCHEMA_VERSION = 15
+SCHEMA_VERSION = 16
 MAX_PHOTO_SLOTS = 6              # photo slots per knife; 3 → 6 on 2026-09-22 (v13 rebuilds the CHECK)
 MAKER_KEYS = ('crk', 'other')   # mirrors bb.makers.MAKERS — db never imports makers (test pins them equal)
 
@@ -127,6 +127,23 @@ def _rebuild_photos_v13(con):
 # resolved report never blocks a fresh one on the same knife later.
 REPORTS_OPEN_INDEX_DDL = ('CREATE UNIQUE INDEX IF NOT EXISTS idx_reports_open '
                           'ON reports(knife_id, reporter_id) WHERE resolved_at IS NULL;')
+
+# 2026-10-19 passkeys (WebAuthn). credential_id is UNIQUE across users; public_key
+# is the COSE bytes py_webauthn hands back; transports is the browser's JSON list.
+PASSKEYS_DDL = """
+CREATE TABLE IF NOT EXISTS passkeys (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  credential_id BLOB NOT NULL UNIQUE,
+  public_key BLOB NOT NULL,
+  sign_count INTEGER NOT NULL DEFAULT 0,
+  transports TEXT,
+  name TEXT NOT NULL,
+  created TEXT NOT NULL,
+  last_used TEXT
+);
+CREATE INDEX IF NOT EXISTS passkeys_user ON passkeys(user_id);
+"""
 
 SCHEMA = f"""
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
@@ -248,6 +265,8 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 CREATE INDEX IF NOT EXISTS sessions_user ON sessions(user_id);
 
+{PASSKEYS_DDL}
+
 CREATE TABLE IF NOT EXISTS magic_tokens (
   id INTEGER PRIMARY KEY,
   token_hash TEXT NOT NULL UNIQUE,
@@ -359,6 +378,9 @@ MIGRATIONS = {
     # 2026-10-15 date board: a want on a birthday (MM-DD), any sale status.
     # 'duplicate column' tolerated for old workers; fresh DBs get it from WANTS_DDL.
     15: ['ALTER TABLE wants ADD COLUMN born_day TEXT'],
+    # 2026-10-19 passkeys: one new table. CREATE IF NOT EXISTS, so an old worker
+    # re-running it is harmless (executescript via a callable).
+    16: [lambda con: con.executescript(PASSKEYS_DDL)],
 }
 
 
@@ -446,6 +468,52 @@ def set_password(con, user_id, password):
     con.execute('UPDATE users SET password_hash = ? WHERE id = ?',
                 (auth.hash_password(password) if password is not None else None, user_id))
     con.commit()
+
+
+# --- passkeys (2026-10-19) -----------------------------------------------------------
+
+def add_passkey(con, user_id, credential_id, public_key, sign_count, transports, name):
+    cur = con.execute(
+        'INSERT INTO passkeys (user_id, credential_id, public_key, sign_count, transports, name, created) '
+        'VALUES (?, ?, ?, ?, ?, ?, ?)',
+        (user_id, credential_id, public_key, int(sign_count),
+         json.dumps(transports) if transports is not None else None, name, now()))
+    con.commit()
+    return cur.lastrowid
+
+
+def _passkey_view(row):
+    return {'id': row['id'], 'name': row['name'], 'created': row['created'],
+            'last_used': row['last_used'],
+            'transports': json.loads(row['transports']) if row['transports'] else None}
+
+
+def passkeys_for_user(con, user_id):
+    """For the settings list: never the key material."""
+    rows = con.execute('SELECT id, name, created, last_used, transports FROM passkeys '
+                       'WHERE user_id = ? ORDER BY created, id', (user_id,)).fetchall()
+    return [_passkey_view(r) for r in rows]
+
+
+def passkey_by_credential_id(con, credential_id):
+    row = con.execute('SELECT * FROM passkeys WHERE credential_id = ?', (credential_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def touch_passkey(con, passkey_id, sign_count):
+    con.execute('UPDATE passkeys SET sign_count = ?, last_used = ? WHERE id = ?',
+                (int(sign_count), now(), passkey_id))
+    con.commit()
+
+
+def remove_passkey(con, user_id, passkey_id):
+    cur = con.execute('DELETE FROM passkeys WHERE id = ? AND user_id = ?', (passkey_id, user_id))
+    con.commit()
+    return cur.rowcount == 1
+
+
+def count_passkeys(con, user_id):
+    return con.execute('SELECT count(*) FROM passkeys WHERE user_id = ?', (user_id,)).fetchone()[0]
 
 
 def get_user_by_email(con, email):

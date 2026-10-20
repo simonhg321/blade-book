@@ -178,7 +178,7 @@ def _build_v7_db():
 def test_v7_to_v8_adds_featured_knife_id(env):
     _build_v7_db()
     con = db.connect()
-    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION == 15
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION == 16
     ucols = {r[1] for r in con.execute('PRAGMA table_info(users)')}
     assert 'featured_knife_id' in ucols
     assert con.execute('SELECT featured_knife_id FROM users WHERE id = 1').fetchone()[0] is None
@@ -211,7 +211,7 @@ def _build_v8_db():
 def test_v8_to_v9_adds_handle_changed_at(env):
     _build_v8_db()
     con = db.connect()
-    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION == 15
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION == 16
     assert 'handle_changed_at' in {r[1] for r in con.execute('PRAGMA table_info(users)')}
     assert con.execute('SELECT handle_changed_at FROM users WHERE id = 1').fetchone()[0] is None
     con.close()
@@ -246,7 +246,7 @@ def _build_v11_db():
 def test_v11_to_v12_adds_maker_name_and_backfills_crk(env):
     _build_v11_db()
     con = db.connect()
-    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION == 15
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION == 16
     assert 'maker_name' in {r[1] for r in con.execute('PRAGMA table_info(knives)')}
     assert 'maker_name' in {r[1] for r in con.execute('PRAGMA table_info(search_cards)')}
     rows = {r[0]: r[1] for r in con.execute('SELECT id, maker_name FROM knives')}
@@ -286,7 +286,7 @@ def _build_v12_db():
 def test_v12_to_v13_rebuilds_photos_with_six_slots(env):
     _build_v12_db()
     con = db.connect()
-    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION == 15
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION == 16
     ddl = con.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'photos'").fetchone()[0]
     assert 'BETWEEN 1 AND 6' in ddl and 'photos_new' not in ddl
     # every row survived, ids and order intact
@@ -334,12 +334,29 @@ def _build_v13_db():
 def test_v13_to_v14_adds_password_hash(env):
     _build_v13_db()
     con = db.connect()
-    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION == 15
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION == 16
     assert 'password_hash' in {r[1] for r in con.execute('PRAGMA table_info(users)')}
     assert db.get_user(con, 1)['password_hash'] is None
     con.close()
     # an old worker re-stamps 13 until the restart: the ALTER must be tolerated
     raw = sqlite3.connect(paths.db_path()); raw.execute('UPDATE schema_version SET version = 13'); raw.commit(); raw.close()
     con = db.connect()
-    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == 15
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == 16
+    con.close()
+
+
+# --- 2026-10-19: v15 → v16 adds the passkeys table (WebAuthn sign-in) ---
+
+def test_v15_to_v16_adds_passkeys_table(env):
+    _build_v13_db()
+    con = db.connect()
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == db.SCHEMA_VERSION == 16
+    cols = {r[1] for r in con.execute('PRAGMA table_info(passkeys)')}
+    assert cols == {'id', 'user_id', 'credential_id', 'public_key', 'sign_count', 'transports',
+                    'name', 'created', 'last_used'}
+    con.close()
+    # an old worker re-stamps 15 until the restart: CREATE IF NOT EXISTS must be tolerated
+    raw = sqlite3.connect(paths.db_path()); raw.execute('UPDATE schema_version SET version = 15'); raw.commit(); raw.close()
+    con = db.connect()
+    assert con.execute('SELECT version FROM schema_version').fetchone()[0] == 16
     con.close()
