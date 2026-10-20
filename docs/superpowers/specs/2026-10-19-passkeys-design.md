@@ -12,7 +12,7 @@ door: Face ID or Touch ID on his Mac and iPhone through iCloud Keychain, and on
 a borrowed or work machine the browser shows a QR code he scans with the phone.
 Nothing to remember, nothing to type, nothing phishable.
 
-Decisions Simon made in the brainstorm (2026-10-19):
+Questions Simon had the brainstorm (2026-10-19):
 
 - **One button, no handle.** "Sign in with a passkey" on the landing page; the
   browser or phone picks the account (discoverable credentials).
