@@ -139,7 +139,12 @@ cleared with the existing `_flow_cookie` / `_clear_flow_cookie` helpers in
 base64url challenge; the cookie is browser-bound so a challenge minted in one
 browser cannot be finished from another. Finish routes read the cookie, clear it
 in the response whatever the outcome, and refuse if it is missing: **a challenge
-is single-use.**
+is single-use as far as the browser is concerned.** The server keeps no list of
+spent challenges (review ruling 2026-10-20): replaying a cookie-plus-assertion
+pair inside its 300 s needs a copy of an HttpOnly, Secure cookie and the signed
+response, i.e. a foothold inside the TLS session, and whoever has that already
+holds the session cookie the login issues. A spent-challenge table is defense in
+depth for later, not a gate for this build.
 
 The settings routes live in `bb/routes/settings.py` under its blueprint; the
 sign-in routes in `bb/routes/auth.py`. Sharing the cookie helpers means moving
