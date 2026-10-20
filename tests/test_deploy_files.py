@@ -1086,3 +1086,14 @@ def test_settings_page_passkeys_card():
         assert needle in html, needle
     assert 'innerHTML' not in html
     assert html.index('id="passwordcard"') < html.index('id="passkeycard"') < html.index('SUBSCRIPTION')
+
+
+def test_landing_has_the_passkey_button():
+    html = _read('html/index.html')
+    for needle in ('id="passkey-btn"', 'Sign in with a passkey', "'/passkey/begin'", "'/passkey/finish'",
+                   'navigator.credentials.get', 'parseRequestOptionsFromJSON', 'window.PublicKeyCredential',
+                   'cancelled, or no passkey on this device', 'that passkey did not work'):
+        assert needle in html, needle
+    assert 'innerHTML' not in html
+    how = _read('html/how/index.html')
+    assert 'Or a passkey: Face ID, Touch ID or your phone' in how

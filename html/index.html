@@ -378,6 +378,8 @@ main{padding:40px 0 50px}
   const API = '/blade-book/api/auth';
   const $ = id => document.getElementById(id);
   const msg = (t, err) => { for (const id of ['msg', 'sent-msg']) { $(id).textContent = t; $(id).className = 'msg' + (err ? ' err' : ''); } };
+  const b64uDec = s => { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; const bin = atob(s), out = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i); return out.buffer; };
+  const b64uEnc = buf => { const b = new Uint8Array(buf); let s = ''; for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
 
   const flag = new URLSearchParams(location.search).get('auth');
   const okPath = p => typeof p === 'string' && p.startsWith('/blade-book/') && !p.startsWith('/blade-book//');
@@ -429,6 +431,44 @@ main{padding:40px 0 50px}
         $('regcount').textContent = n ? n + (n > 1 ? ' knives' : ' knife') + ' in your register' : 'your register is empty — add the first knife';
       }).catch(() => {});
   } else {
+    // passkeys (2026-10-19): one button (id="passkey-btn"); the browser or phone picks the account.
+    // Hidden where the browser cannot do WebAuthn or the host is not the RP id (alias vhost).
+    if (window.PublicKeyCredential && location.hostname !== 'billboard.instockornot.club') {
+      const box = $('providers');
+      const pk = document.createElement('button');
+      pk.type = 'button'; pk.id = 'passkey-btn'; pk.className = 'alt'; pk.style.width = '100%';
+      pk.textContent = 'Sign in with a passkey';
+      pk.addEventListener('click', async () => {
+        pk.disabled = true; msg('');
+        try {
+          const b = await fetch(API + '/passkey/begin', {method: 'POST', credentials: 'same-origin'});
+          const bj = await b.json().catch(() => ({}));
+          if (b.status === 503) { pk.hidden = true; return; }
+          if (!b.ok) throw new Error(bj.error || 'could not start');
+          const o = bj.options;
+          const opts = PublicKeyCredential.parseRequestOptionsFromJSON ? PublicKeyCredential.parseRequestOptionsFromJSON(o)
+            : Object.assign(o, {challenge: b64uDec(o.challenge), allowCredentials: (o.allowCredentials || []).map(c => Object.assign(c, {id: b64uDec(c.id)}))});
+          const cred = await navigator.credentials.get({publicKey: opts});
+          const cj = cred.toJSON ? cred.toJSON() : {id: cred.id, rawId: b64uEnc(cred.rawId), type: cred.type,
+            authenticatorAttachment: cred.authenticatorAttachment || null,
+            response: {clientDataJSON: b64uEnc(cred.response.clientDataJSON), authenticatorData: b64uEnc(cred.response.authenticatorData),
+                       signature: b64uEnc(cred.response.signature), userHandle: cred.response.userHandle ? b64uEnc(cred.response.userHandle) : null}};
+          const f = await fetch(API + '/passkey/finish', {method: 'POST', credentials: 'same-origin',
+            headers: {'Content-Type': 'application/json'}, body: JSON.stringify({credential: cj})});
+          if (f.ok) {
+            if (bbNext) { try { localStorage.removeItem('bbNext'); } catch (e) {} location.replace(bbNext); }
+            else location.href = '/blade-book/me/';
+            return;
+          }
+          const fj = await f.json().catch(() => ({}));
+          msg(f.status === 401 ? 'that passkey did not work — try the email link' : (fj.error || 'Something went wrong.'), true);
+        } catch (err) {
+          msg(err.name === 'NotAllowedError' ? 'cancelled, or no passkey on this device' : (err.message || 'Something went wrong.'), true);
+        } finally { pk.disabled = false; }
+      });
+      box.appendChild(pk);
+      box.classList.remove('hidden');
+    }
     const p = await fetch(API + '/providers').then(r => r.json()).catch(() => ({providers: []}));
     if (p.providers.length) {
       const box = $('providers');
