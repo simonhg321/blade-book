@@ -25,63 +25,13 @@ def _landing(**qs):
     return redirect(LANDING)
 
 
-FLOW_COOKIE_PATH = paths.API_PREFIX + '/auth'
-
-
-def _flow_cookie_name(name):
-    """`__Host-bb_magic` / `__Host-bb_oidc` under https, the bare name on plain
-    http (where the prefix's Secure requirement can't be met, e.g. test runs).
-
-    The prefix is the fix for the sibling-host hole: this app also answers on
-    the alias vhost billboard.instockornot.club, so any page on another
-    *.instockornot.club host could set `bb_magic` with `Domain=.instockornot.club`
-    and make an attacker-minted link take the silent, already-bound path in a
-    victim's browser. A browser refuses to store a `__Host-` cookie that carries
-    a Domain attribute at all, so only this exact host can write it."""
-    return f'__Host-{name}' if auth.base_url().startswith('https') else name
-
-
-def _flow_cookie_path(secure):
-    # `__Host-` REQUIRES Path=/ (and Secure, and no Domain); on http we keep the
-    # tighter auth-routes scope.
-    return '/' if secure else FLOW_COOKIE_PATH
-
-
-def _flow_cookie(resp, name, value, max_age):
-    """A browser-binding cookie for a sign-in flow (review M2). HttpOnly, and —
-    because Apple's form_post callback is a cross-site POST — SameSite=None
-    (which browsers only honour with Secure, hence the https check; plain-http
-    test runs fall back to Lax)."""
-    secure = auth.base_url().startswith('https')
-    resp.set_cookie(_flow_cookie_name(name), value, max_age=max_age,
-                    path=_flow_cookie_path(secure), httponly=True,
-                    secure=secure, samesite='None' if secure else 'Lax')
-    return resp
-
-
-def _clear_flow_cookie(resp, name):
-    # the deletion Set-Cookie must itself satisfy the `__Host-` rules or the
-    # browser drops it and the cookie survives
-    secure = auth.base_url().startswith('https')
-    resp.delete_cookie(_flow_cookie_name(name), path=_flow_cookie_path(secure),
-                       httponly=True, secure=secure,
-                       samesite='None' if secure else 'Lax')
-    return resp
-
-
-def _flow_value(name):
-    """This request's flow cookie, or None when it is absent OR sent twice.
-    Two cookies of one name means something is shadowing the real one (a
-    sibling host's Domain cookie, say) and the server can't tell which is
-    which — so the flow counts as unbound and the click has to be confirmed."""
-    values = request.cookies.getlist(_flow_cookie_name(name))
-    if len(values) != 1:
-        return None
-    try:
-        values[0].encode('utf-8')       # a mangled header can decode to lone surrogates
-    except UnicodeEncodeError:
-        return None
-    return values[0]
+# flow cookies live in bb/auth.py since 2026-10-19 (shared with the settings
+# blueprint for passkey registration); these names keep this file unchanged.
+FLOW_COOKIE_PATH = auth.FLOW_PATH_AUTH
+_flow_cookie_name = auth.flow_cookie_name
+_flow_cookie = auth.set_flow_cookie
+_clear_flow_cookie = auth.clear_flow_cookie
+_flow_value = auth.flow_value
 
 
 def _ct_equal(a, b):

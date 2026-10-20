@@ -334,3 +334,67 @@ def password_locked(con, handle):
 
 def record_password_failure(con, handle):
     db.record_attempt(con, _account_key(handle))
+
+
+# --- flow cookies (moved here from routes/auth.py on 2026-10-19 so the settings
+# blueprint can bind a passkey registration to the browser the same way) ---------
+
+FLOW_PATH_AUTH = paths.API_PREFIX + '/auth'
+FLOW_PATH_API = paths.API_PREFIX
+
+
+def flow_cookie_name(name):
+    """`__Host-bb_magic` / `__Host-bb_oidc` / `__Host-bb_passkey` under https, the
+    bare name on plain http (where the prefix's Secure requirement can't be met,
+    e.g. test runs).
+
+    The prefix is the fix for the sibling-host hole: this app also answers on
+    the alias vhost billboard.instockornot.club, so any page on another
+    *.instockornot.club host could set `bb_magic` with `Domain=.instockornot.club`
+    and make an attacker-minted link take the silent, already-bound path in a
+    victim's browser. A browser refuses to store a `__Host-` cookie that carries
+    a Domain attribute at all, so only this exact host can write it."""
+    return f'__Host-{name}' if base_url().startswith('https') else name
+
+
+def _flow_path(secure, path):
+    # `__Host-` REQUIRES Path=/ (and Secure, and no Domain); on http we keep the
+    # tighter scope the caller asked for.
+    return '/' if secure else path
+
+
+def set_flow_cookie(resp, name, value, max_age, path=FLOW_PATH_AUTH):
+    """A browser-binding cookie for a sign-in flow (review M2). HttpOnly, and —
+    because Apple's form_post callback is a cross-site POST — SameSite=None
+    (which browsers only honour with Secure, hence the https check; plain-http
+    test runs fall back to Lax)."""
+    secure = base_url().startswith('https')
+    resp.set_cookie(flow_cookie_name(name), value, max_age=max_age,
+                    path=_flow_path(secure, path), httponly=True,
+                    secure=secure, samesite='None' if secure else 'Lax')
+    return resp
+
+
+def clear_flow_cookie(resp, name, path=FLOW_PATH_AUTH):
+    # the deletion Set-Cookie must itself satisfy the `__Host-` rules or the
+    # browser drops it and the cookie survives
+    secure = base_url().startswith('https')
+    resp.delete_cookie(flow_cookie_name(name), path=_flow_path(secure, path),
+                       httponly=True, secure=secure,
+                       samesite='None' if secure else 'Lax')
+    return resp
+
+
+def flow_value(name):
+    """This request's flow cookie, or None when it is absent OR sent twice.
+    Two cookies of one name means something is shadowing the real one (a
+    sibling host's Domain cookie, say) and the server can't tell which is
+    which — so the flow counts as unbound and the click has to be confirmed."""
+    values = request.cookies.getlist(flow_cookie_name(name))
+    if len(values) != 1:
+        return None
+    try:
+        values[0].encode('utf-8')       # a mangled header can decode to lone surrogates
+    except UnicodeEncodeError:
+        return None
+    return values[0]
