@@ -106,10 +106,25 @@ def test_open_report_index_is_partial(con):
     assert cur.rowcount == 1                         # resolved → a new open report is allowed
 
 
-def test_board_eligible_rules(con):
+def test_board_eligible_rules_early_access(con):
+    """Hard gate OFF (the default while blade-book is free and open, Simon
+    2026-10-23): verified email + any live knife opens the board. The first
+    stranger to sign up tried to list his Sebenza four times at ten minutes old."""
     fresh = _mk_user(con, email='f@example.com', handle='f-guy')            # unverified, no knives
     ok, why = db.board_eligible(con, fresh)
     assert ok is False and 'verify' in why
+    v = _seller(con, email='v@example.com', handle='v-guy')                  # verified, no knives
+    ok, why = db.board_eligible(con, v)
+    assert ok is False and 'live in your register' in why and 'days' not in why
+    _mk_knife(con, v['id'])                                                  # a live knife, created now
+    assert db.board_eligible(con, v) == (True, None)
+    assert db.board_min_knife_age_days() == 0
+
+
+def test_board_eligible_rules_hard_gate(con, monkeypatch):
+    """Hard gate ON restores spec §9: a knife live for 7 days."""
+    monkeypatch.setenv('BLADEBOOK_HARD_GATE', '1')
+    assert db.board_min_knife_age_days() == 7
     v = _seller(con, email='v@example.com', handle='v-guy')                  # verified, no knives
     ok, why = db.board_eligible(con, v)
     assert ok is False and '7 days' in why
@@ -121,7 +136,16 @@ def test_board_eligible_rules(con):
     assert db.board_eligible(con, admin) == (True, None)
 
 
-def test_board_knives_filters_and_order(con):
+def test_board_shows_a_fresh_sellers_knife_in_early_access(con):
+    u2 = _seller(con, email='u2@example.com', handle='u2-guy')
+    k = _mk_knife(con, u2['id'], sale_status='for_sale', asking_price=1)    # verified, nothing old
+    total, rows = db.board_knives(con)
+    assert total == 1 and rows[0]['id'] == k['id']
+    assert db.board_knife(con, k['id'])['id'] == k['id']
+
+
+def test_board_knives_filters_and_order(con, monkeypatch):
+    monkeypatch.setenv('BLADEBOOK_HARD_GATE', '1')                           # spec §9 rules; early access is tested above
     s = _seller(con)
     old = _old_knife(con, s['id'], days=9)                                   # makes s eligible; keeping
     a = _mk_knife(con, s['id'], sale_status='for_sale', asking_price=500, listed_at='2026-09-01T00:00:00+00:00')

@@ -82,7 +82,8 @@ def test_patch_validates_merges_ext_and_logs_edited_on_live(client, mailer):
     assert len(db.list_events(con, owner, kid)) == 2
 
 
-def test_sale_controls(client, mailer):
+def test_sale_controls(client, mailer, monkeypatch):
+    monkeypatch.setenv('BLADEBOOK_HARD_GATE', '1')             # spec §9 board rule; early access is test_for_sale_is_open_in_early_access
     signed_in(client, mailer)
     kid = _draft_with_photo(client)
     r = client.post(f'{K}/{kid}/sale', json={'sale_status': 'for_sale', 'asking_price': 500})
@@ -215,7 +216,18 @@ def test_new_draft_requires_previous_draft_processed(client, mailer, decoder):
     con.close()
 
 
-def test_for_sale_gate_admin_bypass_and_listed_at(client, mailer):
+def test_for_sale_is_open_in_early_access(client, mailer):
+    """Hard gate off (default): a verified account with one live knife may list it
+    the minute it is saved — 'free and open for now' (Simon 2026-10-23)."""
+    signed_in(client, mailer)
+    kid = _draft_with_photo(client); _processed(kid)
+    assert client.post(f'{K}/{kid}/save').status_code == 200
+    r = client.post(f'{K}/{kid}/sale', json={'sale_status': 'for_sale', 'asking_price': 9})
+    assert r.status_code == 200 and r.get_json()['listed_at']
+
+
+def test_for_sale_gate_admin_bypass_and_listed_at(client, mailer, monkeypatch):
+    monkeypatch.setenv('BLADEBOOK_HARD_GATE', '1')
     me = signed_in(client, mailer)
     kid = _draft_with_photo(client); _processed(kid)
     assert client.post(f'{K}/{kid}/save').status_code == 200

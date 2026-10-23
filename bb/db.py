@@ -12,7 +12,7 @@ import secrets
 import sqlite3
 from datetime import datetime, timedelta, timezone
 
-from bb import paths
+from bb import config, paths
 
 SCHEMA_VERSION = 16
 MAX_PHOTO_SLOTS = 6              # photo slots per knife; 3 → 6 on 2026-09-22 (v13 rebuilds the CHECK)
@@ -1103,8 +1103,19 @@ _BOARD_SELECT = ("SELECT k.*, u.handle AS owner_handle, u.email AS owner_email, 
                  "FROM knives k JOIN users u ON u.id = k.owner_id WHERE " + _BOARD_WHERE)
 
 
-def _board_cutoff():
-    return (datetime.now(timezone.utc) - timedelta(days=BOARD_MIN_KNIFE_AGE_DAYS)).isoformat()
+def board_min_knife_age_days():
+    """How long a knife must be live before its owner may LIST. Spec §9's 7 days
+    once the hard gate is on; 0 during early access — Simon, 2026-10-23: "free
+    and open for now". (The first stranger to sign up, a Dutch collector met on
+    eBay, tried to list his Sebenza four times at ten minutes old and 7 days said
+    no.) Reports keep the 7 days either way: see counting_open_reports."""
+    return BOARD_MIN_KNIFE_AGE_DAYS if config.hard_gate() else 0
+
+
+def _board_cutoff(days=None):
+    if days is None:
+        days = board_min_knife_age_days()
+    return (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
 
 
 def board_eligible(con, user):
@@ -1114,11 +1125,13 @@ def board_eligible(con, user):
         return True, None
     if not user.get('verified_at'):
         return False, 'verify your email before listing on the board'
+    days = board_min_knife_age_days()
     row = con.execute("SELECT 1 FROM knives WHERE owner_id = ? AND status = 'live' AND created <= ? LIMIT 1",
-                      (user['id'], _board_cutoff())).fetchone()
+                      (user['id'], _board_cutoff(days))).fetchone()
     if row is None:
-        return False, (f'the board opens once a knife has been live in your register for '
-                       f'{BOARD_MIN_KNIFE_AGE_DAYS} days')
+        if days == 0:
+            return False, 'the board opens once you have a knife live in your register'
+        return False, f'the board opens once a knife has been live in your register for {days} days'
     return True, None
 
 
@@ -1568,15 +1581,17 @@ def create_report(con, knife_id, owner_id, reporter_id, reason):
 
 def counting_open_reports(con, knife_id):
     """Open reports that count toward auto-hide: one per reporter who is
-    board-eligible themselves — verified email AND a knife live for
-    BOARD_MIN_KNIFE_AGE_DAYS (review H5: a free account with one fresh knife
-    is not skin in the game; three of them hid anyone)."""
+    verified email AND a knife live for BOARD_MIN_KNIFE_AGE_DAYS (review H5: a
+    free account with one fresh knife is not skin in the game; three of them
+    hid anyone). Always the full 7 days, even while early access opens the
+    board door itself (board_min_knife_age_days) — listing is a favour to the
+    seller, hiding is a weapon against one."""
     return con.execute(
         'SELECT count(*) FROM reports r JOIN users u ON u.id = r.reporter_id '
         'WHERE r.knife_id = ? AND r.resolved_at IS NULL AND u.verified_at IS NOT NULL '
         "AND EXISTS (SELECT 1 FROM knives k WHERE k.owner_id = r.reporter_id AND k.status = 'live' "
         '            AND k.created <= ?)',
-        (knife_id, _board_cutoff())).fetchone()[0]
+        (knife_id, _board_cutoff(BOARD_MIN_KNIFE_AGE_DAYS))).fetchone()[0]
 
 
 def open_reports(con):

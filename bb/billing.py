@@ -47,13 +47,14 @@ REASON_OLD = ('this knife is older than 12 months (or undated) and your 3 free o
 # can think about charging"). No meter, no bill, no nag: one friendly line.
 NOTICE_ACCOUNT = ('blade-book is free during early access. We will tell you before that changes.')
 NOTICE_OLD = ('blade-book is free during early access. We will tell you before that changes.')
-TRUE_WORDS = ('1', 'true', 'yes', 'on')
+TRUE_WORDS = config.TRUE_WORDS
 
 
 def hard_gate():
     """False (the default) = early access: refusals become notices. Set
-    BLADEBOOK_HARD_GATE=1 to make can_add refuse for real."""
-    return (config.get('BLADEBOOK_HARD_GATE') or '').strip().lower() in TRUE_WORDS
+    BLADEBOOK_HARD_GATE=1 to make can_add refuse for real. One switch for the
+    whole product — it lives in bb/config so bb/db (the board) can read it too."""
+    return config.hard_gate()
 
 
 def price_text():

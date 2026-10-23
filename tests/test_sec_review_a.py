@@ -113,6 +113,19 @@ def test_three_fresh_accounts_cannot_hide_a_knife(client, mailer, con):
     assert db.get_knife_any(con, k['id'])['hidden_at'] is None
 
 
+def test_report_skin_in_the_game_keeps_7_days_in_early_access(con):
+    """Opening the board door (2026-10-23) does NOT open the report count: a
+    verified account with a fresh knife may list, but its report does not count."""
+    s = _seller(con)
+    _old_knife(con, s['id'])
+    k = _mk_knife(con, s['id'], sale_status='for_sale', asking_price=500)
+    r = _seller(con, email='r@example.com', handle='r-guy')
+    _mk_knife(con, r['id'])                                       # verified, live, but days-fresh
+    assert db.board_eligible(con, r) == (True, None)             # may list
+    assert db.create_report(con, k['id'], s['id'], r['id'], 'spam spam')
+    assert db.counting_open_reports(con, k['id']) == 0           # may not hide anyone
+
+
 def test_report_only_accepts_knives_a_stranger_can_see(client, mailer, con):
     """Was 'board listings only'; the date board (2026-10-15) shows keeping
     knives to strangers, so any visible public knife is reportable — a

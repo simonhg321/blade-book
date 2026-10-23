@@ -152,10 +152,12 @@
       if (!res.ok) return;
       var b = res.j;
       $('sub').textContent = b.active ? 'active' : (b.sub_status || 'free');
-      $('subcard').hidden = !!b.active;
+      // early access (hard_gate off): no price card, no slot meter, no countdown — one line.
+      $('subcard').hidden = !!b.active || !b.hard_gate;
       $('subprice').textContent = b.price || '';
       $('submail').href = 'mailto:' + (b.contact || '') + '?subject=blade-book%20subscription';
       $('subnote').textContent = b.active ? 'Every knife, any age. Thank you.'
+        : !b.hard_gate ? 'blade-book is free during early access. We will tell you before that changes.'
         : ('Free: knives under a year old, plus ' + b.free_old_left + ' of ' + b.free_old_allowance +
            ' older knives left' + (b.account_free_days_left ? ', for ' + b.account_free_days_left + ' more days.' : '.'));
     }).catch(function () {});

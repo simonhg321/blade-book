@@ -17,3 +17,14 @@ def load():
 
 def get(name, default=None):
     return os.environ.get(name, default)
+
+
+TRUE_WORDS = ('1', 'true', 'yes', 'on')
+
+
+def hard_gate():
+    """False (the default) = early access: blade-book is free and open. The
+    paid gate (bb/billing.can_add), the paid search filters and the board's
+    7-day rule (bb/db.board_min_knife_age_days) all switch on together with
+    BLADEBOOK_HARD_GATE=1 in /etc/blade-book/.env + restart. Simon's call."""
+    return (get('BLADEBOOK_HARD_GATE') or '').strip().lower() in TRUE_WORDS
